@@ -1,0 +1,850 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bofa.com/schemas/cdm/payment-instruction-extensions.schema.json",
+  "title": "PaymentInstructionExtensions",
+  "description": "JSON Schema for PaymentInstruction.extensions field supporting global regulatory reporting across 69 jurisdictions",
+  "type": "object",
+  "properties": {
+    "sanctions": {
+      "type": "object",
+      "description": "Sanctions screening and blocking information - Phase 1",
+      "properties": {
+        "sanctionsMatchScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Fuzzy match score (0-100)"
+        },
+        "sanctionsListName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Sanctions list name (OFAC SDN, UN Consolidated, EU, etc.)"
+        },
+        "sanctionsListSource": {
+          "type": "string",
+          "enum": ["OFAC", "UN_CONSOLIDATED", "EU_CONSOLIDATED", "UK_HMT", "DFAT", "MAS_SINGAPORE", "HKMA_HONG_KONG", "CBUAE_UAE", "SAMA_SAUDI_ARABIA", "PBOC_CHINA", "INTERNAL_WATCHLIST"],
+          "description": "Sanctions list source authority"
+        },
+        "sanctionsMatchType": {
+          "type": "string",
+          "enum": ["EXACT_MATCH", "FUZZY_MATCH", "PARTIAL_NAME_MATCH", "ADDRESS_MATCH", "DATE_OF_BIRTH_MATCH", "IDENTIFICATION_MATCH", "VESSEL_MATCH", "AIRCRAFT_MATCH", "FALSE_POSITIVE"],
+          "description": "Type of sanctions match"
+        },
+        "sanctionsMatchedField": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Which field matched (name, address, dob, etc.)"
+        },
+        "blockingAuthority": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Authority requiring block (US OFAC, UN, EU, etc.)"
+        },
+        "blockingDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date transaction was blocked"
+        },
+        "blockingReason": {
+          "type": "string",
+          "description": "Detailed blocking reason"
+        },
+        "licenseException": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "OFAC license exception number"
+        },
+        "licenseRequested": {
+          "type": "boolean",
+          "description": "License requested flag"
+        },
+        "licenseRequestDate": {
+          "type": "string",
+          "format": "date",
+          "description": "License request date"
+        },
+        "licenseApprovalDate": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "License approval date"
+        },
+        "licenseNumber": {
+          "type": ["string", "null"],
+          "maxLength": 50,
+          "description": "OFAC license number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "purposeCode": {
+      "type": "object",
+      "description": "Cross-border payment purpose codes - Phase 1",
+      "properties": {
+        "regulatoryPurposeCode": {
+          "type": "string",
+          "maxLength": 10,
+          "description": "Jurisdiction-specific purpose code (e.g., 121010 for China, S0001 for India)",
+          "examples": ["121010", "S0001", "10101"]
+        },
+        "regulatoryPurposeCodeId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "FK to RegulatoryPurposeCode entity"
+        },
+        "purposeCategory": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Purpose category (Trade in Goods, Trade in Services, Investment, etc.)"
+        },
+        "purposeSubCategory": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Purpose sub-category"
+        },
+        "tradeInvoiceNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Trade invoice number"
+        },
+        "tradeInvoiceDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Trade invoice date"
+        },
+        "tradeContractNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Trade contract number"
+        },
+        "goodsDescription": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Description of goods (for trade payments)"
+        },
+        "hsCode": {
+          "type": "string",
+          "pattern": "^[0-9]{4}\\.[0-9]{2}$",
+          "description": "Harmonized System commodity code (e.g., 8542.31)",
+          "examples": ["8542.31", "0101.21"]
+        },
+        "sourceOfFunds": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Source of funds description"
+        }
+      },
+      "additionalProperties": false
+    },
+    "relationshipToBeneficiary": {
+      "type": "object",
+      "description": "Relationship between remitter and beneficiary - Phase 1",
+      "properties": {
+        "relationshipToBeneficiary": {
+          "type": "string",
+          "pattern": "^R(0[1-9]|1[0-9]|2[0-5])$",
+          "description": "Relationship code (R01-R25)",
+          "examples": ["R01", "R11", "R24"]
+        },
+        "relationshipToBeneficiaryId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "FK to RelationshipToBeneficiary reference entity"
+        },
+        "relationshipDescription": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Free-text relationship description"
+        }
+      },
+      "additionalProperties": false
+    },
+    "chinaSpecific": {
+      "type": "object",
+      "description": "China (PBoC) specific fields - Phase 1",
+      "properties": {
+        "chinaSubjectCode": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{5}$",
+          "description": "China 6-digit subject code (121010-622011)",
+          "examples": ["121010", "222010", "321010"]
+        },
+        "chinaTradeTypeCode": {
+          "type": "string",
+          "enum": ["GENERAL_TRADE", "PROCESSING_TRADE", "BORDER_TRADE", "RE_EXPORT_TRADE", "BARTER_TRADE", "BONDED_WAREHOUSE"],
+          "description": "China trade type classification"
+        },
+        "chinaTransactionNature": {
+          "type": "string",
+          "enum": ["EXPORT", "IMPORT", "SERVICE_PAYMENT", "INCOME", "TRANSFER"],
+          "description": "Transaction nature classification"
+        },
+        "chinaCustomsDeclarationNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Customs declaration number (for trade payments)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "indiaSpecific": {
+      "type": "object",
+      "description": "India (RBI) specific fields - Phase 1",
+      "properties": {
+        "indiaRemittancePurpose": {
+          "type": "string",
+          "pattern": "^S[0-9]{4}$",
+          "description": "India RBI purpose code (S0001-S1099)",
+          "examples": ["S0001", "S0201", "S1001"]
+        },
+        "indiaLRSCategory": {
+          "type": "string",
+          "enum": ["INVESTMENT", "EDUCATION", "MEDICAL", "TRAVEL", "GIFTS", "MAINTENANCE_OF_RELATIVES", "OTHER"],
+          "description": "Liberalized Remittance Scheme category"
+        },
+        "indiaFEMACategory": {
+          "type": "string",
+          "enum": ["CURRENT_ACCOUNT", "CAPITAL_ACCOUNT"],
+          "description": "FEMA (Foreign Exchange Management Act) category"
+        }
+      },
+      "additionalProperties": false
+    },
+    "brazilSpecific": {
+      "type": "object",
+      "description": "Brazil (BACEN) specific fields - Phase 1",
+      "properties": {
+        "brazilPixKeyType": {
+          "type": "string",
+          "enum": ["CPF", "CNPJ", "EMAIL", "PHONE", "EVP"],
+          "description": "PIX key type"
+        },
+        "brazilPixKey": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "PIX key value",
+          "examples": ["123.456.789-00", "12.345.678/0001-00", "user@example.com", "+5511987654321"]
+        },
+        "brazilNatureCode": {
+          "type": "string",
+          "pattern": "^[1-5][0-9]{4}$",
+          "description": "BACEN nature code (10100-50999)",
+          "examples": ["10101", "20101", "50101"]
+        },
+        "brazilTransactionCode": {
+          "type": "string",
+          "maxLength": 10,
+          "description": "BACEN transaction code"
+        }
+      },
+      "additionalProperties": false
+    },
+    "mobileMoney": {
+      "type": "object",
+      "description": "Mobile money and instant payment identifiers - Phase 2",
+      "properties": {
+        "mobileMoneyProvider": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Mobile money provider name",
+          "examples": ["M-Pesa", "GCash", "PayMaya", "Alipay", "WeChat Pay"]
+        },
+        "mobileWalletID": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Mobile wallet identifier"
+        },
+        "mobilePhoneNumber": {
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{1,14}$",
+          "description": "Mobile phone number in E.164 format",
+          "examples": ["+254712345678", "+91-9876543210"]
+        },
+        "pixKeyType": {
+          "type": "string",
+          "enum": ["CPF", "CNPJ", "EMAIL", "PHONE", "EVP"],
+          "description": "Brazil PIX key type"
+        },
+        "pixKey": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Brazil PIX key value"
+        },
+        "pixTransactionID": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Brazil PIX E2E transaction ID (32 characters)"
+        },
+        "upiID": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9.\\-_]{3,}@[a-zA-Z]{3,}$",
+          "description": "India UPI Virtual Payment Address (vpa@bank)",
+          "examples": ["user@paytm", "merchant@icici"]
+        },
+        "upiTransactionID": {
+          "type": "string",
+          "maxLength": 35,
+          "description": "India UPI transaction reference"
+        },
+        "promptPayID": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Thailand PromptPay ID (citizen ID or phone number)"
+        },
+        "payNowID": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Singapore PayNow ID (NRIC, UEN, or mobile number)"
+        },
+        "thaiPromptPayID": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Thailand PromptPay identifier"
+        },
+        "indiaUPIID": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9.\\-_]{3,}@[a-zA-Z]{3,}$",
+          "description": "India UPI ID"
+        },
+        "singaporePayNowID": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Singapore PayNow identifier"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tradeFinance": {
+      "type": "object",
+      "description": "Trade finance document references - Phase 2",
+      "properties": {
+        "letterOfCreditNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Letter of Credit reference number"
+        },
+        "billOfLadingNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Bill of Lading number"
+        },
+        "billOfLadingDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Bill of Lading date"
+        },
+        "hsCode": {
+          "type": "string",
+          "pattern": "^[0-9]{4}\\.[0-9]{2}$",
+          "description": "Harmonized System commodity code"
+        },
+        "tradeDocumentType": {
+          "type": "string",
+          "enum": ["COMMERCIAL_INVOICE", "PROFORMA_INVOICE", "PACKING_LIST", "CERTIFICATE_OF_ORIGIN", "INSPECTION_CERTIFICATE", "INSURANCE_CERTIFICATE", "BILL_OF_LADING", "AIRWAY_BILL", "LETTER_OF_CREDIT", "SHIPPING_ADVICE"],
+          "description": "Type of trade document"
+        },
+        "incoterms": {
+          "type": "string",
+          "enum": ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"],
+          "description": "Incoterms 2020 code"
+        },
+        "exportLicenseNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Export license number"
+        },
+        "importLicenseNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Import license number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "counterfeitCurrency": {
+      "type": "object",
+      "description": "Counterfeit currency reporting (India CCR) - Phase 3",
+      "properties": {
+        "counterfeitCurrencyDetected": {
+          "type": "boolean",
+          "description": "Counterfeit currency detected flag"
+        },
+        "counterfeitCurrencyAmount": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total amount of counterfeit currency"
+        },
+        "counterfeitDenominations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$",
+                "description": "Currency code (ISO 4217)"
+              },
+              "denomination": {
+                "type": "number",
+                "description": "Note denomination value"
+              },
+              "quantity": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Number of counterfeit notes"
+              },
+              "totalAmount": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Total amount for this denomination"
+              }
+            },
+            "required": ["currency", "denomination", "quantity", "totalAmount"]
+          },
+          "description": "Array of counterfeit denominations detected"
+        },
+        "counterfeitSerialNumbers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Serial numbers of counterfeit notes"
+        },
+        "counterfeitDetectionMethod": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "How counterfeit was detected (UV light, watermark check, etc.)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "casino": {
+      "type": "object",
+      "description": "Casino disbursement reporting (Canada) - Phase 3",
+      "properties": {
+        "casinoDisbursement": {
+          "type": "boolean",
+          "description": "Casino disbursement flag"
+        },
+        "casinoName": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Casino name"
+        },
+        "casinoLicenseNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Casino gaming license number"
+        },
+        "disbursementReason": {
+          "type": "string",
+          "enum": ["WINNINGS", "CASH_OUT", "REFUND"],
+          "description": "Reason for disbursement"
+        }
+      },
+      "additionalProperties": false
+    },
+    "virtualAssets": {
+      "type": "object",
+      "description": "Virtual asset / cryptocurrency reporting - Phase 3",
+      "properties": {
+        "virtualAssetFlag": {
+          "type": "boolean",
+          "description": "Virtual asset transaction indicator"
+        },
+        "virtualAssetType": {
+          "type": "string",
+          "enum": ["BTC", "ETH", "USDT", "USDC", "XRP", "ADA", "SOL", "STABLECOIN_OTHER", "CRYPTO_OTHER"],
+          "description": "Type of virtual asset"
+        },
+        "blockchainAddress": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Blockchain wallet address"
+        },
+        "transactionHash": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Blockchain transaction hash"
+        },
+        "vasp_Name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Virtual Asset Service Provider name"
+        },
+        "vasp_RegistrationNumber": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "VASP registration number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "regulatoryReporting": {
+      "type": "object",
+      "description": "Additional regulatory reporting fields (AUSTRAC, FinCEN, PSD2)",
+      "properties": {
+        "directionIndicator": {
+          "type": "string",
+          "enum": ["S", "R"],
+          "description": "AUSTRAC IFTI Field 6.1: S=Sent, R=Received"
+        },
+        "transferType": {
+          "type": "string",
+          "enum": ["SWIFT", "RTGS", "ACH", "OTHER"],
+          "description": "AUSTRAC IFTI Field 6.2: Transfer mechanism"
+        },
+        "countryOfOrigin": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "AUSTRAC IFTI Field 6.3: Country of origin (ISO 3166-1)"
+        },
+        "countryOfDestination": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "AUSTRAC IFTI Field 6.4: Country of destination (ISO 3166-1)"
+        },
+        "suspiciousActivityIndicator": {
+          "type": "boolean",
+          "description": "AUSTRAC IFTI Field 6.5: Suspicious activity flag"
+        },
+        "cashInTotal": {
+          "type": "number",
+          "minimum": 0,
+          "description": "FinCEN CTR: Total cash received"
+        },
+        "cashOutTotal": {
+          "type": "number",
+          "minimum": 0,
+          "description": "FinCEN CTR: Total cash disbursed"
+        },
+        "cashInInstruments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "instrument": {
+                "type": "string",
+                "enum": ["currency", "cashiers_check", "money_order", "travelers_check", "other"]
+              },
+              "amount": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": ["instrument", "amount"]
+          },
+          "description": "FinCEN CTR Items 24-30: Cash in instruments"
+        },
+        "cashOutInstruments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "instrument": {
+                "type": "string",
+                "enum": ["currency", "cashiers_check", "money_order", "travelers_check", "other"]
+              },
+              "amount": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": ["instrument", "amount"]
+          },
+          "description": "FinCEN CTR Items 31-37: Cash out instruments"
+        },
+        "aggregationIndicator": {
+          "type": "boolean",
+          "description": "Part of aggregated reporting"
+        },
+        "aggregationPeriodStart": {
+          "type": "string",
+          "format": "date",
+          "description": "Start of aggregation period"
+        },
+        "aggregationPeriodEnd": {
+          "type": "string",
+          "format": "date",
+          "description": "End of aggregation period"
+        },
+        "foreignCashInDetail": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "country": {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              "amount": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": ["country", "currency", "amount"]
+          },
+          "description": "FinCEN CTR Items 62-66: Foreign cash received by country"
+        },
+        "foreignCashOutDetail": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "country": {
+                "type": "string",
+                "pattern": "^[A-Z]{2}$"
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Z]{3}$"
+              },
+              "amount": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": ["country", "currency", "amount"]
+          },
+          "description": "FinCEN CTR Items 68-72: Foreign cash disbursed by country"
+        },
+        "suspiciousActivityStartDate": {
+          "type": "string",
+          "format": "date",
+          "description": "FinCEN SAR Item 47: Start date of suspicious activity"
+        },
+        "suspiciousActivityEndDate": {
+          "type": "string",
+          "format": "date",
+          "description": "FinCEN SAR Item 48: End date of suspicious activity"
+        },
+        "suspiciousActivityAmount": {
+          "type": "number",
+          "minimum": 0,
+          "description": "FinCEN SAR Item 49: Total amount involved"
+        },
+        "suspiciousActivityTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "STRUCTURING",
+              "TERRORIST_FINANCING",
+              "FRAUD",
+              "IDENTITY_THEFT",
+              "CHECK_FRAUD",
+              "COUNTERFEIT_CHECK",
+              "WIRE_TRANSFER_FRAUD",
+              "ACH_FRAUD",
+              "CREDIT_CARD_FRAUD",
+              "MONEY_LAUNDERING",
+              "BRIBERY",
+              "EMBEZZLEMENT",
+              "MISUSE_OF_POSITION",
+              "CYBER_EVENT",
+              "UNAUTHORIZED_WIRE_TRANSFER",
+              "OTHER"
+            ]
+          },
+          "description": "FinCEN SAR Items 52-68: Activity type checkboxes"
+        },
+        "ipAddress": {
+          "type": "string",
+          "format": "ipv4",
+          "description": "FinCEN SAR cyber event: IP address"
+        },
+        "urlDomain": {
+          "type": "string",
+          "format": "hostname",
+          "description": "FinCEN SAR cyber event: URL domain"
+        },
+        "deviceIdentifier": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "FinCEN SAR cyber event: Device identifier"
+        },
+        "cyberEventIndicator": {
+          "type": "boolean",
+          "description": "FinCEN SAR cyber event flag"
+        },
+        "cardPresentIndicator": {
+          "type": "boolean",
+          "description": "PSD2: Card-present transaction"
+        },
+        "cardholderPresentIndicator": {
+          "type": "boolean",
+          "description": "PSD2: Cardholder present"
+        },
+        "scaMethod": {
+          "type": "string",
+          "enum": ["SMS_OTP", "MOBILE_APP", "HARDWARE_TOKEN", "BIOMETRIC", "KNOWLEDGE_BASED", "NONE"],
+          "description": "PSD2: Strong Customer Authentication method"
+        },
+        "scaExemption": {
+          "type": ["string", "null"],
+          "enum": ["LOW_VALUE", "TRA", "RECURRING", "TRUSTED_BENEFICIARY", "CORPORATE", "MIT", null],
+          "description": "PSD2: SCA exemption type"
+        },
+        "scaStatus": {
+          "type": "string",
+          "enum": ["SUCCESSFUL", "FAILED", "EXEMPTED", "NOT_REQUIRED"],
+          "description": "PSD2: SCA authentication status"
+        },
+        "threeDSecureVersion": {
+          "type": "string",
+          "pattern": "^[0-9]\\.[0-9](\\.[0-9])?$",
+          "description": "PSD2: 3DS version (e.g., 2.2.0)",
+          "examples": ["2.2.0", "2.1"]
+        },
+        "eciValue": {
+          "type": "string",
+          "pattern": "^[0-9]{2}$",
+          "description": "PSD2: Electronic Commerce Indicator",
+          "examples": ["05", "06", "07"]
+        },
+        "cardScheme": {
+          "type": "string",
+          "enum": ["VISA", "MASTERCARD", "AMEX", "DISCOVER", "OTHER"],
+          "description": "PSD2: Card scheme"
+        },
+        "fraudType": {
+          "type": ["string", "null"],
+          "enum": ["LOST_STOLEN", "COUNTERFEIT", "CNP_FRAUD", "ID_THEFT", "APPLICATION_FRAUD", "ACCOUNT_TAKEOVER", null],
+          "description": "PSD2 Fraud Reporting: Type of fraud"
+        },
+        "fraudDetectionDate": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "PSD2: Date fraud was detected"
+        },
+        "fraudReportedDate": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "PSD2: Date fraud was reported"
+        },
+        "fraudAmountRecovered": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "PSD2: Amount recovered from fraud"
+        },
+        "chargebackIndicator": {
+          "type": "boolean",
+          "description": "PSD2: Chargeback filed indicator"
+        },
+        "chargebackDate": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "PSD2: Chargeback date"
+        },
+        "chargebackAmount": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "PSD2: Chargeback amount"
+        },
+        "transactionLocationCountry": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "Transaction location country (ISO 3166-1)"
+        },
+        "transactionLocationCity": {
+          "type": "string",
+          "maxLength": 35,
+          "description": "Transaction location city"
+        },
+        "merchantCategoryCode": {
+          "type": "string",
+          "pattern": "^[0-9]{4}$",
+          "description": "Merchant Category Code (MCC)",
+          "examples": ["5411", "5812"]
+        },
+        "merchantName": {
+          "type": "string",
+          "maxLength": 140,
+          "description": "Merchant name"
+        },
+        "terminalId": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Terminal identifier (for card/ATM)"
+        },
+        "atmId": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "ATM identifier"
+        },
+        "fundsAvailabilityDate": {
+          "type": "string",
+          "format": "date",
+          "description": "When funds available to beneficiary"
+        },
+        "holdPlacedIndicator": {
+          "type": "boolean",
+          "description": "Hold placed on funds"
+        },
+        "holdReason": {
+          "type": ["string", "null"],
+          "maxLength": 200,
+          "description": "Reason for hold"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true,
+  "examples": [
+    {
+      "purposeCode": {
+        "regulatoryPurposeCode": "121010",
+        "regulatoryPurposeCodeId": "550e8400-e29b-41d4-a716-446655440000",
+        "purposeCategory": "Trade in Goods",
+        "purposeSubCategory": "Export",
+        "tradeInvoiceNumber": "INV-2025-001234",
+        "tradeInvoiceDate": "2025-12-10",
+        "goodsDescription": "Electronic components for manufacturing",
+        "hsCode": "8542.31"
+      },
+      "chinaSpecific": {
+        "chinaSubjectCode": "121010",
+        "chinaTradeTypeCode": "GENERAL_TRADE",
+        "chinaTransactionNature": "EXPORT",
+        "chinaCustomsDeclarationNumber": "CN-2025-DEC-001234"
+      },
+      "relationshipToBeneficiary": {
+        "relationshipToBeneficiary": "R11",
+        "relationshipToBeneficiaryId": "660e8400-e29b-41d4-a716-446655440001",
+        "relationshipDescription": "Payment for goods purchased"
+      }
+    },
+    {
+      "mobileMoney": {
+        "upiID": "merchant@paytm",
+        "upiTransactionID": "UPI1234567890123456789",
+        "mobilePhoneNumber": "+91-9876543210"
+      },
+      "indiaSpecific": {
+        "indiaRemittancePurpose": "S0201",
+        "indiaLRSCategory": "MAINTENANCE_OF_RELATIVES",
+        "indiaFEMACategory": "CURRENT_ACCOUNT"
+      },
+      "relationshipToBeneficiary": {
+        "relationshipToBeneficiary": "R05",
+        "relationshipDescription": "Monthly support to family member in India"
+      }
+    },
+    {
+      "brazilSpecific": {
+        "brazilPixKeyType": "CPF",
+        "brazilPixKey": "123.456.789-00",
+        "brazilNatureCode": "10101"
+      },
+      "mobileMoney": {
+        "pixKeyType": "CPF",
+        "pixKey": "123.456.789-00",
+        "pixTransactionID": "E12345678901234567890123456789012"
+      }
+    }
+  ]
+}

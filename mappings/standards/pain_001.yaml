@@ -1,0 +1,495 @@
+# GPS Payments CDM - pain.001 Mapping
+# ISO 20022 Customer Credit Transfer Initiation
+#
+# Reference: /documents/mappings/standards/ISO20022_pain001_CustomerCreditTransferInitiation_Mapping.md
+# Schema Version: 1.0.0
+
+version: "1.0"
+
+mapping:
+  id: PAIN_001_V09
+  name: "ISO 20022 pain.001 Customer Credit Transfer Initiation"
+  description: |
+    Maps ISO 20022 pain.001.001.09 messages to GPS Payments CDM entities.
+    Supports batch processing with multiple payment instructions per message.
+  doc_reference: "/documents/mappings/standards/ISO20022_pain001_CustomerCreditTransferInitiation_Mapping.md"
+
+  # Source configuration
+  source:
+    format: XML
+    parser: iso20022
+    namespace: "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"
+    root_element: CstmrCdtTrfInitn
+
+  # Entity extraction for repeating elements
+  entity_extraction:
+    - path: //PmtInf
+      entity: BatchHeader
+      key_field: PmtInfId
+      children:
+        - path: CdtTrfTxInf
+          entity: PaymentInstruction
+          key_field: PmtId/EndToEndId
+
+  # Field mappings
+  fields:
+    # ============================================
+    # Payment Entity - Header Level
+    # ============================================
+    - source: GrpHdr/MsgId
+      target:
+        entity: Payment
+        attribute: message_id
+      type: string
+      required: true
+      max_length: 35
+      notes: "Unique message identification assigned by initiating party"
+
+    - source: GrpHdr/CreDtTm
+      target:
+        entity: Payment
+        attribute: creation_datetime
+      type: datetime
+      required: true
+      date_format: "yyyy-MM-dd'T'HH:mm:ss"
+      notes: "Date and time at which message was created"
+
+    - source: GrpHdr/NbOfTxs
+      target:
+        entity: Payment
+        attribute: number_of_transactions
+      type: integer
+      required: true
+      notes: "Number of individual transactions in message"
+
+    - source: GrpHdr/CtrlSum
+      target:
+        entity: Payment
+        attribute: control_sum
+      type: decimal
+      precision: 18
+      scale: 4
+      notes: "Total of all individual amounts in message"
+
+    - target:
+        entity: Payment
+        attribute: payment_type
+      transform:
+        type: expression
+        expr: "'CREDIT_TRANSFER'"
+      notes: "Static value for pain.001"
+
+    # ============================================
+    # BatchHeader Entity - Payment Information Level
+    # ============================================
+    - source: PmtInf/PmtInfId
+      target:
+        entity: BatchHeader
+        attribute: payment_information_id
+      type: string
+      required: true
+      max_length: 35
+
+    - source: PmtInf/PmtMtd
+      target:
+        entity: BatchHeader
+        attribute: payment_method
+      type: string
+      transform:
+        type: lookup
+        mapping:
+          TRF: "CREDIT_TRANSFER"
+          TRA: "CREDIT_TRANSFER_ADVICE"
+          CHK: "CHEQUE"
+        default: "CREDIT_TRANSFER"
+
+    - source: PmtInf/ReqdExctnDt/Dt
+      target:
+        entity: Payment
+        attribute: requested_execution_date
+      type: date
+      date_format: "yyyy-MM-dd"
+
+    - source: PmtInf/ReqdExctnDt/DtTm
+      target:
+        entity: Payment
+        attribute: requested_execution_datetime
+      type: datetime
+      condition: "PmtInf/ReqdExctnDt/DtTm IS NOT NULL"
+
+    # ============================================
+    # PaymentInstruction Entity - Transaction Level
+    # ============================================
+    - source: PmtInf/CdtTrfTxInf/PmtId/InstrId
+      target:
+        entity: PaymentInstruction
+        attribute: instruction_identification
+      type: string
+      max_length: 35
+
+    - source: PmtInf/CdtTrfTxInf/PmtId/EndToEndId
+      target:
+        entity: PaymentInstruction
+        attribute: end_to_end_id
+      type: string
+      required: true
+      max_length: 35
+      notes: "Unique end-to-end reference assigned by initiating party"
+
+    - source: PmtInf/CdtTrfTxInf/PmtId/UETR
+      target:
+        entity: PaymentInstruction
+        attribute: uetr
+      type: uuid
+      notes: "Unique End-to-end Transaction Reference (gpi)"
+
+    - source: PmtInf/CdtTrfTxInf/Amt/InstdAmt
+      target:
+        entity: PaymentInstruction
+        attribute: instructed_amount
+      type: decimal
+      precision: 18
+      scale: 4
+      required: true
+      extract: text_content
+
+    - source: PmtInf/CdtTrfTxInf/Amt/InstdAmt/@Ccy
+      target:
+        entity: PaymentInstruction
+        attribute: instructed_currency
+      type: string
+      required: true
+      max_length: 3
+      extract: attribute
+
+    - source: PmtInf/CdtTrfTxInf/ChrgBr
+      target:
+        entity: PaymentInstruction
+        attribute: charge_bearer
+      type: string
+      transform:
+        type: lookup
+        mapping:
+          DEBT: "OUR"
+          CRED: "BEN"
+          SHAR: "SHA"
+          SLEV: "SLEV"
+        default: "SHA"
+
+    # ============================================
+    # Party Entity - Debtor (Originator)
+    # ============================================
+    - source: PmtInf/Dbtr/Nm
+      target:
+        entity: Party
+        attribute: name
+      type: string
+      max_length: 140
+      notes: "Debtor name"
+
+    - source: PmtInf/Dbtr/PstlAdr/StrtNm
+      target:
+        entity: Address
+        attribute: street_name
+      type: string
+      condition: "source IS NOT NULL"
+
+    - source: PmtInf/Dbtr/PstlAdr/BldgNb
+      target:
+        entity: Address
+        attribute: building_number
+      type: string
+
+    - source: PmtInf/Dbtr/PstlAdr/PstCd
+      target:
+        entity: Address
+        attribute: postal_code
+      type: string
+
+    - source: PmtInf/Dbtr/PstlAdr/TwnNm
+      target:
+        entity: Address
+        attribute: town_name
+      type: string
+
+    - source: PmtInf/Dbtr/PstlAdr/Ctry
+      target:
+        entity: Address
+        attribute: country
+      type: string
+      max_length: 2
+
+    - source: PmtInf/Dbtr/Id/OrgId/LEI
+      target:
+        entity: Party
+        attribute: lei
+      type: string
+      max_length: 20
+      transform:
+        type: custom
+        function: validate_lei
+
+    - source: PmtInf/Dbtr/Id/OrgId/AnyBIC
+      target:
+        entity: Party
+        attribute: bic
+      type: string
+      transform:
+        type: custom
+        function: validate_bic
+
+    - source: PmtInf/Dbtr/Id/PrvtId/DtAndPlcOfBirth/BirthDt
+      target:
+        entity: Party
+        attribute: date_of_birth
+      type: date
+      date_format: "yyyy-MM-dd"
+      condition: "PmtInf/Dbtr/Id/PrvtId IS NOT NULL"
+
+    # ============================================
+    # Account Entity - Debtor Account
+    # ============================================
+    - source: PmtInf/DbtrAcct/Id/IBAN
+      target:
+        entity: Account
+        attribute: iban
+      type: string
+      max_length: 34
+      transform:
+        type: custom
+        function: validate_iban
+
+    - source: PmtInf/DbtrAcct/Id/Othr/Id
+      target:
+        entity: Account
+        attribute: account_number
+      type: string
+      condition: "PmtInf/DbtrAcct/Id/IBAN IS NULL"
+
+    - source: PmtInf/DbtrAcct/Tp/Cd
+      target:
+        entity: Account
+        attribute: account_type
+      type: string
+      transform:
+        type: lookup
+        table: account_type
+
+    - source: PmtInf/DbtrAcct/Ccy
+      target:
+        entity: Account
+        attribute: currency
+      type: string
+      max_length: 3
+
+    # ============================================
+    # FinancialInstitution - Debtor Agent
+    # ============================================
+    - source: PmtInf/DbtrAgt/FinInstnId/BICFI
+      target:
+        entity: FinancialInstitution
+        attribute: bic
+      type: string
+      required: true
+      transform:
+        type: custom
+        function: normalize_bic
+
+    - source: PmtInf/DbtrAgt/FinInstnId/ClrSysMmbId/MmbId
+      target:
+        entity: FinancialInstitution
+        attribute: member_id
+      type: string
+
+    - source: PmtInf/DbtrAgt/FinInstnId/Nm
+      target:
+        entity: FinancialInstitution
+        attribute: institution_name
+      type: string
+      max_length: 140
+
+    # ============================================
+    # Party Entity - Creditor (Beneficiary)
+    # ============================================
+    - source: PmtInf/CdtTrfTxInf/Cdtr/Nm
+      target:
+        entity: Party
+        attribute: name
+      type: string
+      required: true
+      max_length: 140
+      notes: "Creditor/Beneficiary name"
+
+    - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/Ctry
+      target:
+        entity: Address
+        attribute: country
+      type: string
+      max_length: 2
+
+    - sources:
+        - PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine[1]
+        - PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/StrtNm
+      target:
+        entity: Address
+        attribute: street_name
+      type: string
+      transform:
+        type: merge
+
+    # ============================================
+    # Account Entity - Creditor Account
+    # ============================================
+    - source: PmtInf/CdtTrfTxInf/CdtrAcct/Id/IBAN
+      target:
+        entity: Account
+        attribute: iban
+      type: string
+      max_length: 34
+
+    - source: PmtInf/CdtTrfTxInf/CdtrAcct/Id/Othr/Id
+      target:
+        entity: Account
+        attribute: account_number
+      type: string
+      condition: "CdtTrfTxInf/CdtrAcct/Id/IBAN IS NULL"
+
+    # ============================================
+    # FinancialInstitution - Creditor Agent
+    # ============================================
+    - source: PmtInf/CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI
+      target:
+        entity: FinancialInstitution
+        attribute: bic
+      type: string
+      transform:
+        type: custom
+        function: normalize_bic
+
+    # ============================================
+    # Remittance Information
+    # ============================================
+    - source: PmtInf/CdtTrfTxInf/RmtInf/Ustrd
+      target:
+        entity: PaymentInstruction
+        attribute: remittance_information
+      type: string
+      max_length: 140
+      transform:
+        type: custom
+        function: format_remittance
+
+    - source: PmtInf/CdtTrfTxInf/RmtInf/Strd/RfrdDocInf/Nb
+      target:
+        entity: Document
+        attribute: document_number
+      type: string
+      condition: "RmtInf/Strd IS NOT NULL"
+
+    - source: PmtInf/CdtTrfTxInf/RmtInf/Strd/RfrdDocInf/Tp/CdOrPrtry/Cd
+      target:
+        entity: Document
+        attribute: document_type
+      type: string
+
+    # ============================================
+    # Regulatory Reporting
+    # ============================================
+    - source: PmtInf/CdtTrfTxInf/RgltryRptg/DtlsSeq/Cd
+      target:
+        entity: RegulatoryReporting
+        attribute: details
+      type: string
+      condition: "RgltryRptg IS NOT NULL"
+
+    - source: PmtInf/CdtTrfTxInf/RgltryRptg/DtlsSeq/Amt
+      target:
+        entity: RegulatoryReporting
+        attribute: amount
+      type: decimal
+
+    - source: PmtInf/CdtTrfTxInf/RgltryRptg/DtlsSeq/Amt/@Ccy
+      target:
+        entity: RegulatoryReporting
+        attribute: currency
+      type: string
+      extract: attribute
+
+    # ============================================
+    # Purpose
+    # ============================================
+    - source: PmtInf/CdtTrfTxInf/Purp/Cd
+      target:
+        entity: PaymentInstruction
+        attribute: purpose_code
+      type: string
+      max_length: 4
+
+    - source: PmtInf/CdtTrfTxInf/Purp/Prtry
+      target:
+        entity: PaymentInstruction
+        attribute: purpose_proprietary
+      type: string
+      condition: "Purp/Cd IS NULL"
+
+  # Validation rules
+  validations:
+    - id: VAL001
+      rule: "TRY_CAST(${PaymentInstruction__instructed_amount} AS DECIMAL(18,2)) IS NULL OR TRY_CAST(${PaymentInstruction__instructed_amount} AS DECIMAL(18,2)) > 0"
+      severity: ERROR
+      message: "Instructed amount must be greater than zero"
+      error_code: AM01
+
+    - id: VAL002
+      rule: "${PaymentInstruction__instructed_currency} IS NOT NULL"
+      severity: ERROR
+      message: "Currency is required"
+      error_code: AM02
+
+    - id: VAL003
+      rule: "LENGTH(${PaymentInstruction__end_to_end_id}) <= 35"
+      severity: ERROR
+      message: "End-to-end ID exceeds maximum length of 35"
+      error_code: FF01
+
+    - id: VAL004
+      rule: "${Party__name} IS NOT NULL"
+      severity: WARNING
+      message: "Party name should be provided"
+
+    - id: VAL005
+      rule: "${FinancialInstitution__bic} IS NULL OR ${FinancialInstitution__bic} RLIKE '^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$'"
+      severity: ERROR
+      message: "Invalid BIC format"
+      error_code: RC01
+
+  # Data quality configuration
+  quality:
+    completeness:
+      - field: PaymentInstruction__instructed_amount
+        weight: 1.0
+      - field: PaymentInstruction__end_to_end_id
+        weight: 1.0
+      - field: Party__name
+        weight: 0.8
+      - field: Account__iban
+        weight: 0.7
+      - field: FinancialInstitution__bic
+        weight: 0.9
+    accuracy:
+      - field: Account__iban
+        validation: "validate_iban"
+      - field: FinancialInstitution__bic
+        validation: "validate_bic"
+    timeliness:
+      timestamp_field: Payment__creation_datetime
+      max_age_hours: 24
+
+  # Performance optimization hints
+  optimization:
+    partition_filter: "creation_date >= current_date - 7"
+    cluster_by:
+      - debtor_agent_bic
+      - creditor_agent_bic
+    broadcast_lookups: true
+    cache_parsed: false

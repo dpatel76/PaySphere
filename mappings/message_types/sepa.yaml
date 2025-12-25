@@ -1,0 +1,565 @@
+# GPS CDM - SEPA Full Mapping
+# Single Euro Payments Area Credit Transfer
+#
+# This file defines the complete transformation:
+#   Bronze (raw SEPA) → Silver (stg_sepa) → Gold (cdm_payment_instruction)
+
+version: "2.0"
+
+mapping:
+  id: SEPA_FULL
+  name: "SEPA Credit Transfer"
+  message_type: "SEPA"
+  message_version: "pain.001.001.09"
+  description: |
+    Complete Bronze→Silver→Gold transformation for SEPA Credit Transfer.
+    Based on EPC SEPA Credit Transfer Scheme Rulebook.
+
+  # ============================================================================
+  # STAGE 1: BRONZE → SILVER
+  # ============================================================================
+  bronze_to_silver:
+    source:
+      layer: bronze
+      table: raw_payment_messages
+      content_column: raw_content
+      format: XML
+      parser: iso20022
+      namespace: "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"
+      root_element: Document/CstmrCdtTrfInitn
+      filter:
+        message_type: "SEPA"
+
+    target:
+      layer: silver
+      table: stg_sepa
+
+    entity_extraction:
+      - path: //PmtInf
+        entity: payment_info
+        key_field: PmtInfId
+        children:
+          - path: CdtTrfTxInf
+            entity: transaction
+            key_field: PmtId/EndToEndId
+
+    fields:
+      # --- Group Header ---
+      - source: GrpHdr/MsgId
+        target: message_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: GrpHdr/CreDtTm
+        target: creation_datetime
+        type: timestamp
+        required: true
+
+      - source: GrpHdr/NbOfTxs
+        target: number_of_transactions
+        type: integer
+        required: true
+
+      - source: GrpHdr/CtrlSum
+        target: control_sum
+        type: decimal
+        precision: 18
+        scale: 2
+
+      - source: GrpHdr/InitgPty/Nm
+        target: initiating_party_name
+        type: string
+        max_length: 70
+
+      # --- Payment Information ---
+      - source: PmtInf/PmtInfId
+        target: payment_information_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: PmtInf/PmtMtd
+        target: payment_method
+        type: string
+        max_length: 3
+
+      - source: PmtInf/BtchBookg
+        target: batch_booking
+        type: boolean
+
+      - source: PmtInf/ReqdExctnDt/Dt
+        target: requested_execution_date
+        type: date
+        required: true
+
+      - source: PmtInf/PmtTpInf/SvcLvl/Cd
+        target: service_level_code
+        type: string
+        max_length: 4
+        notes: "Must be SEPA for SEPA CT"
+
+      - source: PmtInf/PmtTpInf/LclInstrm/Cd
+        target: local_instrument_code
+        type: string
+        max_length: 35
+
+      - source: PmtInf/PmtTpInf/CtgyPurp/Cd
+        target: category_purpose_code
+        type: string
+        max_length: 4
+
+      # --- Debtor ---
+      - source: PmtInf/Dbtr/Nm
+        target: debtor_name
+        type: string
+        required: true
+        max_length: 70
+
+      - source: PmtInf/Dbtr/PstlAdr/Ctry
+        target: debtor_country
+        type: string
+        max_length: 2
+
+      - source: PmtInf/Dbtr/PstlAdr/AdrLine
+        target: debtor_address_lines
+        type: array
+        array_type: string
+
+      - source: PmtInf/Dbtr/Id/OrgId/Othr/Id
+        target: debtor_org_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/Dbtr/Id/PrvtId/Othr/Id
+        target: debtor_private_id
+        type: string
+        max_length: 35
+
+      # --- Debtor Account ---
+      - source: PmtInf/DbtrAcct/Id/IBAN
+        target: debtor_iban
+        type: string
+        required: true
+        max_length: 34
+
+      - source: PmtInf/DbtrAcct/Ccy
+        target: debtor_account_currency
+        type: string
+        max_length: 3
+
+      # --- Debtor Agent ---
+      - source: PmtInf/DbtrAgt/FinInstnId/BICFI
+        target: debtor_agent_bic
+        type: string
+        required: true
+        max_length: 11
+
+      # --- Transaction ---
+      - source: PmtInf/CdtTrfTxInf/PmtId/InstrId
+        target: instruction_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/PmtId/EndToEndId
+        target: end_to_end_id
+        type: string
+        required: true
+        max_length: 35
+
+      # --- Amount ---
+      - source: PmtInf/CdtTrfTxInf/Amt/InstdAmt
+        target: amount
+        type: decimal
+        precision: 18
+        scale: 2
+        required: true
+        extract: text_content
+
+      - source: PmtInf/CdtTrfTxInf/Amt/InstdAmt/@Ccy
+        target: currency
+        type: string
+        required: true
+        max_length: 3
+        extract: attribute
+        notes: "Must be EUR for SEPA"
+
+      - source: PmtInf/CdtTrfTxInf/ChrgBr
+        target: charge_bearer
+        type: string
+        max_length: 4
+        notes: "Must be SLEV for SEPA"
+
+      # --- Creditor Agent ---
+      - source: PmtInf/CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI
+        target: creditor_agent_bic
+        type: string
+        max_length: 11
+
+      # --- Creditor ---
+      - source: PmtInf/CdtTrfTxInf/Cdtr/Nm
+        target: creditor_name
+        type: string
+        required: true
+        max_length: 70
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/Ctry
+        target: creditor_country
+        type: string
+        max_length: 2
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine
+        target: creditor_address_lines
+        type: array
+        array_type: string
+
+      # --- Creditor Account ---
+      - source: PmtInf/CdtTrfTxInf/CdtrAcct/Id/IBAN
+        target: creditor_iban
+        type: string
+        required: true
+        max_length: 34
+
+      # --- Ultimate Parties ---
+      - source: PmtInf/UltmtDbtr/Nm
+        target: ultimate_debtor_name
+        type: string
+        max_length: 70
+
+      - source: PmtInf/CdtTrfTxInf/UltmtCdtr/Nm
+        target: ultimate_creditor_name
+        type: string
+        max_length: 70
+
+      # --- Purpose & Remittance ---
+      - source: PmtInf/CdtTrfTxInf/Purp/Cd
+        target: purpose_code
+        type: string
+        max_length: 4
+
+      - source: PmtInf/CdtTrfTxInf/RmtInf/Ustrd
+        target: remittance_unstructured
+        type: string
+        max_length: 140
+
+      - source: PmtInf/CdtTrfTxInf/RmtInf/Strd/CdtrRefInf/Ref
+        target: creditor_reference
+        type: string
+        max_length: 35
+
+  # ============================================================================
+  # STAGE 2: SILVER → GOLD
+  # ============================================================================
+  silver_to_gold:
+    source:
+      layer: silver
+      table: stg_sepa
+      filter:
+        processing_status: "PENDING"
+
+    target:
+      layer: gold
+      table: cdm_payment_instruction
+      source_message_type: "SEPA"
+      source_stg_table: "stg_sepa"
+
+    fields:
+      - source: stg_id
+        target: source_stg_id
+        type: string
+        required: true
+
+      - source: end_to_end_id
+        target: end_to_end_id
+        type: string
+        required: true
+
+      - source: instruction_id
+        target: instruction_id_ext
+        type: string
+
+      - source: message_id
+        target: message_id
+        type: string
+
+      - target: payment_type
+        type: string
+        transform:
+          type: constant
+          value: "CREDIT_TRANSFER"
+
+      - target: scheme_code
+        type: string
+        transform:
+          type: constant
+          value: "SEPA_CT"
+
+      - target: direction
+        type: string
+        transform:
+          type: constant
+          value: "OUTBOUND"
+
+      - source: debtor_country
+        target: cross_border_flag
+        type: boolean
+        transform:
+          type: expression
+          expr: "debtor_country != creditor_country"
+
+      - target: priority
+        type: string
+        transform:
+          type: constant
+          value: "NORM"
+
+      - source: service_level_code
+        target: service_level
+        type: string
+
+      - source: local_instrument_code
+        target: local_instrument
+        type: string
+
+      - source: category_purpose_code
+        target: category_purpose
+        type: string
+
+      - source: amount
+        target: instructed_amount
+        type: decimal
+        required: true
+
+      - source: currency
+        target: instructed_currency
+        type: string
+        required: true
+
+      - source: creation_datetime
+        target: creation_datetime
+        type: timestamp
+
+      - source: requested_execution_date
+        target: requested_execution_date
+        type: date
+
+      - source: purpose_code
+        target: purpose
+        type: string
+
+      - source: charge_bearer
+        target: charge_bearer
+        type: string
+
+      - source: remittance_unstructured
+        target: remittance_unstructured
+        type: array
+        transform:
+          type: wrap_array
+
+      - source: creditor_reference
+        target: remittance_reference
+        type: string
+
+      - target: current_status
+        type: string
+        transform:
+          type: constant
+          value: "RECEIVED"
+
+      - source: source_system
+        target: source_system
+        type: string
+
+      - source: requested_execution_date
+        target: partition_year
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(YEAR FROM requested_execution_date)"
+
+      - source: requested_execution_date
+        target: partition_month
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(MONTH FROM requested_execution_date)"
+
+      - target: region
+        type: string
+        transform:
+          type: constant
+          value: "EU"
+
+    party_mappings:
+      - role: debtor
+        target_table: cdm_party
+        fields:
+          - source: debtor_name
+            target: name
+          - source: debtor_country
+            target: country
+          - source: debtor_org_id
+            target: registration_number
+          - source: debtor_private_id
+            target: identification_number
+
+      - role: creditor
+        target_table: cdm_party
+        fields:
+          - source: creditor_name
+            target: name
+          - source: creditor_country
+            target: country
+
+    account_mappings:
+      - role: debtor_account
+        target_table: cdm_account
+        fields:
+          - source: debtor_iban
+            target: iban
+          - source: debtor_account_currency
+            target: currency
+
+      - role: creditor_account
+        target_table: cdm_account
+        fields:
+          - source: creditor_iban
+            target: iban
+
+    fi_mappings:
+      - role: debtor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: debtor_agent_bic
+            target: bic
+
+      - role: creditor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: creditor_agent_bic
+            target: bic
+
+  # ============================================================================
+  # VALIDATION RULES (SEPA-specific)
+  # ============================================================================
+  validations:
+    - id: SEPA_VAL001
+      stage: silver
+      rule: "end_to_end_id IS NOT NULL AND LENGTH(end_to_end_id) <= 35"
+      severity: ERROR
+      message: "EndToEndId is required (max 35 chars)"
+      error_code: AT01
+      dimension: completeness
+
+    - id: SEPA_VAL002
+      stage: silver
+      rule: "amount > 0 AND amount <= 999999999.99"
+      severity: ERROR
+      message: "Amount must be between 0.01 and 999,999,999.99 EUR"
+      error_code: AM01
+      dimension: validity
+
+    - id: SEPA_VAL003
+      stage: silver
+      rule: "currency = 'EUR'"
+      severity: ERROR
+      message: "Currency must be EUR for SEPA"
+      error_code: AM03
+      dimension: validity
+
+    - id: SEPA_VAL004
+      stage: silver
+      rule: "debtor_iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$'"
+      severity: ERROR
+      message: "Invalid Debtor IBAN format"
+      error_code: AC01
+      dimension: accuracy
+
+    - id: SEPA_VAL005
+      stage: silver
+      rule: "creditor_iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$'"
+      severity: ERROR
+      message: "Invalid Creditor IBAN format"
+      error_code: AC01
+      dimension: accuracy
+
+    - id: SEPA_VAL006
+      stage: silver
+      rule: "debtor_agent_bic ~ '^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$'"
+      severity: ERROR
+      message: "Invalid Debtor Agent BIC"
+      error_code: RC01
+      dimension: accuracy
+
+    - id: SEPA_VAL007
+      stage: silver
+      rule: "charge_bearer IS NULL OR charge_bearer = 'SLEV'"
+      severity: ERROR
+      message: "Charge Bearer must be SLEV for SEPA"
+      error_code: CH01
+      dimension: validity
+
+    - id: SEPA_VAL008
+      stage: silver
+      rule: "service_level_code IS NULL OR service_level_code = 'SEPA'"
+      severity: ERROR
+      message: "Service Level must be SEPA"
+      error_code: SL01
+      dimension: validity
+
+    - id: SEPA_VAL009
+      stage: silver
+      rule: "SUBSTRING(debtor_iban, 1, 2) IN ('AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'GB', 'IS', 'LI', 'NO', 'CH', 'MC', 'SM', 'AD', 'VA')"
+      severity: ERROR
+      message: "Debtor IBAN must be from SEPA country"
+      error_code: AC02
+      dimension: validity
+
+  quality:
+    completeness:
+      - field: end_to_end_id
+        weight: 1.0
+        required: true
+      - field: amount
+        weight: 1.0
+        required: true
+      - field: debtor_iban
+        weight: 1.0
+        required: true
+      - field: creditor_iban
+        weight: 1.0
+        required: true
+      - field: debtor_name
+        weight: 1.0
+        required: true
+      - field: creditor_name
+        weight: 1.0
+        required: true
+      - field: debtor_agent_bic
+        weight: 0.9
+
+    accuracy:
+      - field: debtor_iban
+        validation: validate_iban
+      - field: creditor_iban
+        validation: validate_iban
+      - field: debtor_agent_bic
+        validation: validate_bic
+      - field: creditor_agent_bic
+        validation: validate_bic
+
+    thresholds:
+      overall_pass: 0.90
+      completeness_pass: 0.95
+      accuracy_pass: 0.98
+      validity_pass: 0.99
+
+  optimization:
+    bronze_to_silver:
+      batch_size: 2000
+      parallel_parse: true
+
+    silver_to_gold:
+      batch_size: 5000
+      partition_filter: "requested_execution_date >= CURRENT_DATE - 30"

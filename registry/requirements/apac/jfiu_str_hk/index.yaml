@@ -1,0 +1,145 @@
+# JFIU Suspicious Transaction Report (STR) - Hong Kong
+# Report Type: JFIU_STR
+# Filing Authority: JFIU (Joint Financial Intelligence Unit)
+# Supervisory Authority: HKMA (Hong Kong Monetary Authority)
+# Jurisdiction: HK
+# Total Requirements: 105
+
+report_metadata:
+  report_type: "JFIU_STR"
+  report_name: "Hong Kong Suspicious Transaction Report"
+  fiu: "JFIU"
+  fiu_full_name: "Joint Financial Intelligence Unit"
+  supervisor: "HKMA"
+  supervisor_full_name: "Hong Kong Monetary Authority"
+  jurisdiction: "HK"
+  regulation: "Anti-Money Laundering and Counter-Terrorist Financing Ordinance (AMLO) Cap. 615"
+  effective_date: "2012-04-01"
+  last_updated: "2024-12-21"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "As soon as reasonably practicable"
+  output_format: "XML"
+  submission_method: "JFIU Online Portal"
+  submission_url: "https://www.jfiu.gov.hk/"
+
+requirement_summary:
+  total: 105
+  by_category:
+    ELIGIBILITY: 5
+    FIELD: 82
+    VALIDATION: 11
+    FORMAT: 4
+    TIMING: 2
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 92
+    RECOMMENDED: 10
+    OPTIONAL: 3
+
+requirements:
+  eligibility:
+    - id: "REQ-HKSTR-001"
+      title: "Knowledge/Suspicion of ML/TF"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Knowledge or suspicion that property is proceeds of crime or terrorist property"
+
+    - id: "REQ-HKSTR-002"
+      title: "Financial Institution Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Licensed banks, SVF licensees, MSOs"
+
+  fields_transaction:
+    - id: "REQ-HKSTR-020"
+      title: "Transaction Reference"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "payment_id"
+
+    - id: "REQ-HKSTR-021"
+      title: "Transaction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+
+    - id: "REQ-HKSTR-022"
+      title: "Transaction Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_amount"
+
+    - id: "REQ-HKSTR-023"
+      title: "Transaction Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_currency"
+
+  fields_subject:
+    - id: "REQ-HKSTR-030"
+      title: "Subject Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "name"
+
+    - id: "REQ-HKSTR-031"
+      title: "Subject HKID/Passport"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PartyIdentification"
+        field: "id_number"
+        id_type: "HKID"
+
+    - id: "REQ-HKSTR-032"
+      title: "Subject Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "address"
+
+  fields_suspicion:
+    - id: "REQ-HKSTR-040"
+      title: "Grounds for Suspicion"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "suspicion_indicators"
+
+    - id: "REQ-HKSTR-041"
+      title: "Narrative Description"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "narrative"
+
+  timing:
+    - id: "REQ-HKSTR-090"
+      title: "As Soon As Practicable"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "No specific deadline - as soon as reasonably practicable"
+
+cdm_coverage:
+  entities_used:
+    - Payment
+    - PaymentInstruction
+    - Party
+    - PartyIdentification
+    - Account
+    - FinancialInstitution
+    - ComplianceCase
+  coverage_percentage: 100

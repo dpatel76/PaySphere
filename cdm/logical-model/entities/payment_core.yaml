@@ -1,0 +1,467 @@
+# Payment Core Domain Entities
+# Version: 1.0.0
+# Entities: Payment, PaymentInstruction, CreditTransfer, DirectDebit, PaymentReturn, PaymentReversal, PaymentStatusReport
+
+domain:
+  name: payment_core
+  description: Core payment types and lifecycle management
+  entity_count: 7
+
+entities:
+  - name: Payment
+    description: Root entity representing a payment transaction
+    table_name: payment
+    primary_key: payment_id
+    attributes:
+      - name: payment_id
+        type: uuid
+        required: true
+        description: Primary key
+
+      - name: payment_type
+        type: enum
+        required: true
+        values: [CREDIT_TRANSFER, DIRECT_DEBIT, RETURN, REVERSAL, STATUS_REPORT]
+        description: Type of payment
+
+      - name: scheme_code
+        type: enum
+        required: true
+        values: [ACH, FEDWIRE, CHIPS, SWIFT, SEPA, RTP, FEDNOW, BACS, FPS, CHAPS, PIX, UPI, PROMPTPAY, PAYNOW, CIPS, CHECK, MOBILE]
+        description: Payment scheme/network
+
+      - name: status
+        type: enum
+        required: true
+        values:
+          - initiated
+          - received
+          - accepted
+          - validation_pending
+          - validated
+          - validation_failed
+          - fraud_screening
+          - fraud_clear
+          - fraud_hold
+          - fraud_reject
+          - sanctions_screening
+          - sanctions_clear
+          - sanctions_hit
+          - sanctions_rejected
+          - compliance_review
+          - compliance_approved
+          - compliance_rejected
+          - enrichment_pending
+          - enriched
+          - processing
+          - queued
+          - routed
+          - transmitted
+          - in_clearing
+          - clearing_failed
+          - settled
+          - settlement_pending
+          - settlement_failed
+          - completed
+          - returned
+          - reversed
+          - cancelled
+          - rejected
+          - failed
+          - suspended
+          - on_hold
+          - awaiting_approval
+          - approved
+          - partially_settled
+        description: Current lifecycle status
+
+      - name: direction
+        type: enum
+        required: true
+        values: [INBOUND, OUTBOUND, INTERNAL]
+        description: Payment direction
+
+      - name: cross_border_flag
+        type: boolean
+        required: false
+        default: false
+        description: Cross-border payment indicator
+
+      - name: priority
+        type: enum
+        required: false
+        values: [HIGH, NORM, URGP]
+        default: NORM
+        description: Processing priority
+
+      - name: created_at
+        type: timestamp
+        required: true
+        description: Creation timestamp
+
+      - name: valid_from
+        type: date
+        required: true
+        description: Business validity start
+
+      - name: valid_to
+        type: date
+        required: false
+        description: Business validity end
+
+    relationships:
+      - name: instruction
+        target: PaymentInstruction
+        cardinality: one_to_one
+        required: true
+
+      - name: events
+        target: PaymentEvent
+        cardinality: one_to_many
+        required: false
+
+      - name: settlement
+        target: Settlement
+        cardinality: one_to_one
+        required: false
+
+  - name: PaymentInstruction
+    description: Detailed instruction for payment execution
+    table_name: payment_instruction
+    primary_key: instruction_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: instruction_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+        description: FK to Payment
+
+      - name: end_to_end_id
+        type: string
+        max_length: 35
+        required: false
+        description: End-to-end identification (ISO 20022)
+
+      - name: uetr
+        type: uuid
+        required: false
+        description: SWIFT UETR for gpi payments
+
+      - name: transaction_id
+        type: string
+        max_length: 35
+        required: false
+        description: Transaction identification
+
+      - name: instruction_id_ext
+        type: string
+        max_length: 35
+        required: false
+        description: External instruction ID
+
+      - name: debtor_id
+        type: uuid
+        required: true
+        description: FK to Party (payer)
+
+      - name: debtor_account_id
+        type: uuid
+        required: false
+        description: FK to Account
+
+      - name: debtor_agent_id
+        type: uuid
+        required: false
+        description: FK to FinancialInstitution
+
+      - name: creditor_id
+        type: uuid
+        required: true
+        description: FK to Party (payee)
+
+      - name: creditor_account_id
+        type: uuid
+        required: false
+        description: FK to Account
+
+      - name: creditor_agent_id
+        type: uuid
+        required: false
+        description: FK to FinancialInstitution
+
+      - name: instructed_amount_id
+        type: uuid
+        required: true
+        description: FK to Amount
+
+      - name: requested_execution_date
+        type: date
+        required: true
+        description: Requested execution date
+
+      - name: requested_execution_time
+        type: time
+        required: false
+        description: Requested execution time
+
+      - name: purpose
+        type: string
+        max_length: 4
+        required: false
+        description: ISO 20022 purpose code
+
+      - name: purpose_description
+        type: string
+        max_length: 500
+        required: false
+        description: Purpose description
+
+      - name: charge_bearer
+        type: enum
+        values: [DEBT, CRED, SHAR, SLEV]
+        required: false
+        default: SHAR
+        description: Charge bearer code
+
+  - name: CreditTransfer
+    description: Credit transfer specific details
+    table_name: credit_transfer
+    primary_key: credit_transfer_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: credit_transfer_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: intermediary_agent_1_id
+        type: uuid
+        required: false
+        description: FK to FinancialInstitution
+
+      - name: intermediary_agent_2_id
+        type: uuid
+        required: false
+
+      - name: intermediary_agent_3_id
+        type: uuid
+        required: false
+
+      - name: instruction_for_creditor_agent
+        type: string
+        max_length: 140
+        required: false
+
+      - name: instruction_for_next_agent
+        type: string
+        max_length: 140
+        required: false
+
+      - name: previous_instructing_agent_id
+        type: uuid
+        required: false
+
+  - name: DirectDebit
+    description: Direct debit specific details
+    table_name: direct_debit
+    primary_key: direct_debit_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: direct_debit_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: mandate_id
+        type: string
+        max_length: 35
+        required: true
+        description: Direct debit mandate reference
+
+      - name: mandate_date
+        type: date
+        required: true
+        description: Mandate signing date
+
+      - name: sequence_type
+        type: enum
+        values: [FRST, RCUR, FNAL, OOFF]
+        required: true
+        description: First, Recurring, Final, One-off
+
+      - name: creditor_scheme_id
+        type: string
+        max_length: 35
+        required: false
+
+      - name: direct_debit_type
+        type: enum
+        values: [B2B, CORE]
+        required: false
+
+      - name: amendment_indicator
+        type: boolean
+        required: false
+        default: false
+
+  - name: PaymentReturn
+    description: Payment return details
+    table_name: payment_return
+    primary_key: return_id
+    attributes:
+      - name: return_id
+        type: uuid
+        required: true
+
+      - name: original_payment_id
+        type: uuid
+        required: true
+        description: FK to original Payment
+
+      - name: return_payment_id
+        type: uuid
+        required: true
+        description: FK to return Payment
+
+      - name: return_reason_code
+        type: string
+        max_length: 4
+        required: true
+        description: ISO 20022 return reason code
+
+      - name: return_reason_description
+        type: string
+        max_length: 500
+        required: false
+
+      - name: original_end_to_end_id
+        type: string
+        max_length: 35
+        required: false
+
+      - name: original_transaction_id
+        type: string
+        max_length: 35
+        required: false
+
+      - name: return_amount_id
+        type: uuid
+        required: true
+        description: FK to Amount
+
+      - name: return_date
+        type: date
+        required: true
+
+      - name: charges_information
+        type: json
+        required: false
+
+  - name: PaymentReversal
+    description: Payment reversal details
+    table_name: payment_reversal
+    primary_key: reversal_id
+    attributes:
+      - name: reversal_id
+        type: uuid
+        required: true
+
+      - name: original_payment_id
+        type: uuid
+        required: true
+
+      - name: reversal_payment_id
+        type: uuid
+        required: true
+
+      - name: reversal_reason_code
+        type: string
+        max_length: 4
+        required: true
+
+      - name: reversal_reason_description
+        type: string
+        max_length: 500
+        required: false
+
+      - name: original_interbank_settlement_amount_id
+        type: uuid
+        required: false
+
+      - name: reversal_date
+        type: date
+        required: true
+
+  - name: PaymentStatusReport
+    description: Payment status report for tracking
+    table_name: payment_status_report
+    primary_key: status_report_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: status_report_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: message_id
+        type: string
+        max_length: 35
+        required: true
+
+      - name: creation_date_time
+        type: timestamp
+        required: true
+
+      - name: status_code
+        type: string
+        max_length: 4
+        required: true
+        description: ISO 20022 status code
+
+      - name: status_reason_code
+        type: string
+        max_length: 4
+        required: false
+
+      - name: status_reason_description
+        type: string
+        max_length: 500
+        required: false
+
+      - name: acceptance_date_time
+        type: timestamp
+        required: false
+
+      - name: effective_interbank_settlement_date
+        type: date
+        required: false
+
+      - name: original_message_id
+        type: string
+        max_length: 35
+        required: false

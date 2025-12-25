@@ -1,0 +1,343 @@
+# Account Domain Entities
+# Version: 1.0.0
+# Entities: Account, CashAccount, AccountOwner
+
+domain:
+  name: account
+  description: Account types and ownership relationships
+  entity_count: 3
+
+entities:
+  - name: Account
+    description: Core account entity
+    table_name: account
+    primary_key: account_id
+    attributes:
+      - name: account_id
+        type: uuid
+        required: true
+
+      - name: account_number
+        type: string
+        max_length: 34
+        required: true
+        description: Account number (max 34 chars per IBAN standard)
+
+      - name: iban
+        type: string
+        max_length: 34
+        pattern: "^[A-Z]{2}[0-9]{2}[A-Z0-9]+$"
+        required: false
+        description: IBAN format
+
+      - name: account_type
+        type: enum
+        required: true
+        values: [CHECKING, SAVINGS, MONEY_MARKET, CD, LOAN, CREDIT_CARD, INVESTMENT, RETIREMENT, TRUST, CUSTODIAL, ESCROW, NOSTRO, VOSTRO, OTHER]
+
+      - name: currency
+        type: string
+        max_length: 3
+        pattern: "^[A-Z]{3}$"
+        required: true
+        description: ISO 4217 currency code
+
+      - name: financial_institution_id
+        type: uuid
+        required: true
+        description: FK to FinancialInstitution
+
+      - name: branch_id
+        type: string
+        max_length: 50
+        required: false
+
+      - name: account_status
+        type: enum
+        required: true
+        values: [ACTIVE, INACTIVE, DORMANT, CLOSED, FROZEN, SUSPENDED]
+
+      - name: open_date
+        type: date
+        required: true
+
+      - name: close_date
+        type: date
+        required: false
+
+      - name: current_balance
+        type: decimal
+        precision: 18
+        scale: 4
+        required: false
+
+      - name: available_balance
+        type: decimal
+        precision: 18
+        scale: 4
+        required: false
+
+      - name: ledger_balance
+        type: decimal
+        precision: 18
+        scale: 4
+        required: false
+
+      - name: last_transaction_date
+        type: timestamp
+        required: false
+
+      # FATCA Extensions
+      - name: fatca_status
+        type: enum
+        values: [PARTICIPATING_FFI_ACCOUNT, NON_PARTICIPATING_FFI_ACCOUNT, US_REPORTABLE_ACCOUNT, RECALCITRANT_ACCOUNT, DORMANT_ACCOUNT, EXEMPT_ACCOUNT]
+        required: false
+
+      - name: fatca_giin
+        type: string
+        max_length: 19
+        required: false
+
+      - name: account_holder_type
+        type: enum
+        values: [INDIVIDUAL, ENTITY_ACTIVE_NFE, ENTITY_PASSIVE_NFE, ENTITY_FINANCIAL_INSTITUTION, ENTITY_GOVERNMENT, ENTITY_INTERNATIONAL_ORG]
+        required: false
+
+      # CRS Extensions
+      - name: crs_reportable_account
+        type: boolean
+        required: false
+
+      - name: controlling_persons
+        type: array
+        item_type: object
+        required: false
+        description: Controlling persons for entities (FATCA/CRS)
+
+      - name: dormant_account
+        type: boolean
+        required: false
+
+      - name: account_balance_for_tax_reporting
+        type: decimal
+        precision: 18
+        scale: 4
+        required: false
+
+      - name: withholding_tax_rate
+        type: decimal
+        precision: 5
+        scale: 2
+        required: false
+
+      # FinCEN Extensions
+      - name: loan_amount
+        type: decimal
+        precision: 18
+        scale: 2
+        required: false
+        description: FinCEN SAR Item 59
+
+      - name: loan_origination
+        type: date
+        required: false
+        description: FinCEN SAR Item 60
+
+      # Risk/Compliance
+      - name: sanctions_screening_status
+        type: enum
+        values: [not_screened, clear, hit, pending, false_positive]
+        required: false
+        default: not_screened
+
+      - name: risk_rating
+        type: enum
+        values: [low, medium, high, very_high]
+        required: false
+
+      # Bi-temporal
+      - name: effective_from
+        type: date
+        required: true
+
+      - name: effective_to
+        type: date
+        required: false
+
+      - name: is_current
+        type: boolean
+        required: true
+
+    relationships:
+      - name: financial_institution
+        target: FinancialInstitution
+        cardinality: many_to_one
+        required: true
+
+      - name: owners
+        target: AccountOwner
+        cardinality: one_to_many
+        required: true
+
+  - name: CashAccount
+    description: Cash account specific attributes
+    table_name: cash_account
+    primary_key: cash_account_id
+    foreign_keys:
+      - name: account_id
+        target: Account
+        required: true
+    attributes:
+      - name: cash_account_id
+        type: uuid
+        required: true
+
+      - name: account_id
+        type: uuid
+        required: true
+
+      - name: cash_account_type
+        type: enum
+        required: true
+        values:
+          - CACC  # Current Account
+          - SVGS  # Savings Account
+          - CASH  # Cash
+          - LOAN  # Loan Account
+          - CARD  # Card Account
+          - OTHR  # Other
+        description: ISO 20022 cash account type
+
+      - name: proprietary_type
+        type: string
+        max_length: 35
+        required: false
+        description: Proprietary account type
+
+      - name: secondary_id
+        type: string
+        max_length: 34
+        required: false
+        description: Secondary identification
+
+      - name: overdraft_limit
+        type: decimal
+        precision: 18
+        scale: 4
+        required: false
+
+      - name: credit_limit
+        type: decimal
+        precision: 18
+        scale: 4
+        required: false
+
+      - name: interest_rate
+        type: decimal
+        precision: 7
+        scale: 4
+        required: false
+        description: Annual interest rate
+
+      - name: interest_type
+        type: enum
+        values: [FIXED, VARIABLE, TIERED]
+        required: false
+
+      - name: minimum_balance
+        type: decimal
+        precision: 18
+        scale: 4
+        required: false
+
+      - name: monthly_fee
+        type: decimal
+        precision: 10
+        scale: 2
+        required: false
+
+  - name: AccountOwner
+    description: Account ownership relationship
+    table_name: account_owner
+    primary_key: account_owner_id
+    foreign_keys:
+      - name: account_id
+        target: Account
+        required: true
+      - name: party_id
+        target: Party
+        required: true
+    attributes:
+      - name: account_owner_id
+        type: uuid
+        required: true
+
+      - name: account_id
+        type: uuid
+        required: true
+
+      - name: party_id
+        type: uuid
+        required: true
+
+      - name: ownership_type
+        type: enum
+        required: true
+        values: [PRIMARY, JOINT, BENEFICIAL, AUTHORIZED_SIGNER, POWER_OF_ATTORNEY, TRUSTEE, NOMINEE, CUSTODIAN]
+
+      - name: ownership_percentage
+        type: decimal
+        precision: 5
+        scale: 2
+        required: false
+        description: Ownership percentage (0-100)
+
+      - name: role
+        type: enum
+        values: [OWNER, SIGNATORY, TRUSTEE, NOMINEE, GUARDIAN, EXECUTOR, ADMINISTRATOR]
+        required: false
+
+      - name: signing_authority
+        type: enum
+        values: [SOLE, JOINT_ANY, JOINT_ALL]
+        required: false
+        description: Signing authority type
+
+      - name: signing_limit
+        type: decimal
+        precision: 18
+        scale: 2
+        required: false
+        description: Maximum transaction signing limit
+
+      - name: effective_from
+        type: date
+        required: true
+        description: Relationship start date
+
+      - name: effective_to
+        type: date
+        required: false
+        description: Relationship end date
+
+      - name: is_current
+        type: boolean
+        required: true
+
+      # CRS/FATCA Extensions
+      - name: is_controlling_person
+        type: boolean
+        required: false
+        default: false
+        description: Controlling person indicator for CRS
+
+      - name: control_type
+        type: enum
+        values: [OWNERSHIP, SENIOR_MANAGING_OFFICIAL, CONTROLLING_PERSON]
+        required: false
+
+      - name: tax_residence
+        type: array
+        item_type: string
+        required: false
+        description: Tax residence country codes

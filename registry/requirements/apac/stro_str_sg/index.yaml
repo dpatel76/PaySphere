@@ -1,0 +1,136 @@
+# STRO Suspicious Transaction Report (STR) - Singapore
+# Report Type: STRO_STR
+# Filing Authority: STRO (Suspicious Transaction Reporting Office)
+# Supervisory Authority: MAS (Monetary Authority of Singapore)
+# Jurisdiction: SG
+# Total Requirements: 112
+
+report_metadata:
+  report_type: "STRO_STR"
+  report_name: "Singapore Suspicious Transaction Report"
+  fiu: "STRO"
+  fiu_full_name: "Suspicious Transaction Reporting Office"
+  supervisor: "MAS"
+  supervisor_full_name: "Monetary Authority of Singapore"
+  jurisdiction: "SG"
+  regulation: "Corruption, Drug Trafficking and Other Serious Crimes Act (CDSA) Section 39"
+  effective_date: "2007-07-01"
+  last_updated: "2024-12-21"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "As soon as reasonably practicable"
+  output_format: "XML"
+  submission_method: "STRO Portal"
+  submission_url: "https://www.police.gov.sg/stro"
+
+requirement_summary:
+  total: 112
+  by_category:
+    ELIGIBILITY: 5
+    FIELD: 88
+    VALIDATION: 12
+    FORMAT: 4
+    TIMING: 2
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 98
+    RECOMMENDED: 11
+    OPTIONAL: 3
+
+requirements:
+  eligibility:
+    - id: "REQ-MASSTR-001"
+      title: "Suspicion of Drug/Serious Crime Proceeds"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Knowledge or suspicion that property represents proceeds of drug trafficking or serious crime"
+
+    - id: "REQ-MASSTR-002"
+      title: "FI/DNFBP Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Financial institutions and designated non-financial businesses"
+
+  fields_transaction:
+    - id: "REQ-MASSTR-020"
+      title: "Transaction Reference"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "payment_id"
+
+    - id: "REQ-MASSTR-021"
+      title: "Transaction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+
+    - id: "REQ-MASSTR-022"
+      title: "Transaction Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_amount"
+
+  fields_subject:
+    - id: "REQ-MASSTR-030"
+      title: "Subject Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "name"
+
+    - id: "REQ-MASSTR-031"
+      title: "Subject NRIC/FIN/Passport"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PartyIdentification"
+        field: "id_number"
+        id_types: ["NRIC", "FIN", "PASSPORT"]
+
+    - id: "REQ-MASSTR-032"
+      title: "Subject Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "address"
+
+  fields_suspicion:
+    - id: "REQ-MASSTR-040"
+      title: "Grounds for Suspicion"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "suspicion_indicators"
+
+    - id: "REQ-MASSTR-041"
+      title: "Detailed Narrative"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "narrative"
+
+  timing:
+    - id: "REQ-MASSTR-090"
+      title: "As Soon As Practicable"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+cdm_coverage:
+  entities_used:
+    - Payment
+    - PaymentInstruction
+    - Party
+    - PartyIdentification
+    - Account
+    - FinancialInstitution
+    - ComplianceCase
+  coverage_percentage: 100

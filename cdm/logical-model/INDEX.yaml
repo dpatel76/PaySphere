@@ -1,0 +1,697 @@
+# GPS Payments CDM - Logical Model Index
+# Version: 1.1.0
+# Date: 2024-12-21
+# Total Entities: 29
+# Payment Standards: 69
+# Regulatory Reports: 32+
+
+model:
+  name: GPS Payments CDM
+  version: "1.1.0"
+  description: Common Domain Model for Global Payment Services
+  status: ACTIVE
+  created_date: "2024-12-20"
+  last_updated: "2024-12-21"
+
+statistics:
+  total_entities: 29
+  total_domains: 8
+  total_attributes: 412
+  total_relationships: 24
+  payment_standards: 69
+  regulatory_reports: 32
+  total_fields_mapped: 5983
+
+# =============================================================================
+# PAYMENT STANDARDS COVERAGE (69 Standards)
+# =============================================================================
+
+payment_standards:
+  iso20022:
+    count: 33
+    categories:
+      pain:
+        count: 6
+        messages:
+          - pain.001  # Customer Credit Transfer Initiation
+          - pain.002  # Customer Payment Status Report
+          - pain.007  # Customer Payment Reversal
+          - pain.008  # Customer Direct Debit Initiation
+          - pain.013  # Creditor Payment Activation Request Amendment
+          - pain.014  # Creditor Payment Activation Request Status Report
+
+      pacs:
+        count: 7
+        messages:
+          - pacs.002  # FI Payment Status Report
+          - pacs.003  # FI Customer Direct Debit
+          - pacs.004  # Payment Return
+          - pacs.007  # FI Payment Reversal
+          - pacs.008  # FI Credit Transfer
+          - pacs.009  # FI Credit Transfer Own Account
+          - pacs.028  # FI Payment Status Request
+
+      camt:
+        count: 16
+        messages:
+          - camt.026  # Unable to Apply
+          - camt.027  # Claim Non-Receipt
+          - camt.029  # Resolution of Investigation
+          - camt.050  # Liquidity Credit Transfer
+          - camt.052  # Account Report (Intraday)
+          - camt.053  # Bank Statement
+          - camt.054  # Debit/Credit Notification
+          - camt.055  # Customer Payment Cancellation Request
+          - camt.056  # FI Payment Cancellation Request
+          - camt.057  # Notification to Receive
+          - camt.058  # Notification to Receive Cancellation Advice
+          - camt.059  # Account Reporting Request
+          - camt.060  # Account Reporting Request (Alternative)
+          - camt.086  # Bank Service Billing
+          - camt.087  # Request to Modify Payment
+
+      acmt:
+        count: 4
+        messages:
+          - acmt.001  # Account Opening Instruction
+          - acmt.002  # Account Details Confirmation
+          - acmt.003  # Account Modification Instruction
+          - acmt.007  # Account Opening Request
+
+  swift_mt:
+    count: 14
+    messages:
+      - MT103     # Single Customer Credit Transfer
+      - MT103+    # STP Credit Transfer
+      - MT200     # FI Own Account Transfer
+      - MT201     # Multiple FI Transfer for Own Account
+      - MT202     # General FI Transfer
+      - MT202COV  # General FI Transfer Cover Payment
+      - MT203     # Multiple FI to FI Transfer
+      - MT204     # FI Direct Debit
+      - MT205     # FI Direct Debit (COV)
+      - MT900     # Confirmation of Debit
+      - MT910     # Confirmation of Credit
+      - MT940     # Customer Statement Message
+      - MT942     # Interim Transaction Report
+      - MT950     # Statement Message
+
+  regional_systems:
+    count: 22
+    united_states:
+      - ACH       # NACHA Automated Clearing House
+      - Fedwire   # Federal Reserve Wire Transfer
+      - CHIPS     # Clearing House Interbank Payment System
+      - RTP       # Real-Time Payments
+      - FedNow    # Federal Reserve Instant Payment
+
+    united_kingdom:
+      - BACS      # Bankers Automated Clearing
+      - FPS       # Faster Payments Service
+      - CHAPS     # Clearing House Automated Payment System
+
+    europe:
+      - SEPA_SCT      # SEPA Credit Transfer
+      - SEPA_INST     # SEPA Instant Credit Transfer
+      - SEPA_SDD_CORE # SEPA Direct Debit Core
+      - SEPA_SDD_B2B  # SEPA Direct Debit B2B
+      - TARGET2       # Trans-European RTGS
+
+    latin_america:
+      - PIX       # Brazil Instant Payment System
+
+    asia_pacific:
+      - UPI       # India Unified Payments Interface
+      - IMPS      # India Immediate Payment Service
+      - PayNow    # Singapore Instant Payment
+      - PromptPay # Thailand Instant Payment
+      - InstaPay  # Philippines Instant Payment
+      - NPP       # Australia New Payments Platform
+      - CNAPS     # China National Advanced Payment System
+      - CIPS      # China Cross-border Interbank Payment System
+      - RTGS_HK   # Hong Kong Real-Time Gross Settlement
+
+# =============================================================================
+# REGULATORY REPORTS COVERAGE (32+ Reports)
+# =============================================================================
+
+regulatory_reports:
+  fincen:
+    jurisdiction: US
+    count: 7
+    reports:
+      - type: CTR
+        form: Form 112
+        description: Currency Transaction Report
+        threshold: $10,000
+        frequency: Daily
+        fields: 117
+
+      - type: SAR
+        form: Form 111
+        description: Suspicious Activity Report
+        frequency: Event-driven
+        deadline: 30 days
+        fields: 184
+
+      - type: FBAR
+        form: Form 114
+        description: Foreign Bank Account Report
+        frequency: Annual
+        fields: 92
+
+      - type: Form_8300
+        description: Cash Payments Over $10,000
+        frequency: Event-driven
+        fields: 78
+
+      - type: CMIR
+        form: Form 104
+        description: Currency and Monetary Instrument Report
+        frequency: Event-driven
+        fields: 85
+
+      - type: 314(a)
+        description: Information Request
+        frequency: On-demand
+        fields: 45
+
+      - type: 314(b)
+        description: Information Sharing Notice
+        frequency: Event-driven
+        fields: 38
+
+  austrac:
+    jurisdiction: AU
+    count: 5
+    reports:
+      - type: IFTI
+        description: International Funds Transfer Instruction
+        frequency: Real-time
+        deadline: 10 business days
+        fields: 87
+
+      - type: IFTI_IN
+        description: IFTI Inbound
+        fields: 83
+
+      - type: IFTI_OUT
+        description: IFTI Outbound
+        fields: 83
+
+      - type: TTR
+        description: Threshold Transaction Report
+        threshold: AUD 10,000
+        frequency: Event-driven
+        fields: 76
+
+      - type: SMR
+        description: Suspicious Matter Report
+        frequency: Event-driven
+        deadline: 24 hours (terrorism) / 3 days (other)
+        fields: 92
+
+  fintrac:
+    jurisdiction: CA
+    count: 4
+    reports:
+      - type: LCTR
+        description: Large Cash Transaction Report
+        threshold: CAD 10,000
+        frequency: Event-driven
+        fields: 95
+
+      - type: STR
+        description: Suspicious Transaction Report
+        frequency: Event-driven
+        fields: 125
+
+      - type: EFTR
+        description: Electronic Funds Transfer Report
+        threshold: CAD 10,000
+        frequency: Event-driven
+        fields: 88
+
+      - type: TPR
+        description: Terrorist Property Report
+        frequency: Immediate
+        fields: 62
+
+  irs_oecd:
+    jurisdiction: INTERNATIONAL
+    count: 4
+    reports:
+      - type: FATCA_8966
+        form: Form 8966
+        description: FATCA Report
+        frequency: Annual
+        deadline: March 31
+        fields: 97
+
+      - type: FATCA_POOL
+        description: FATCA Pool Report
+        frequency: Annual
+        fields: 67
+
+      - type: CRS
+        description: Common Reporting Standard
+        jurisdictions: 100+
+        frequency: Annual
+        fields: 108
+
+      - type: CRS_CP
+        description: CRS Controlling Person Report
+        frequency: Annual
+        fields: 85
+
+  eba:
+    jurisdiction: EU
+    count: 1
+    reports:
+      - type: PSD2_FRAUD
+        description: PSD2 Payment Fraud Statistical Report
+        regulation: PSD2 Directive 2015/2366
+        frequency: Semi-annual
+        fields: 87
+
+  esma:
+    jurisdiction: EU
+    count: 3
+    reports:
+      - type: MIFID_II
+        description: MiFID II Transaction Report
+        frequency: T+1
+        fields: 142
+
+      - type: EMIR
+        description: EMIR Trade Report
+        frequency: T+1
+        fields: 156
+
+      - type: MAR_STOR
+        description: Suspicious Transaction and Order Report
+        frequency: Event-driven
+        fields: 98
+
+  eu_general:
+    jurisdiction: EU
+    count: 2
+    reports:
+      - type: AMLD5_BO
+        description: AMLD5 Beneficial Ownership
+        regulation: AMLD5
+        fields: 95
+
+      - type: TFR_ART15
+        description: Terrorism Financing Regulation Article 15
+        frequency: Event-driven
+        fields: 72
+
+  uk_nca:
+    jurisdiction: UK
+    count: 2
+    reports:
+      - type: UK_SAR
+        description: UK Suspicious Activity Report
+        regulation: POCA 2002, TA 2000
+        frequency: Event-driven
+        fields: 122
+
+      - type: UK_DAML_SAR
+        description: Defence Against Money Laundering SAR
+        regulation: POCA 2002 Section 338
+        frequency: Before proceeding
+        fields: 132
+
+  apac:
+    jurisdiction: APAC
+    count: 3
+    reports:
+      - type: HKMA_STR
+        jurisdiction: HK
+        description: Hong Kong Suspicious Transaction Report
+        fields: 105
+
+      - type: MAS_STR
+        jurisdiction: SG
+        description: Singapore Suspicious Transaction Report
+        fields: 112
+
+      - type: JAFIC_STR
+        jurisdiction: JP
+        description: Japan Suspicious Transaction Report
+        fields: 98
+
+  ofac:
+    jurisdiction: US
+    count: 1
+    reports:
+      - type: BLOCKING
+        description: OFAC Blocked Property Report
+        regulation: 31 CFR Part 501
+        deadline: 10 business days
+        fields: 72
+
+  multi_jurisdiction:
+    jurisdiction: INTERNATIONAL
+    count: 1
+    reports:
+      - type: TERRORIST_PROPERTY
+        description: Terrorist Property Report
+        regulation: UN Security Council Resolutions
+        frequency: Immediate
+        fields: 62
+
+# =============================================================================
+# CDM DOMAINS (8 Domains, 29 Entities)
+# =============================================================================
+
+domains:
+  - name: payment_core
+    description: Core payment types and lifecycle management
+    entity_count: 7
+    entities:
+      - Payment
+      - PaymentInstruction
+      - CreditTransfer
+      - DirectDebit
+      - PaymentReturn
+      - PaymentReversal
+      - PaymentStatusReport
+    definition_file: entities/payment_core.yaml
+
+  - name: party
+    description: Counterparties, identifications, and financial institutions
+    entity_count: 5
+    entities:
+      - Party
+      - PartyIdentification
+      - Person
+      - Organisation
+      - FinancialInstitution
+    definition_file: entities/party.yaml
+
+  - name: account
+    description: Account types and ownership relationships
+    entity_count: 3
+    entities:
+      - Account
+      - CashAccount
+      - AccountOwner
+    definition_file: entities/account.yaml
+
+  - name: amount
+    description: Monetary amounts, currency exchange, and charges
+    entity_count: 3
+    entities:
+      - Amount
+      - CurrencyExchange
+      - Charges
+    definition_file: entities/amount.yaml
+
+  - name: settlement
+    description: Settlement processing and clearing systems
+    entity_count: 3
+    entities:
+      - Settlement
+      - SettlementInstruction
+      - ClearingSystem
+    definition_file: entities/settlement.yaml
+
+  - name: reference
+    description: Reference data and metadata for payments
+    entity_count: 4
+    entities:
+      - PaymentTypeInformation
+      - RegulatoryReporting
+      - RemittanceInformation
+      - Document
+    definition_file: entities/reference.yaml
+
+  - name: events
+    description: Lifecycle and workflow event tracking
+    entity_count: 2
+    entities:
+      - PaymentEvent
+      - WorkflowEvent
+    definition_file: entities/events.yaml
+
+  - name: lineage
+    description: Data lineage and audit trail tracking
+    entity_count: 2
+    entities:
+      - LineageMetadata
+      - AuditTrail
+    definition_file: entities/lineage.yaml
+
+# =============================================================================
+# JSON SCHEMAS
+# =============================================================================
+
+json_schemas:
+  existing:
+    - name: PaymentInstruction
+      file: ../../schemas/01_payment_instruction_complete_schema.json
+      status: ACTIVE
+
+    - name: Party
+      file: ../../schemas/02_party_complete_schema.json
+      status: ACTIVE
+
+    - name: Account
+      file: ../../schemas/03_account_complete_schema.json
+      status: ACTIVE
+
+    - name: FinancialInstitution
+      file: ../../schemas/04_financial_institution_complete_schema.json
+      status: ACTIVE
+
+    - name: RegulatoryReport
+      file: ../../schemas/05_regulatory_report_complete_schema.json
+      status: ACTIVE
+
+    - name: ComplianceCase
+      file: ../../schemas/06_compliance_case_complete_schema.json
+      status: ACTIVE
+
+  new:
+    - name: Payment
+      file: ../json-schemas/payment_schema.json
+      status: NEW
+
+    - name: Settlement
+      file: ../json-schemas/settlement_schema.json
+      status: NEW
+
+    - name: PaymentEvent
+      file: ../json-schemas/payment_event_schema.json
+      status: NEW
+
+    - name: LineageMetadata
+      file: ../json-schemas/lineage_metadata_schema.json
+      status: NEW
+
+    - name: AuditTrail
+      file: ../json-schemas/audit_trail_schema.json
+      status: NEW
+
+# =============================================================================
+# RELATIONSHIPS
+# =============================================================================
+
+relationships:
+  - from: Payment
+    to: PaymentInstruction
+    type: one_to_one
+    required: true
+
+  - from: Payment
+    to: CreditTransfer
+    type: one_to_one
+    required: false
+
+  - from: Payment
+    to: DirectDebit
+    type: one_to_one
+    required: false
+
+  - from: Payment
+    to: Settlement
+    type: one_to_one
+    required: false
+
+  - from: Payment
+    to: PaymentEvent
+    type: one_to_many
+    required: false
+
+  - from: PaymentInstruction
+    to: Party
+    type: many_to_one
+    required: true
+    role: debtor
+
+  - from: PaymentInstruction
+    to: Party
+    type: many_to_one
+    required: true
+    role: creditor
+
+  - from: PaymentInstruction
+    to: Account
+    type: many_to_one
+    required: false
+    role: debtor_account
+
+  - from: PaymentInstruction
+    to: Account
+    type: many_to_one
+    required: false
+    role: creditor_account
+
+  - from: PaymentInstruction
+    to: FinancialInstitution
+    type: many_to_one
+    required: false
+    role: debtor_agent
+
+  - from: PaymentInstruction
+    to: FinancialInstitution
+    type: many_to_one
+    required: false
+    role: creditor_agent
+
+  - from: PaymentInstruction
+    to: Amount
+    type: many_to_one
+    required: true
+    role: instructed_amount
+
+  - from: Account
+    to: FinancialInstitution
+    type: many_to_one
+    required: true
+
+  - from: Account
+    to: AccountOwner
+    type: one_to_many
+    required: true
+
+  - from: AccountOwner
+    to: Party
+    type: many_to_one
+    required: true
+
+  - from: Party
+    to: PartyIdentification
+    type: one_to_many
+    required: false
+
+  - from: Party
+    to: Person
+    type: one_to_one
+    required: false
+
+  - from: Party
+    to: Organisation
+    type: one_to_one
+    required: false
+
+  - from: Settlement
+    to: ClearingSystem
+    type: many_to_one
+    required: false
+
+  - from: Settlement
+    to: SettlementInstruction
+    type: one_to_many
+    required: false
+
+  - from: Payment
+    to: RegulatoryReporting
+    type: one_to_many
+    required: false
+
+  - from: Payment
+    to: RemittanceInformation
+    type: one_to_one
+    required: false
+
+  - from: Payment
+    to: Document
+    type: one_to_many
+    required: false
+
+  - from: Payment
+    to: Charges
+    type: one_to_many
+    required: false
+
+# =============================================================================
+# COMMON PATTERNS
+# =============================================================================
+
+common_patterns:
+  bi_temporal:
+    description: All entities support bi-temporal tracking
+    columns:
+      - valid_from
+      - valid_to
+      - is_current
+      - created_timestamp
+      - last_updated_timestamp
+      - last_updated_by
+      - record_version
+      - is_deleted
+      - deleted_timestamp
+
+  source_tracking:
+    description: All entities track source system information
+    columns:
+      - source_system
+      - source_system_record_id
+      - source_message_type
+      - ingestion_timestamp
+      - bronze_to_silver_timestamp
+
+  data_quality:
+    description: All entities include data quality metrics
+    columns:
+      - data_quality_score
+      - data_quality_dimensions
+      - data_quality_issues
+
+  partitioning:
+    description: Standard partitioning for analytical queries
+    columns:
+      - partition_year
+      - partition_month
+      - region
+
+# =============================================================================
+# VERSION HISTORY
+# =============================================================================
+
+version_history:
+  - version: "1.1.0"
+    date: "2024-12-21"
+    author: "GPS CDM Team"
+    changes:
+      - Expanded payment standards coverage to 69 (33 ISO20022 + 14 SWIFT MT + 22 Regional)
+      - Expanded regulatory reports coverage to 32+ across 11 regulators
+      - Added FINTRAC (Canada) reports - LCTR, STR, EFTR, TPR
+      - Added ESMA reports - MiFID II, EMIR, MAR STOR
+      - Added EU reports - AMLD5, TFR Article 15
+      - Added APAC reports - HKMA, MAS, JAFIC STR
+      - Added full ISO 20022 CAMT message coverage
+      - Added SWIFT MT200, MT201, MT203, MT204, MT205 coverage
+      - Updated enum definitions with complete coverage
+
+  - version: "1.0.0"
+    date: "2024-12-20"
+    author: "GPS CDM Team"
+    changes:
+      - Initial logical model with 29 entities
+      - 8 domains defined
+      - Full regulatory coverage for 13 reports
+      - Bi-temporal and lineage patterns

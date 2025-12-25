@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bofa.com/schemas/cdm/account-complete.schema.json",
+  "title": "AccountComplete",
+  "description": "Complete Account entity with FATCA/CRS tax reporting extensions and controlling persons",
+  "type": "object",
+  "required": ["accountId", "accountNumber", "accountType", "currency", "accountOwner", "effectiveFrom", "isCurrent"],
+  "properties": {
+    "accountId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "accountNumber": {
+      "type": "string",
+      "maxLength": 34,
+      "description": "Account number (max 34 chars per IBAN standard)"
+    },
+    "iban": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z]{2}[0-9]{2}[A-Z0-9]+$",
+      "maxLength": 34,
+      "description": "IBAN format"
+    },
+    "accountType": {
+      "type": "string",
+      "enum": ["CHECKING", "SAVINGS", "MONEY_MARKET", "CD", "LOAN", "CREDIT_CARD", "INVESTMENT", "RETIREMENT", "TRUST", "CUSTODIAL", "ESCROW", "OTHER"]
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "ISO 4217 currency code"
+    },
+    "accountOwner": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to Party (primary account holder)"
+    },
+    "jointOwners": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to Party for joint account holders"
+      }
+    },
+    "beneficialOwners": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to Party for beneficial owners"
+      }
+    },
+    "financialInstitutionId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to FinancialInstitution"
+    },
+    "branchId": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "openDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "closeDate": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "accountStatus": {
+      "type": "string",
+      "enum": ["ACTIVE", "INACTIVE", "DORMANT", "CLOSED", "FROZEN", "SUSPENDED"]
+    },
+    "loanAmount": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "FinCEN SAR Item 59 - Loan amount if applicable"
+    },
+    "loanOrigination": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "FinCEN SAR Item 60 - Loan origination date"
+    },
+    "fatcaStatus": {
+      "type": "string",
+      "enum": ["PARTICIPATING_FFI_ACCOUNT", "NON_PARTICIPATING_FFI_ACCOUNT", "US_REPORTABLE_ACCOUNT", "RECALCITRANT_ACCOUNT", "DORMANT_ACCOUNT", "EXEMPT_ACCOUNT"],
+      "description": "FATCA: Account status - Non-ISO Extension"
+    },
+    "fatcaGIIN": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z0-9]{6}\\.[A-Z0-9]{5}\\.[A-Z]{2}\\.[A-Z0-9]{3}$",
+      "description": "FATCA: Global Intermediary Identification Number (19 chars: XXXXXX.XXXXX.XX.XXX) - Non-ISO Extension"
+    },
+    "crsReportableAccount": {
+      "type": "boolean",
+      "description": "CRS: Reportable account flag - ISO 20022 Extended"
+    },
+    "accountHolderType": {
+      "type": "string",
+      "enum": ["INDIVIDUAL", "ENTITY_ACTIVE_NFE", "ENTITY_PASSIVE_NFE", "ENTITY_FINANCIAL_INSTITUTION", "ENTITY_GOVERNMENT", "ENTITY_INTERNATIONAL_ORG"],
+      "description": "FATCA/CRS: Account holder type - Non-ISO Extension"
+    },
+    "controllingPersons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "partyId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID reference to Party entity"
+          },
+          "controlType": {
+            "type": "string",
+            "enum": ["OWNERSHIP", "SENIOR_MANAGING_OFFICIAL", "CONTROLLING_PERSON"],
+            "description": "Type of control"
+          },
+          "ownershipPercentage": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Ownership percentage (0-100)"
+          },
+          "taxResidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$",
+              "description": "ISO country codes for tax residence"
+            }
+          },
+          "tin": {
+            "type": ["string", "null"],
+            "maxLength": 50,
+            "description": "Tax Identification Number"
+          },
+          "tinType": {
+            "type": ["string", "null"],
+            "maxLength": 50,
+            "description": "TIN type: SSN, EIN, etc."
+          },
+          "isPEP": {
+            "type": "boolean",
+            "description": "Politically Exposed Person flag"
+          }
+        },
+        "required": ["partyId", "controlType"]
+      },
+      "description": "Controlling persons for entities (FATCA/CRS requirement) - ISO 20022 Compliant"
+    },
+    "dormantAccount": {
+      "type": "boolean",
+      "description": "Dormant/inactive account flag (no activity for specified period) - ISO 20022 Compliant"
+    },
+    "accountBalanceForTaxReporting": {
+      "type": ["number", "null"],
+      "description": "Account balance for tax reporting purposes (year-end or period-end) - ISO 20022 Compliant"
+    },
+    "withholdingTaxRate": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Applicable withholding tax rate (0-100 percent) - ISO 20022 Compliant"
+    },
+    "currentBalance": {
+      "type": "number",
+      "description": "Current account balance"
+    },
+    "availableBalance": {
+      "type": "number",
+      "description": "Available balance (current - holds - reserves)"
+    },
+    "ledgerBalance": {
+      "type": "number",
+      "description": "Ledger balance (current + pending)"
+    },
+    "lastTransactionDate": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "sanctionsScreeningStatus": {
+      "type": "string",
+      "enum": ["not_screened", "clear", "hit", "pending", "false_positive"],
+      "default": "not_screened"
+    },
+    "riskRating": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "very_high"]
+    },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date"
+    },
+    "effectiveTo": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "isCurrent": {
+      "type": "boolean"
+    },
+    "sourceSystem": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "sourceSystemRecordId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "createdTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedBy": {
+      "type": "string"
+    },
+    "recordVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}

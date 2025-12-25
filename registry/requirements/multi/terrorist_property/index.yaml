@@ -1,0 +1,141 @@
+# Terrorist Property Report - Requirement Index
+# Report Type: TERRORIST_PROPERTY
+# Regulator: Multiple (varies by jurisdiction)
+# Jurisdiction: International
+# Total Requirements: 62
+
+report_metadata:
+  report_type: "TERRORIST_PROPERTY"
+  report_name: "Terrorist Property Report"
+  regulator: "MULTIPLE"
+  jurisdiction: "INTERNATIONAL"
+  regulation: "UN Security Council Resolutions, National implementing legislation"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "Immediately upon detection"
+  output_format: "Varies by jurisdiction"
+  submission_method: "National FIU/Treasury"
+
+requirement_summary:
+  total: 62
+  by_category:
+    ELIGIBILITY: 6
+    FIELD: 45
+    VALIDATION: 6
+    FORMAT: 3
+    TIMING: 2
+  by_criticality:
+    MANDATORY: 55
+    RECOMMENDED: 5
+    OPTIONAL: 2
+
+requirements:
+  eligibility:
+    - id: "REQ-TERR-001"
+      title: "UN Designated Terrorist"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Match against UN consolidated sanctions list"
+
+    - id: "REQ-TERR-002"
+      title: "National Terrorist List"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Match against national proscribed organizations list"
+
+    - id: "REQ-TERR-003"
+      title: "Property Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Assets of any kind including funds, resources, property"
+
+    - id: "REQ-TERR-004"
+      title: "Freezing Obligation"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Immediate freezing of terrorist property"
+
+    - id: "REQ-TERR-005"
+      title: "Attempted Transactions"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Report attempted transactions involving terrorist property"
+
+    - id: "REQ-TERR-006"
+      title: "Indirect Holdings"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Property indirectly held by designated persons"
+
+  fields_designated_person:
+    - id: "REQ-TERR-020"
+      title: "Designated Person Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TERR-021"
+      title: "Designation Source"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "UN, EU, National, etc."
+
+    - id: "REQ-TERR-022"
+      title: "Designation Reference"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TERR-023"
+      title: "Match Quality"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Exact, partial, alias match"
+
+    - id: "REQ-TERR-024"
+      title: "Aliases/AKAs"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+  fields_property:
+    - id: "REQ-TERR-030"
+      title: "Property Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TERR-031"
+      title: "Property Value"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TERR-032"
+      title: "Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TERR-033"
+      title: "Account/Reference Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TERR-034"
+      title: "Freezing Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TERR-035"
+      title: "Location of Property"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-TERR-060"
+      title: "Immediate Reporting"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Report immediately upon detection"
+
+    - id: "REQ-TERR-061"
+      title: "Periodic Status Updates"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Regular updates on frozen property status"

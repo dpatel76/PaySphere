@@ -1,0 +1,137 @@
+# AUSTRAC Threshold Transaction Report (TTR) - Requirement Index
+# Report Type: TTR
+# Regulator: AUSTRAC
+# Jurisdiction: Australia
+# Total Requirements: 76
+
+report_metadata:
+  report_type: "TTR"
+  report_name: "Threshold Transaction Report"
+  regulator: "AUSTRAC"
+  jurisdiction: "AU"
+  regulation: "Anti-Money Laundering and Counter-Terrorism Financing Act 2006 - Section 43"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "Within 10 business days"
+  output_format: "XML"
+  submission_method: "AUSTRAC Online"
+
+requirement_summary:
+  total: 76
+  by_category:
+    ELIGIBILITY: 5
+    FIELD: 58
+    VALIDATION: 8
+    FORMAT: 3
+    TIMING: 2
+  by_criticality:
+    MANDATORY: 68
+    RECOMMENDED: 6
+    OPTIONAL: 2
+
+requirements:
+  eligibility:
+    - id: "REQ-TTR-001"
+      title: "AUD 10,000 Threshold"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Cash transactions of AUD 10,000 or more"
+
+    - id: "REQ-TTR-002"
+      title: "Physical Currency Requirement"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Must involve physical currency (notes and coins)"
+
+    - id: "REQ-TTR-003"
+      title: "Aggregation Within 24 Hours"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Aggregate transactions by same person within 24 hours"
+
+    - id: "REQ-TTR-004"
+      title: "Designated Services"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transaction through designated services"
+
+    - id: "REQ-TTR-005"
+      title: "Foreign Currency Equivalent"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Foreign currency equivalent to AUD 10,000+"
+
+  fields_transaction:
+    - id: "REQ-TTR-010"
+      title: "Transaction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TTR-011"
+      title: "Transaction Amount (AUD)"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TTR-012"
+      title: "Transaction Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Deposit, Withdrawal, Currency Exchange, etc."
+
+    - id: "REQ-TTR-013"
+      title: "Currency Denomination"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-TTR-014"
+      title: "Foreign Currency Amount"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-TTR-015"
+      title: "Foreign Currency Type"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+  fields_customer:
+    - id: "REQ-TTR-020"
+      title: "Customer Full Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TTR-021"
+      title: "Customer Date of Birth"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TTR-022"
+      title: "Customer Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TTR-023"
+      title: "Customer ID Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TTR-024"
+      title: "Customer ID Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TTR-025"
+      title: "Customer Occupation"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+  timing:
+    - id: "REQ-TTR-070"
+      title: "10 Business Day Filing"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+    - id: "REQ-TTR-071"
+      title: "Real-Time Submission Encouraged"
+      category: "TIMING"
+      criticality: "RECOMMENDED"

@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bofa.com/schemas/cdm/regulatory-report-complete.schema.json",
+  "title": "Regulatory ReportComplete",
+  "description": "Complete RegulatoryReport entity with global tax reporting, sanctions, UK DAML workflow, and terrorist property extensions",
+  "type": "object",
+  "required": ["regulatoryReportId", "reportType", "jurisdiction", "reportStatus", "createdTimestamp"],
+  "properties": {
+    "regulatoryReportId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reportType": {
+      "type": "string",
+      "enum": [
+        "FINCEN_CTR",
+        "FINCEN_SAR",
+        "AUSTRAC_IFTI",
+        "AUSTRAC_TTR",
+        "AUSTRAC_SMR",
+        "UK_SAR",
+        "UK_SAR_DAML",
+        "FATCA_FORM_8966",
+        "FATCA_FORM_8966_POOL",
+        "CRS_REPORTING",
+        "SANCTIONS_BLOCKING",
+        "TERRORIST_PROPERTY",
+        "PSD2_FRAUD",
+        "PSD2_INCIDENT",
+        "OTHER"
+      ]
+    },
+    "jurisdiction": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "ISO 3166-1 alpha-2 country code"
+    },
+    "regulatoryAuthority": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Regulatory authority name"
+    },
+    "reportReferenceNumber": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Report reference number assigned by system or regulator"
+    },
+    "reportStatus": {
+      "type": "string",
+      "enum": ["draft", "pending_review", "approved", "submitted", "accepted", "rejected", "amended", "cancelled"]
+    },
+    "dueDate": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "submissionDate": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "acknowledgementDate": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "transactionCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of transactions in report"
+    },
+    "totalReportedValue": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Total value reported"
+    },
+    "reportingEntityABN": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{11}$",
+      "description": "AUSTRAC IFTI Field 1.1 - Australian Business Number"
+    },
+    "reportingEntityBranch": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "AUSTRAC IFTI Field 1.3 - Branch name/identifier"
+    },
+    "reportingEntityContactName": {
+      "type": ["string", "null"],
+      "maxLength": 140,
+      "description": "AUSTRAC/FinCEN - Contact person name"
+    },
+    "reportingEntityContactPhone": {
+      "type": ["string", "null"],
+      "pattern": "^\\+?[0-9\\-\\(\\)\\ ]{7,25}$",
+      "description": "AUSTRAC/FinCEN - Contact phone number"
+    },
+    "filingType": {
+      "type": ["string", "null"],
+      "enum": ["initial", "amendment", "correction", "late", null],
+      "description": "AUSTRAC/FinCEN filing type"
+    },
+    "priorReportBSAID": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "FinCEN - Prior report BSA ID for amendments"
+    },
+    "reportingPeriodType": {
+      "type": ["string", "null"],
+      "enum": ["single_transaction", "aggregated", "periodic", null],
+      "description": "Type of reporting period"
+    },
+    "totalCashIn": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "FinCEN CTR - Total cash received"
+    },
+    "totalCashOut": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "FinCEN CTR - Total cash disbursed"
+    },
+    "foreignCashIn": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "country": {"type": "string", "pattern": "^[A-Z]{2}$"},
+          "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+          "amount": {"type": "number", "minimum": 0}
+        },
+        "required": ["country", "currency", "amount"]
+      },
+      "description": "FinCEN CTR Items 62-66"
+    },
+    "foreignCashOut": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "country": {"type": "string", "pattern": "^[A-Z]{2}$"},
+          "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+          "amount": {"type": "number", "minimum": 0}
+        },
+        "required": ["country", "currency", "amount"]
+      },
+      "description": "FinCEN CTR Items 68-72"
+    },
+    "multiplePersonsFlag": {
+      "type": "boolean",
+      "description": "FinCEN CTR Item 3 - Multiple persons involved"
+    },
+    "aggregationMethod": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Transaction aggregation methodology"
+    },
+    "taxYear": {
+      "type": ["integer", "null"],
+      "minimum": 2000,
+      "maximum": 2100,
+      "description": "Tax reporting year (YYYY format) - Non-ISO Extension"
+    },
+    "reportingFI_GIIN": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z0-9]{6}\\.[A-Z0-9]{5}\\.[A-Z]{2}\\.[A-Z0-9]{3}$",
+      "description": "Reporting FI GIIN for FATCA (19 chars) - Non-ISO Extension"
+    },
+    "reportingFI_TIN": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Reporting FI Tax Identification Number - ISO 20022 Compliant"
+    },
+    "sponsorGIIN": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z0-9]{6}\\.[A-Z0-9]{5}\\.[A-Z]{2}\\.[A-Z0-9]{3}$",
+      "description": "Sponsor GIIN if sponsored FFI (19 chars) - Non-ISO Extension"
+    },
+    "reportingModel": {
+      "type": ["string", "null"],
+      "enum": ["MODEL1_IGA", "MODEL2_IGA", "NON_IGA_FATCA", "CRS", null],
+      "description": "FATCA/CRS reporting model - Non-ISO Extension"
+    },
+    "igaJurisdiction": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z]{2}$",
+      "description": "IGA (Intergovernmental Agreement) jurisdiction (ISO 3166-1 alpha-2) - Non-ISO Extension"
+    },
+    "poolReportType": {
+      "type": ["string", "null"],
+      "enum": ["RECALCITRANT_ACCOUNT_HOLDERS_WITH_US_INDICIA", "RECALCITRANT_ACCOUNT_HOLDERS_WITHOUT_US_INDICIA", "DORMANT_ACCOUNTS", "NON_PARTICIPATING_FFIS", null],
+      "description": "FATCA pool reporting type - Non-ISO Extension"
+    },
+    "sanctionsBlockingDate": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date property was blocked due to sanctions - Non-ISO Extension"
+    },
+    "propertyBlocked": {
+      "type": ["string", "null"],
+      "description": "Description of blocked property (funds, assets, etc.) - Non-ISO Extension"
+    },
+    "estimatedPropertyValue": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Estimated value of blocked property in USD - Non-ISO Extension"
+    },
+    "sanctionsProgram": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Sanctions program name (Iran, Russia, North Korea, ISIL, etc.) - Non-ISO Extension"
+    },
+    "defenceAgainstMoneyLaunderingFlag": {
+      "type": "boolean",
+      "default": false,
+      "description": "UK DAML SAR flag (consent regime) - Non-ISO Extension"
+    },
+    "consentRequired": {
+      "type": "boolean",
+      "default": false,
+      "description": "Consent required to proceed with transaction - Non-ISO Extension"
+    },
+    "consentGranted": {
+      "type": ["boolean", "null"],
+      "description": "Consent granted by UK NCA (National Crime Agency) - Non-ISO Extension"
+    },
+    "consentRefusalReason": {
+      "type": ["string", "null"],
+      "description": "Reason for consent refusal from NCA - Non-ISO Extension"
+    },
+    "consentRequestDate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When consent was requested from UK NCA - Non-ISO Extension"
+    },
+    "consentResponseDate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When consent response received from NCA - Non-ISO Extension"
+    },
+    "consentExpiryDate": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Consent expiry (7 business days default, or 31 days if refused) - Non-ISO Extension"
+    },
+    "sarnNumber": {
+      "type": ["string", "null"],
+      "maxLength": 20,
+      "description": "SAR reference number from UK NCA - Non-ISO Extension"
+    },
+    "terroristPropertyFlag": {
+      "type": "boolean",
+      "default": false,
+      "description": "Terrorist property report indicator (Canada, South Africa, etc.) - Non-ISO Extension"
+    },
+    "terroristEntityName": {
+      "type": ["string", "null"],
+      "maxLength": 200,
+      "description": "Listed terrorist entity name - ISO 20022 Compliant"
+    },
+    "terroristListSource": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "List source: UN, domestic list, etc. - ISO 20022 Extended"
+    },
+    "propertyDescription": {
+      "type": ["string", "null"],
+      "description": "Description of terrorist property - ISO 20022 Compliant"
+    },
+    "propertySeized": {
+      "type": "boolean",
+      "default": false,
+      "description": "Property seized flag - Non-ISO Extension"
+    },
+    "relatedPaymentInstructions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to PaymentInstruction"
+      }
+    },
+    "relatedParties": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to Party"
+      }
+    },
+    "relatedAccounts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to Account"
+      }
+    },
+    "relatedComplianceCaseId": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "FK to ComplianceCase"
+    },
+    "createdTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedBy": {
+      "type": "string"
+    },
+    "recordVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://gps-cdm.example.com/schemas/requirement.json",
+  "title": "Regulatory Requirement Schema",
+  "description": "Schema for defining regulatory requirements in the GPS CDM Traceability Registry",
+  "type": "object",
+  "required": ["requirement"],
+  "properties": {
+    "requirement": {
+      "type": "object",
+      "required": ["id", "regulator", "regulation", "report_type", "category", "title", "description", "source", "criticality", "status"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^REQ-[A-Z]+-[0-9]{3}$",
+          "description": "Unique requirement identifier"
+        },
+        "regulator": {
+          "type": "string",
+          "enum": ["FinCEN", "AUSTRAC", "IRS", "OECD", "UK_NCA", "EBA", "OFAC", "MULTIPLE"],
+          "description": "Regulatory authority"
+        },
+        "regulation": {
+          "type": "string",
+          "description": "Regulation reference (e.g., 31 CFR 1010.311)"
+        },
+        "report_type": {
+          "type": "string",
+          "enum": ["CTR", "SAR", "IFTI", "TTR", "SMR", "FATCA_8966", "FATCA_POOL", "CRS", "UK_SAR", "UK_DAML_SAR", "PSD2_FRAUD", "SANCTIONS_BLOCKING", "TERRORIST_PROPERTY"],
+          "description": "Type of regulatory report"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["ELIGIBILITY", "FIELD", "VALIDATION", "FORMAT", "TIMING", "SUBMISSION", "RETENTION"],
+          "description": "Requirement category"
+        },
+        "subcategory": {
+          "type": "string",
+          "description": "Subcategory for further classification"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Short title for the requirement"
+        },
+        "description": {
+          "type": "string",
+          "description": "Full description of the requirement"
+        },
+        "source": {
+          "type": "object",
+          "required": ["document", "section"],
+          "properties": {
+            "document": {
+              "type": "string",
+              "description": "Source document name"
+            },
+            "section": {
+              "type": "string",
+              "description": "Section reference"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "URL to source document"
+            },
+            "effective_date": {
+              "type": "string",
+              "format": "date",
+              "description": "When requirement became effective"
+            },
+            "last_amended": {
+              "type": "string",
+              "format": "date",
+              "description": "Last amendment date"
+            }
+          }
+        },
+        "attributes": {
+          "type": "object",
+          "description": "Requirement-specific attributes",
+          "additionalProperties": true
+        },
+        "criticality": {
+          "type": "string",
+          "enum": ["MANDATORY", "RECOMMENDED", "OPTIONAL"],
+          "description": "Criticality level"
+        },
+        "penalty_risk": {
+          "type": "string",
+          "enum": ["HIGH", "MEDIUM", "LOW"],
+          "description": "Risk level if not implemented"
+        },
+        "related_requirements": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^REQ-[A-Z]+-[0-9]{3}$"
+          },
+          "description": "Related requirement IDs"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["DRAFT", "ACTIVE", "DEPRECATED", "SUPERSEDED"],
+          "description": "Requirement lifecycle status"
+        },
+        "superseded_by": {
+          "type": ["string", "null"],
+          "pattern": "^REQ-[A-Z]+-[0-9]{3}$",
+          "description": "ID of superseding requirement"
+        },
+        "implementation": {
+          "type": "object",
+          "properties": {
+            "expected_dsl_rules": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "expected_dsl_fields": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "expected_validations": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

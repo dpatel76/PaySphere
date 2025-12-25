@@ -1,0 +1,90 @@
+# GPS CDM Persistence Configuration
+# ==================================
+#
+# This file configures the database backend for each environment.
+# The same orchestration code works against all backends.
+
+# Local development with PostgreSQL
+development:
+  backend: postgresql
+  host: localhost
+  port: 5432
+  database: cdm_dev
+  user: postgres
+  password: postgres
+  catalog: cdm
+  bronze_schema: bronze
+  silver_schema: silver
+  gold_schema: gold
+  observability_schema: observability
+
+# Local testing with PostgreSQL (different database)
+test:
+  backend: postgresql
+  host: localhost
+  port: 5432
+  database: cdm_test
+  user: postgres
+  password: postgres
+  catalog: cdm_test
+  bronze_schema: bronze
+  silver_schema: silver
+  gold_schema: gold
+  observability_schema: observability
+
+# Databricks Community Edition (being retired Jan 2026)
+# Uses DBFS storage, no Unity Catalog
+databricks_ce:
+  backend: databricks_ce
+  storage_path: "/dbfs/cdm"
+  database: cdm_dev
+  extra:
+    auto_optimize: true
+    retention_days: 30
+    max_table_size_gb: 10
+
+# Databricks Free Edition (RECOMMENDED - replacing Community Edition)
+# Uses Unity Catalog and serverless compute
+# Sign up at: https://www.databricks.com/try-databricks
+databricks_free:
+  backend: databricks_free
+  catalog: main
+  schema: cdm_dev
+  volume_path: "/Volumes/main/cdm_dev/data"
+  extra:
+    auto_optimize: true
+    retention_days: 30
+
+# Staging environment with Delta Lake
+staging:
+  backend: delta
+  catalog: cdm_staging
+  storage_path: "abfss://staging@cdmstorage.dfs.core.windows.net/cdm"
+  unity_catalog: true
+  bronze_schema: bronze
+  silver_schema: silver
+  gold_schema: gold
+  observability_schema: observability
+
+# Production environment with Delta Lake
+production:
+  backend: delta
+  catalog: cdm_prod
+  storage_path: "abfss://production@cdmstorage.dfs.core.windows.net/cdm"
+  unity_catalog: true
+  bronze_schema: bronze
+  silver_schema: silver
+  gold_schema: gold
+  observability_schema: observability
+  # Additional production settings
+  extra:
+    auto_optimize: true
+    retention_days: 2555  # 7 years
+    checkpoint_enabled: true
+
+# Query federation with Starburst (future)
+# federation:
+#   backend: starburst
+#   starburst_catalog: cdm_federation
+#   host: starburst.company.com
+#   port: 8080

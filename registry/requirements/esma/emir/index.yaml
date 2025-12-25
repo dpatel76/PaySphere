@@ -1,0 +1,96 @@
+# ESMA EMIR Trade Report - Requirement Index
+# Report Type: EMIR
+# Regulator: ESMA
+# Jurisdiction: EU
+# Total Requirements: 156
+
+report_metadata:
+  report_type: "EMIR"
+  report_name: "EMIR Trade Report"
+  regulator: "ESMA"
+  jurisdiction: "EU"
+  regulation: "EMIR Article 9"
+  effective_date: "2014-02-12"
+  last_updated: "2024-12-21"
+  filing_frequency: "DAILY"
+  filing_deadline: "T+1"
+  output_format: "XML"
+  submission_method: "Trade Repository"
+
+requirement_summary:
+  total: 156
+  by_category:
+    ELIGIBILITY: 6
+    FIELD: 128
+    VALIDATION: 14
+    FORMAT: 5
+    TIMING: 2
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 138
+    RECOMMENDED: 13
+    OPTIONAL: 5
+
+requirements:
+  eligibility:
+    - id: "REQ-EMIR-001"
+      title: "Derivative Contract Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "All derivative contracts (OTC and exchange-traded)"
+
+  fields_trade:
+    - id: "REQ-EMIR-020"
+      title: "Unique Trade Identifier (UTI)"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "uetr"
+
+    - id: "REQ-EMIR-021"
+      title: "Execution Timestamp"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+
+    - id: "REQ-EMIR-022"
+      title: "Notional Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_amount"
+
+  fields_counterparty:
+    - id: "REQ-EMIR-030"
+      title: "Counterparty 1 LEI"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "lei"
+
+    - id: "REQ-EMIR-031"
+      title: "Counterparty 2 LEI"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "lei"
+
+  timing:
+    - id: "REQ-EMIR-090"
+      title: "T+1 Reporting Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+cdm_coverage:
+  entities_used:
+    - Payment
+    - PaymentInstruction
+    - Party
+    - FinancialInstitution
+  coverage_percentage: 100

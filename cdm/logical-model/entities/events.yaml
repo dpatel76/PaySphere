@@ -1,0 +1,339 @@
+# Events Domain Entities
+# Version: 1.0.0
+# Entities: PaymentEvent, WorkflowEvent
+
+domain:
+  name: events
+  description: Lifecycle and workflow event tracking
+  entity_count: 2
+
+entities:
+  - name: PaymentEvent
+    description: Payment lifecycle event record
+    table_name: payment_event
+    primary_key: event_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: event_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: event_type
+        type: enum
+        required: true
+        values:
+          # Lifecycle Events
+          - CREATED
+          - RECEIVED
+          - ACCEPTED
+          - REJECTED
+          - CANCELLED
+          - COMPLETED
+
+          # Status Changes
+          - STATUS_CHANGE
+
+          # Validation Events
+          - VALIDATION_STARTED
+          - VALIDATION_PASSED
+          - VALIDATION_FAILED
+          - VALIDATION_WARNING
+
+          # Screening Events
+          - SANCTIONS_SCREENING_STARTED
+          - SANCTIONS_SCREENING_PASSED
+          - SANCTIONS_SCREENING_HIT
+          - SANCTIONS_SCREENING_CLEARED
+          - FRAUD_SCREENING_STARTED
+          - FRAUD_SCREENING_PASSED
+          - FRAUD_SCREENING_ALERT
+          - FRAUD_SCREENING_CLEARED
+
+          # Compliance Events
+          - COMPLIANCE_REVIEW_STARTED
+          - COMPLIANCE_REVIEW_APPROVED
+          - COMPLIANCE_REVIEW_REJECTED
+          - AML_ALERT_RAISED
+          - AML_ALERT_CLOSED
+
+          # Processing Events
+          - ENRICHMENT_STARTED
+          - ENRICHMENT_COMPLETED
+          - TRANSFORMATION_STARTED
+          - TRANSFORMATION_COMPLETED
+          - ROUTING_STARTED
+          - ROUTING_COMPLETED
+
+          # Transmission Events
+          - TRANSMISSION_STARTED
+          - TRANSMISSION_SUCCEEDED
+          - TRANSMISSION_FAILED
+          - ACKNOWLEDGEMENT_RECEIVED
+          - ACKNOWLEDGEMENT_POSITIVE
+          - ACKNOWLEDGEMENT_NEGATIVE
+
+          # Settlement Events
+          - SETTLEMENT_INITIATED
+          - SETTLEMENT_PENDING
+          - SETTLEMENT_COMPLETED
+          - SETTLEMENT_FAILED
+          - SETTLEMENT_REVERSED
+
+          # Exception Events
+          - EXCEPTION_RAISED
+          - EXCEPTION_RESOLVED
+          - ERROR_OCCURRED
+          - TIMEOUT_OCCURRED
+          - RETRY_ATTEMPTED
+
+          # Manual Intervention
+          - MANUAL_REVIEW_REQUIRED
+          - MANUAL_REVIEW_COMPLETED
+          - APPROVAL_REQUESTED
+          - APPROVAL_GRANTED
+          - APPROVAL_DENIED
+
+      - name: event_timestamp
+        type: timestamp
+        required: true
+        description: Event occurrence time
+
+      - name: previous_state
+        type: string
+        max_length: 50
+        required: false
+        description: Previous status/state
+
+      - name: new_state
+        type: string
+        max_length: 50
+        required: true
+        description: New status/state
+
+      - name: actor
+        type: string
+        max_length: 100
+        required: false
+        description: System/user causing event
+
+      - name: actor_type
+        type: enum
+        values: [SYSTEM, USER, EXTERNAL, BATCH, API, SCHEDULER]
+        required: false
+
+      - name: actor_id
+        type: string
+        max_length: 100
+        required: false
+        description: Actor identifier (user ID, system ID)
+
+      - name: details
+        type: json
+        required: false
+        description: Event-specific details
+
+      - name: correlation_id
+        type: uuid
+        required: false
+        description: Request correlation identifier
+
+      - name: parent_event_id
+        type: uuid
+        required: false
+        description: Parent event for hierarchical tracking
+
+      - name: duration_ms
+        type: integer
+        required: false
+        description: Event duration in milliseconds
+
+      - name: error_code
+        type: string
+        max_length: 20
+        required: false
+        description: Error code if applicable
+
+      - name: error_message
+        type: string
+        max_length: 1000
+        required: false
+        description: Error message if applicable
+
+      - name: source_system
+        type: string
+        max_length: 100
+        required: false
+        description: System that generated the event
+
+      - name: external_reference
+        type: string
+        max_length: 100
+        required: false
+        description: External system reference
+
+    indexes:
+      - name: idx_payment_event_payment_id
+        columns: [payment_id]
+      - name: idx_payment_event_timestamp
+        columns: [event_timestamp]
+      - name: idx_payment_event_type
+        columns: [event_type]
+      - name: idx_payment_event_correlation
+        columns: [correlation_id]
+
+  - name: WorkflowEvent
+    description: Workflow/process event for any entity
+    table_name: workflow_event
+    primary_key: workflow_event_id
+    attributes:
+      - name: workflow_event_id
+        type: uuid
+        required: true
+
+      - name: entity_type
+        type: string
+        max_length: 50
+        required: true
+        description: "Entity type: Payment, Party, Account, ComplianceCase"
+
+      - name: entity_id
+        type: uuid
+        required: true
+        description: Entity identifier
+
+      - name: workflow_type
+        type: enum
+        required: true
+        values:
+          - APPROVAL
+          - REVIEW
+          - INVESTIGATION
+          - ONBOARDING
+          - KYC_REFRESH
+          - PERIODIC_REVIEW
+          - EXCEPTION_HANDLING
+          - DISPUTE_RESOLUTION
+          - REMEDIATION
+
+      - name: workflow_instance_id
+        type: uuid
+        required: false
+        description: Workflow instance identifier
+
+      - name: event_type
+        type: enum
+        required: true
+        values:
+          - WORKFLOW_STARTED
+          - WORKFLOW_COMPLETED
+          - WORKFLOW_CANCELLED
+          - WORKFLOW_FAILED
+          - TASK_CREATED
+          - TASK_ASSIGNED
+          - TASK_STARTED
+          - TASK_COMPLETED
+          - TASK_FAILED
+          - TASK_REASSIGNED
+          - TASK_ESCALATED
+          - TASK_DELEGATED
+          - REMINDER_SENT
+          - SLA_WARNING
+          - SLA_BREACH
+          - APPROVAL_REQUESTED
+          - APPROVAL_GRANTED
+          - APPROVAL_DENIED
+          - COMMENT_ADDED
+          - DOCUMENT_ATTACHED
+
+      - name: event_timestamp
+        type: timestamp
+        required: true
+
+      - name: actor
+        type: string
+        max_length: 100
+        required: true
+        description: Actor identifier
+
+      - name: actor_role
+        type: string
+        max_length: 50
+        required: false
+        description: Actor role
+
+      - name: actor_department
+        type: string
+        max_length: 100
+        required: false
+
+      - name: previous_assignee
+        type: string
+        max_length: 100
+        required: false
+
+      - name: current_assignee
+        type: string
+        max_length: 100
+        required: false
+
+      - name: task_name
+        type: string
+        max_length: 200
+        required: false
+
+      - name: task_priority
+        type: enum
+        values: [LOW, MEDIUM, HIGH, CRITICAL]
+        required: false
+
+      - name: due_date
+        type: timestamp
+        required: false
+
+      - name: sla_deadline
+        type: timestamp
+        required: false
+
+      - name: comments
+        type: string
+        max_length: 1000
+        required: false
+
+      - name: attachments
+        type: array
+        item_type: uuid
+        required: false
+        description: Document attachments
+
+      - name: decision
+        type: string
+        max_length: 100
+        required: false
+        description: Approval/review decision
+
+      - name: decision_reason
+        type: string
+        max_length: 500
+        required: false
+
+      - name: metadata
+        type: json
+        required: false
+        description: Additional workflow metadata
+
+    indexes:
+      - name: idx_workflow_event_entity
+        columns: [entity_type, entity_id]
+      - name: idx_workflow_event_timestamp
+        columns: [event_timestamp]
+      - name: idx_workflow_event_workflow
+        columns: [workflow_type, workflow_instance_id]
+      - name: idx_workflow_event_assignee
+        columns: [current_assignee]

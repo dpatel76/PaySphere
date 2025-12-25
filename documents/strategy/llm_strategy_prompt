@@ -1,0 +1,974 @@
+# ENHANCED PROMPT: Global Payments Data Strategy Development
+
+## ROLE & CONTEXT
+
+You are a senior data architect and strategy advisor supporting a 4-member team (1 US, 1 UK, 2 India resources) developing a comprehensive data strategy for **Bank of America's Global Payments Organization**, including CashPro and all payment services (Wires, ACH, Zelle, SWIFT, Real-Time Payments, FedNow, SEPA, BACS, Faster Payments, cross-border payments, and correspondent banking services).
+
+**Timeline:** 4 months for strategy development + 4 months for POC execution
+**Primary Stakeholder:** Chief Information Officer (CIO)
+**Deliverable Format:** Modular, parallelizable workstream outputs using Zachman Framework
+
+---
+
+## CURRENT STATE CONTEXT
+
+**Existing Infrastructure:**
+- Primary data platform: Oracle Exadata (on-premises)
+- Messaging infrastructure: Apache Kafka
+- Data catalog: Collibra
+- ISO 20022 adoption: In progress, not complete
+- Approved cloud platforms: AWS and Azure
+
+**Pain Points Driving Modernization:**
+1. Overly complex architecture that does not scale
+2. Multiple analytical platforms with inconsistent data
+3. Pervasive data quality issues
+4. Lack of standardized data model across payment products
+5. Insufficient foundation for AI/ML enablement
+
+**Operational Parameters:**
+- Transaction volume: Tens of millions of records per day
+- Latency requirements: Milliseconds (for fraud detection, payment processing)
+- Geographic scope: Global operations requiring data residency compliance
+
+---
+
+## RESEARCH REQUIREMENTS
+
+Before developing any deliverables, conduct thorough research on the following. **Do not omit any relevant findings. Accuracy and completeness are paramount.**
+
+### Research Block 1: Bank of America Payments Footprint
+
+1. **Geographic Presence:** Identify ALL countries where Bank of America provides payment services. For each country, document:
+   - Payment products offered
+   - Local entity/license type
+   - Data residency requirements
+   - Local clearing system participation (e.g., CHIPS, Fedwire, TARGET2, CHAPS, BACS, SEPA, local RTGS systems)
+
+2. **Payment Products Inventory:** Create comprehensive inventory of ALL payment types:
+   - Domestic: ACH, Wires (Fedwire, CHIPS), Zelle, RTP, FedNow, Check/Image
+   - International: SWIFT (MT and MX), Cross-border wires, Correspondent banking
+   - Regional: SEPA (Credit Transfer, Instant, Direct Debit), BACS, Faster Payments, regional schemes
+   - Commercial: CashPro capabilities, Virtual accounts, Liquidity management, Notional pooling
+   - Emerging: Request to Pay, Open Banking payments, Embedded payments
+
+3. **Peer Analysis:** Research publicly available information on payments data architecture and modernization initiatives at:
+   - JPMorgan Chase (including Onyx, payments modernization)
+   - Citigroup (including Treasury and Trade Solutions)
+   - Wells Fargo
+   - HSBC
+   - Deutsche Bank
+   - BNY Mellon
+   - Standard Chartered
+   
+   For each peer, identify: published data platform choices, ISO 20022 adoption status, cloud strategies, CDM approaches, regulatory technology investments.
+
+### Research Block 2: Regulatory Landscape (Exhaustive)
+
+Create a comprehensive regulatory catalog. For EACH regulation, document:
+- Regulation name and jurisdiction
+- Regulatory body
+- Applicable payment types
+- Reporting frequency
+- ALL required data elements (field-level)
+- Format requirements
+- Submission mechanism
+
+**US Regulations (include but not limited to):**
+- Bank Secrecy Act (BSA) / AML requirements
+- OFAC sanctions screening requirements
+- Federal Reserve Regulation E (Electronic Fund Transfers)
+- Federal Reserve Regulation CC (Funds Availability)
+- Federal Reserve Regulation J (Fedwire)
+- NACHA Operating Rules (ACH)
+- Dodd-Frank Act reporting requirements
+- FFIEC examination requirements
+- FinCEN CTR, SAR, CMIR, FBAR reporting
+- 1099/1042 tax reporting for payments
+- FATCA reporting requirements
+- FedNow Service participation requirements
+- RTP network requirements
+
+**EU/UK Regulations:**
+- PSD2 (Payment Services Directive 2) and upcoming PSD3
+- GDPR (data protection implications for payments)
+- DORA (Digital Operational Resilience Act)
+- EU AML Directives (AMLD5, AMLD6)
+- SEPA Regulation and Rulebooks
+- UK Payment Services Regulations
+- UK FCA reporting requirements
+- Bank of England RTGS requirements
+- EMIR (for payment-related derivatives)
+- SFTR (Securities Financing Transactions Regulation)
+
+**APAC Regulations:**
+- MAS (Singapore) Payment Services Act and reporting
+- HKMA payment system requirements
+- BOJ (Japan) payment system regulations
+- RBI (India) payment system guidelines
+- PBOC (China) cross-border payment requirements
+- APRA (Australia) requirements
+
+**Global/Cross-Border:**
+- SWIFT compliance requirements
+- FATF recommendations
+- Basel III/IV implications for operational risk
+- Correspondent banking due diligence requirements
+
+**Regulation Reminder:** These regulations are a good example list but you need to perform full review for each country that Bank of America operates in and make sure that list of regulation is complete
+
+### Research Block 3: Message Formats and Data Models
+
+Document ALL relevant message and data standards:
+
+**SWIFT/ISO Standards:**
+- ISO 20022 message catalog (all payment-related messages): pacs, pain, camt, acmt, reda
+- Legacy MT message formats: MT103, MT202, MT202COV, MT900, MT910, MT940, MT942, MT950
+- MT to MX mapping specifications
+- ISO 20022 data dictionary (complete element catalog)
+
+**Regional/Domestic Standards:**
+- NACHA file formats (all record types)
+- Fedwire message formats
+- CHIPS message formats
+- SEPA XML schemas (SCT, SDD, SCT Inst)
+- BACS formats (Standard 18, AUDDIS, ADDACS)
+- Faster Payments message specifications
+
+**Industry Reference Models:**
+- ISDA Common Domain Model (CDM) - architecture patterns applicable to payments
+- Digital Regulatory Reporting (DRR) initiative approaches
+- BIAN (Banking Industry Architecture Network) service domains for payments
+- IFX (Interactive Financial eXchange) standards
+- TWIST standards for treasury
+
+**Standard Reminder:** These standards are a good example list but you need to perform full review for each country that Bank of America operates in and make sure that list of standards is complete
+
+---
+
+## WORKSTREAM 1: DATA PLATFORM MODERNIZATION
+
+### Deliverable 1.1: Use Case Catalog and Requirements Matrix
+
+Create exhaustive catalog of ALL payment data use cases organized by:
+
+**Category A - Regulatory Reporting:**
+For each report identified in Research Block 2, document:
+- Report name and identifier
+- Source systems
+- Data elements required (cross-referenced to regulation)
+- Transformation logic
+- Timeliness requirements (T+0, T+1, monthly, etc.)
+- Current pain points
+- Batch vs. real-time requirements
+
+**Category B - Fraud Detection:**
+- Real-time transaction screening
+- Pattern detection and anomaly identification
+- Sanctions screening (OFAC, EU, UN lists)
+- Network analysis for fraud rings
+- ML model feature engineering requirements
+- Latency requirements (document millisecond requirements)
+
+**Category C - Payment Processing:**
+- Payment initiation and validation
+- Routing and clearing
+- Settlement and reconciliation
+- Exception handling and repair
+- Nostro/Vostro reconciliation
+- Liquidity management
+
+**Category D - Analytics and AI:**
+- Payment flow analytics
+- Customer behavior analysis
+- Pricing optimization
+- Forecasting and planning
+- Operational metrics and KPIs
+- AI/ML model training data requirements
+
+**Category E - Operational:**
+- End-of-day processing
+- Statement generation
+- Audit and compliance queries
+- Data quality monitoring
+- Lineage and impact analysis
+
+### Deliverable 1.2: Platform Assessment Framework
+
+Develop comprehensive assessment framework for evaluating: **Databricks**, **Starburst**, **Neo4j**, **Oracle Exadata (current)**, and hybrid combinations.
+
+**Assessment Dimensions (Equal Weighting):**
+
+| Dimension | Criteria | Scoring Method |
+|-----------|----------|----------------|
+| **Scalability** | Horizontal scaling, data volume capacity, concurrent user support, elasticity | 1-5 scale with defined rubric |
+| **Performance** | Batch processing speed, real-time/streaming latency, query performance, ML workload performance | Benchmarked metrics |
+| **Data Architecture Fit** | Lakehouse pattern support, data mesh compatibility, polyglot persistence, schema flexibility | Capability matrix |
+| **Integration** | Oracle Exadata connectivity, Kafka integration, Collibra integration, API ecosystem | Connector inventory |
+| **Governance & Quality** | Built-in data quality, lineage tracking, access control, audit capabilities, Collibra integration depth | Feature checklist |
+| **Real-time Capabilities** | Stream processing, CDC support, event-driven architecture, millisecond latency support | Technical assessment |
+| **AI/ML Enablement** | Native ML capabilities, feature store, model serving, MLOps integration | Capability assessment |
+| **Regulatory Compliance** | Data residency support, encryption, audit logging, retention management | Compliance checklist |
+| **Cloud Compatibility** | AWS deployment options, Azure deployment options, hybrid support, Kubernetes readiness | Deployment matrix |
+| **Total Cost of Ownership** | Licensing model, compute costs, storage costs, operational overhead, migration costs | 5-year TCO model |
+| **Vendor Viability** | Market position, financial stability, roadmap alignment, support quality | Analyst research |
+| **Change Management** | Learning curve, available talent, training resources, migration tooling | Readiness assessment |
+
+**Specific Evaluation Requirements:**
+
+*For Databricks:*
+- Delta Lake capabilities for ACID transactions
+- Unity Catalog for governance
+- Databricks SQL for analytics
+- MLflow integration for AI/ML
+- Streaming capabilities (Structured Streaming)
+- Photon engine performance
+- AWS and Azure deployment options
+
+*For Starburst:*
+- Query federation capabilities across Oracle and cloud
+- Starburst Galaxy vs. Enterprise evaluation
+- Data product catalog features
+- Oracle connector performance
+- Cost-based optimization effectiveness
+
+*For Neo4j:*
+- Graph use cases: fraud ring detection, payment network analysis, entity resolution, lineage
+- Integration patterns with lakehouse
+- AuraDB cloud vs. self-managed
+- Performance at scale for payment networks
+
+*For Hybrid Architecture Patterns:*
+- Oracle Exadata for transactional/operational workloads
+- Lakehouse for analytical workloads
+- Neo4j for graph-specific use cases
+- Integration architecture (data virtualization vs. replication)
+
+### Deliverable 1.3: Target State Architecture Blueprint
+
+Using Zachman Framework, develop architecture across all perspectives:
+
+**Scope (Planner) - Row 1:**
+- Business context and drivers
+- Strategic alignment with BofA technology strategy
+- Capability map for payments data services
+
+**Business Model (Owner) - Row 2:**
+- Business process models for payment data flows
+- Semantic business data model
+- Business rules and policies
+- Organization and roles
+
+**System Model (Designer) - Row 3:**
+- Logical data architecture
+- Application architecture
+- Integration architecture
+- Technology architecture
+
+**Technology Model (Builder) - Row 4:**
+- Physical data models
+- Component specifications
+- Infrastructure specifications
+- Security architecture
+
+**Detailed Representation (Subcontractor) - Row 5:**
+- Implementation specifications
+- Configuration details
+- Deployment specifications
+
+**Functioning System (User) - Row 6:**
+- Operational procedures
+- User documentation
+- Training materials
+
+**Architecture Blueprint Must Include:**
+
+1. **Lakehouse Architecture Design:**
+   - Bronze/Silver/Gold layer specifications
+   - Data zone definitions (raw, curated, consumption)
+   - Storage formats (Delta, Parquet, Iceberg considerations)
+   - Partitioning and clustering strategies for payment data
+
+2. **Real-time Architecture:**
+   - Kafka integration patterns
+   - Stream processing topology
+   - CDC implementation approach from Oracle
+   - Event-driven architecture for millisecond use cases
+
+3. **Data Quality Architecture:**
+   - Integrated quality rules and checkpoints
+   - Quality scoring methodology
+   - Remediation workflows
+   - Integration with Collibra
+
+4. **Governance Architecture:**
+   - Metadata management integration with Collibra
+   - Data lineage capture and visualization
+   - Access control and entitlement model
+   - Policy enforcement mechanisms
+
+5. **AI/ML Architecture:**
+   - Feature store design
+   - Model training infrastructure
+   - Model serving patterns
+   - MLOps pipeline integration
+
+6. **Graph Architecture (Neo4j Integration):**
+   - Use case allocation (what goes in graph vs. lakehouse)
+   - Synchronization patterns
+   - Query federation approach
+
+7. **Multi-Region Architecture:**
+   - Data residency compliance by region
+   - Cross-region replication strategy
+   - Regional deployment topology
+   - Latency optimization
+
+
+### Deliverable 1.4: Transition Roadmap
+
+Develop phased roadmap with:
+
+**Phase 0: Foundation (Months 1-4 of POC period)**
+- POC execution and validation
+- Detailed planning refinement
+- Team training and enablement
+
+**Phase 1: Platform Foundation (Months 5-10)**
+- Core platform deployment
+- Integration framework establishment
+- Governance foundation
+- Initial data domains migration
+
+**Phase 2: Core Migration (Months 11-18)**
+- Priority use case migration
+- CDM implementation expansion
+- Real-time capability activation
+- Regulatory reporting migration
+
+**Phase 3: Advanced Capabilities (Months 19-24)**
+- AI/ML enablement
+- Advanced analytics activation
+- Graph analytics integration
+- Full self-service enablement
+
+**Phase 4: Optimization (Months 25-30)**
+- Legacy decommissioning
+- Performance optimization
+- Cost optimization
+- Operational maturity
+
+For each phase, document:
+- Deliverables and milestones
+- Resource requirements
+- Dependencies and prerequisites
+- Risk mitigation strategies
+- Success criteria and KPIs
+- Decision gates
+
+---
+
+## WORKSTREAM 2: PAYMENTS COMMON DOMAIN MODEL (CDM)
+
+### Deliverable 2.1: CDM Design Principles and Methodology
+
+Document approach for CDM development:
+
+**Guiding Principles:**
+1. ISO 20022 as canonical foundation
+2. Extensibility for proprietary requirements
+3. Backward compatibility with MT formats during transition
+4. Regulatory reporting as first-class design driver
+5. Analytics and AI-readiness
+6. Multi-product harmonization
+7. Temporal modeling for historical analysis
+
+**Methodology:**
+- Domain-Driven Design (DDD) approach
+- Event Sourcing patterns where applicable
+- ISDA CDM lessons learned and patterns
+- Digital Regulatory Reporting alignment
+
+### Deliverable 2.2: Logical Common Domain Model
+
+Develop comprehensive logical model covering ALL data elements:
+
+**Core Domain Entities:**
+
+1. **Payment Instruction**
+   - Payment identification
+   - Payment type classification
+   - Instruction dates and times
+   - Amount and currency
+   - Charge allocation
+   - Purpose and remittance information
+   - Regulatory reporting codes
+
+2. **Party**
+   - Party identification (multiple schemes: BIC, LEI, proprietary)
+   - Party type (debtor, creditor, intermediary, agent)
+   - Account information
+   - Address information (structured per ISO 20022)
+   - Contact information
+
+3. **Account**
+   - Account identification (IBAN, proprietary)
+   - Account type
+   - Currency
+   - Servicer information
+   - Account relationship (Nostro/Vostro/customer)
+
+4. **Financial Institution**
+   - BIC
+   - LEI
+   - Clearing system membership
+   - Correspondent relationships
+   - Branch information
+
+5. **Payment Status**
+   - Status code (ISO 20022 status codes)
+   - Status reason
+   - Timestamp
+   - Status history (full lifecycle)
+
+6. **Settlement**
+   - Settlement method
+   - Settlement date
+   - Settlement amount
+   - Settlement account
+   - Clearing system information
+
+7. **Charges and Fees**
+   - Charge type
+   - Charge amount
+   - Charge bearer
+   - Tax information
+
+8. **Regulatory Information**
+   - Transaction reporting identifiers
+   - Purpose codes
+   - Regulatory product type
+   - Cross-border indicators
+   - Sanctions screening results
+   - AML risk indicators
+
+9. **Remittance Information**
+   - Structured remittance
+   - Unstructured remittance
+   - Related documents
+   - Invoice references
+
+10. **Payment Chain**
+    - Original instruction reference
+    - Related payments
+    - Cover payment relationships
+    - Return/recall relationships
+
+**Supporting Domain Entities:**
+
+11. **Reference Data**
+    - Currency reference
+    - Country reference
+    - Clearing system reference
+    - Charge type reference
+    - Purpose code reference
+    - Regulatory product mapping
+
+12. **Compliance and Screening**
+    - Screening results
+    - Alert information
+    - Case management reference
+    - SLA tracking
+
+13. **Operational**
+    - Processing instructions
+    - Exception information
+    - Manual intervention records
+    - Audit trail
+
+**Cross-Product Mapping:**
+Document how each payment product maps to common model:
+- ACH → CDM mapping (with NACHA field mapping)
+- Wire (Fedwire/CHIPS) → CDM mapping
+- SWIFT MT → CDM mapping (all message types)
+- SWIFT MX → CDM mapping
+- Zelle → CDM mapping
+- RTP/FedNow → CDM mapping
+- SEPA → CDM mapping
+- BACS/Faster Payments → CDM mapping
+- Check/Image → CDM mapping
+
+**Regulatory Data Element Cross-Reference:**
+For each data element in the logical model, cross-reference to:
+- Source regulations requiring the element
+- Specific reports using the element
+- Transformation rules for reporting
+- Quality requirements
+- Retention requirements
+
+**Reconciliation**
+Reconcile each data element for each standard/message format including FULL ISO 20022 standard as well as each regulatory report to proposed CDM model and document any elements that are not covered, use these insights to enhance CDM model and re-perform reconciliation again. GOAL is 100% coverage and completeness
+
+### Deliverable 2.3: Physical Common Domain Model
+
+Develop physical implementation in JSON Schema format:
+
+**Schema Design Requirements:**
+- JSON Schema Draft 2020-12 compliance
+- Modular schema organization (separate files for reusable components)
+- Comprehensive documentation within schema
+- Validation rules embedded
+- Enumeration definitions with descriptions
+- Extension mechanisms for proprietary fields
+
+**Physical Schema Modules:**
+
+```
+/schemas
+  /core
+    payment-instruction.schema.json
+    party.schema.json
+    account.schema.json
+    financial-institution.schema.json
+    amount.schema.json
+    date-time.schema.json
+  /status
+    payment-status.schema.json
+    status-reason.schema.json
+  /settlement
+    settlement.schema.json
+    clearing-system.schema.json
+  /regulatory
+    regulatory-reporting.schema.json
+    compliance-data.schema.json
+    screening-result.schema.json
+  /remittance
+    remittance-information.schema.json
+    document-reference.schema.json
+  /reference
+    currency.schema.json
+    country.schema.json
+    purpose-codes.schema.json
+  /products
+    ach-payment.schema.json (extends core)
+    wire-payment.schema.json (extends core)
+    swift-payment.schema.json (extends core)
+    realtime-payment.schema.json (extends core)
+    sepa-payment.schema.json (extends core)
+  /analytics
+    payment-event.schema.json (for event sourcing)
+    payment-metrics.schema.json (for aggregations)
+```
+
+**Physical Model Specifications:**
+- Provide complete JSON Schema for each module
+- Include sample documents for validation
+- Define Delta Lake table specifications derived from schemas
+- Specify partitioning strategies (by date, region, product type)
+- Define indexing strategies for query patterns
+- Document CDC/streaming event schemas
+
+### Deliverable 2.4: CDM Governance Framework
+
+**Model Governance:**
+- Change control process for CDM modifications
+- Version management strategy
+- Backward compatibility rules
+- Extension guidelines
+- Collibra integration for CDM documentation
+
+**Data Quality Rules:**
+- Field-level validation rules
+- Cross-field validation rules
+- Business rule validation
+- Referential integrity rules
+- Quality scoring methodology
+
+---
+
+## WORKSTREAM 3: CLOUD ADOPTION STRATEGY
+
+### Deliverable 3.1: Cloud Readiness Assessment
+
+**Approved Cloud Pattern Reminder:** Compute-only cloud usage is approved. Data persistence in cloud requires additional governance approval.
+
+**Assessment Framework for Cloud Candidacy:**
+
+| Criterion | Weight | Assessment Method |
+|-----------|--------|-------------------|
+| Compute Intensity | 20% | Workload profiling |
+| Burst Capacity Needs | 15% | Peak analysis |
+| Data Sensitivity | 20% | Classification review |
+| Latency Tolerance | 15% | SLA requirements |
+| Integration Complexity | 15% | Dependency mapping |
+| Cost Benefit | 15% | TCO comparison |
+
+### Deliverable 3.2: Cloud Use Case Prioritization
+
+Evaluate and prioritize these use case categories:
+
+**High Potential Cloud Compute Use Cases:**
+1. Batch regulatory report generation
+2. ML model training for fraud detection
+3. Historical analytics and reporting
+4. Data quality processing
+5. End-of-day reconciliation processing
+6. Stress testing and scenario analysis
+7. Development and testing environments
+
+**Assessment for Each Use Case:**
+- Current compute requirements
+- Peak vs. average utilization
+- Data volumes processed
+- Data sensitivity classification
+- Latency requirements
+- Cost comparison (on-prem vs. cloud)
+- Risk assessment
+
+### Deliverable 3.3: Cloud Platform Recommendation
+
+Compare AWS and Azure for payments workloads:
+
+**AWS Evaluation:**
+- Relevant services: EMR, Glue, Lambda, SageMaker, MSK, Redshift Serverless
+- BofA existing AWS footprint and agreements
+- Financial services specific features
+- Compliance certifications (SOC, PCI-DSS, etc.)
+- Data residency options by region
+- Cost modeling
+
+**Azure Evaluation:**
+- Relevant services: Synapse, Databricks on Azure, Azure ML, Event Hubs, Functions
+- BofA existing Azure footprint and agreements
+- Financial services specific features
+- Compliance certifications
+- Data residency options by region
+- Cost modeling
+
+**Hybrid Considerations:**
+- Multi-cloud strategy evaluation
+- Workload placement criteria
+- Inter-cloud connectivity
+- Unified management approach
+
+### Deliverable 3.4: Cloud Architecture Patterns
+
+For approved compute-only pattern, define:
+
+**Pattern 1: Burst Analytics Processing**
+- Architecture diagram
+- Data flow (on-prem data → cloud compute → results back)
+- Security controls
+- Network architecture
+- Cost optimization strategies
+
+**Pattern 2: ML Training Pipeline**
+- Data sampling/anonymization approach
+- Training infrastructure
+- Model artifact management
+- Deployment back to on-prem
+
+**Pattern 3: Development/Test Environments**
+- Data subsetting strategies
+- Environment provisioning
+- Cost management
+- Compliance considerations
+
+---
+
+## WORKSTREAM 4: PROOF OF CONCEPT PLANNING
+
+### POC 1: Target State Architecture Validation
+
+**Objective:** Validate proposed data platform architecture meets all key requirements
+
+**Scope:**
+- Platform: [Recommended platform from assessment]
+- Data Volume: Representative subset (minimum 10M transactions)
+- Use Cases: Batch regulatory reporting + real-time fraud screening
+
+**Validation Dimensions:**
+
+1. **Scalability Validation**
+   - Test: Ingest 50M records in batch window
+   - Test: Scale concurrent queries
+   - Success Criteria: Linear scaling demonstrated
+
+2. **Performance Validation**
+   - Test: Batch report generation within SLA
+   - Test: Real-time query latency <100ms at P99
+   - Test: Streaming ingestion latency <1 second
+   - Success Criteria: All SLAs met
+
+3. **Integration Validation**
+   - Test: Oracle Exadata CDC capture
+   - Test: Kafka consumer integration
+   - Test: Collibra metadata sync
+   - Success Criteria: All integrations functional
+
+4. **Governance Validation**
+   - Test: Data lineage capture end-to-end
+   - Test: Access control enforcement
+   - Test: Audit logging completeness
+   - Success Criteria: Full lineage, no unauthorized access
+
+5. **Data Quality Validation**
+   - Test: Quality rules execution at scale
+   - Test: Quality score calculation
+   - Test: Anomaly detection
+   - Success Criteria: Quality framework operational
+
+6. **Real-time Validation**
+   - Test: End-to-end latency for streaming
+   - Test: Exactly-once processing guarantee
+   - Test: Late data handling
+   - Success Criteria: Millisecond latency achieved
+
+7. **AI/ML Validation**
+   - Test: Feature engineering at scale
+   - Test: Model training performance
+   - Test: Model serving latency
+   - Success Criteria: ML pipeline functional
+
+**POC 1 Success Criteria Summary:**
+| Dimension | Metric | Target |
+|-----------|--------|--------|
+| Batch Ingest | Records/hour | >10M |
+| Query Latency | P99 | <100ms |
+| Stream Latency | End-to-end | <1s |
+| Lineage | Coverage | 100% |
+| Data Quality | Rule execution | <5min for 10M records |
+
+### POC 2: CDM Implementation for Selected Payment Product
+
+**Product Selection Criteria:**
+| Criterion | Weight | Rationale |
+|-----------|--------|-----------|
+| Transaction Volume | 20% | Tests scale |
+| Data Complexity | 20% | Tests model flexibility |
+| Regulatory Coverage | 25% | Validates reporting use case |
+| Business Priority | 20% | Ensures stakeholder engagement |
+| Implementation Risk | 15% | Manageable scope |
+
+**Recommended Product Evaluation:**
+- ACH: High volume, established formats, multiple report types
+- Wires: Complex data, critical for regulatory
+- Zelle: Real-time, newer product
+- SWIFT: ISO 20022 native, cross-border complexity
+
+**POC 2 Implementation Scope:**
+
+1. **Source Data Integration**
+   - Identify system of record for selected product
+   - Implement CDC from Oracle source
+   - Define data extraction specifications
+   - Implement Kafka streaming pipeline
+
+2. **CDM Transformation**
+   - Implement source → CDM mapping logic
+   - Apply data quality rules
+   - Generate quality scores
+   - Handle exceptions and fallbacks
+
+3. **Target Platform Loading**
+   - Load to Bronze layer (raw)
+   - Transform to Silver layer (CDM-conformant)
+   - Aggregate to Gold layer (consumption-ready)
+   - Implement Delta Lake/Iceberg tables
+
+4. **Data Products Development**
+   - Regulatory reporting data product
+   - Analytics data product
+   - API access layer
+   - Documentation and catalog registration
+
+5. **Validation:**
+   - Reconciliation to source
+   - Regulatory report generation test
+   - Lineage verification
+   - Quality metrics review
+
+**POC 2 Success Criteria:**
+| Dimension | Metric | Target |
+|-----------|--------|--------|
+| Data Completeness | Records loaded | 100% |
+| CDM Conformance | Schema validation pass | 100% |
+| Data Quality | Quality score | >95% |
+| Reconciliation | Variance | 0 |
+| Report Generation | Sample report accuracy | 100% |
+| Lineage | Field-level coverage | 100% |
+
+### POC 3: Cloud Adoption Validation
+
+**Objective:** Validate compute-only cloud pattern for prioritized use case
+
+**Use Case Selection Criteria:**
+| Criterion | Weight | Rationale |
+|-----------|--------|-----------|
+| Compute Intensity | 25% | Maximizes cloud benefit |
+| Data Sensitivity | 25% | Lower sensitivity preferred for initial POC |
+| Business Impact | 20% | Demonstrates value |
+| Technical Feasibility | 20% | Achievable in timeframe |
+| Cost Benefit | 10% | Positive ROI |
+
+**Recommended Use Cases for Evaluation:**
+1. ML model training for fraud detection (using anonymized data)
+2. Historical payment analytics batch processing
+3. Regulatory report generation (compute-intensive calculations)
+4. Data quality batch processing
+
+**POC 3 Implementation Scope:**
+
+1. **Infrastructure Setup**
+   - Provision cloud environment (AWS or Azure based on recommendation)
+   - Configure networking (secure connectivity to on-prem)
+   - Implement security controls
+   - Deploy compute resources
+
+2. **Data Pipeline**
+   - Implement secure data transfer (encrypted)
+   - Apply any required data masking/anonymization
+   - Process in cloud compute
+   - Return results to on-prem
+
+3. **Workload Execution**
+   - Execute representative workload
+   - Monitor performance metrics
+   - Track costs
+   - Validate results
+
+4. **Security Validation**
+   - Penetration testing
+   - Compliance audit
+   - Data protection verification
+   - Access control validation
+
+**POC 3 Success Criteria:**
+| Dimension | Metric | Target |
+|-----------|--------|--------|
+| Performance | Processing time vs. on-prem | >30% improvement |
+| Cost | TCO comparison | <80% of on-prem |
+| Security | Compliance findings | 0 critical |
+| Data Protection | Data leakage incidents | 0 |
+| Scalability | Burst capacity test | Successfully scaled |
+
+---
+
+
+## WORKSTREAM 5: DODUCMENTATION
+
+### Deliverable 5.1: Detailed Approach documentation
+
+Review the steps performed as part of this task in a detailed approach documentation with activities, sequencing and dependencies. Organize activities into logical groups so it can be presented to client
+
+**Documentation Reminder:** Needs to capture all activities essential for creating data strategy and POC planning/execution
+
+
+### Deliverable 5.2: Mappings Documentation
+
+Document full mappings with CDM data element as the key. For each element, have separate column for each standard/message format including ISO 20022 as well as each regulatory report and document corresponding element mapping.
+
+ ### Deliverable 5.2: Reconciliation Documentation
+
+Reconcile each data element for each standard/message format including ISO 20022 as well as each regulatory report to proposed CDM model and document any elements that are not covered, use these insights to enhance CDM model and re-perform reconciliation again. 
+ 
+
+**Documentation Reminder:** Needs to capture all activities essential for creating data strategy and POC planning/execution
+**Reconciliation Reminder:** Goal is 100% completeness of all data elements in CDM model
+
+—
+
+## DELIVERABLE TEMPLATES AND STANDARDS
+
+### Documentation Standards
+
+**Architecture Deliverables:**
+- Use ArchiMate 3.1 notation for architecture diagrams
+- Align to Zachman Framework columns and rows
+- Include decision logs with rationale
+- Version control all artifacts
+
+**Data Model Deliverables:**
+- Logical models in UML class diagram notation
+- Physical models in JSON Schema with full documentation
+- Include sample data for each entity
+- Provide data dictionary in Collibra-importable format
+
+**Assessment Deliverables:**
+- Use standardized scoring rubrics
+- Include evidence for each score
+- Provide executive summary views
+- Include detailed appendices
+
+### Workstream Assignment Recommendations
+
+| Workstream | Lead | Support | Duration |
+|------------|------|---------|----------|
+| WS1: Platform Modernization | US Resource | India Resource 1 | Months 1-4 |
+| WS2: CDM Development | UK Resource | India Resource 2 | Months 1-4 |
+| WS3: Cloud Strategy | US Resource | UK Resource | Months 2-3 |
+| WS4: POC Planning | All | All | Month 4 |
+| POC Execution | All | All | Months 5-8 |
+
+### Risk Register Template
+
+| Risk ID | Description | Probability | Impact | Mitigation | Owner |
+|---------|-------------|-------------|--------|------------|-------|
+| R001 | Platform assessment delayed | | | | |
+| R002 | CDM complexity underestimated | | | | |
+| R003 | Regulatory requirement gaps | | | | |
+| R004 | Integration challenges | | | | |
+| R005 | Resource availability | | | | |
+
+---
+
+## OUTPUT REQUIREMENTS
+
+For each deliverable, provide:
+
+1. **Executive Summary** (1-2 pages)
+   - Key findings and recommendations
+   - Critical decisions required
+   - Timeline and resource implications
+
+2. **Detailed Content** (Comprehensive)
+   - Complete analysis and documentation
+   - All supporting evidence and rationale
+   - Implementation specifications
+
+3. **Appendices**
+   - Reference materials
+   - Detailed data mappings
+   - Technical specifications
+
+**Quality Checklist:**
+- [ ] All research requirements completed
+- [ ] No relevant information omitted
+- [ ] Cross-references to regulations complete
+- [ ] All payment products covered
+- [ ] Physical schemas complete and valid
+- [ ] Assessment frameworks fully populated
+- [ ] Roadmap actionable and realistic
+- [ ] POC plans executable
+- [ ] CIO-ready executive summaries included
+
+---
+
+## REASONING APPROACH
+
+Apply first principles thinking and chain-of-thought reasoning:
+
+1. **Decompose** each problem into fundamental components
+2. **Research** thoroughly before recommending
+3. **Analyze** multiple options with evidence
+4. **Synthesize** findings into coherent recommendations
+5. **Validate** logic and completeness before finalizing
+6. **Document** reasoning transparently
+
+For each major recommendation, explicitly state:
+- The problem being solved
+- Options considered
+- Evaluation criteria applied
+- Evidence supporting the recommendation
+- Risks and mitigations
+- Implementation implications

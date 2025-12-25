@@ -1,0 +1,183 @@
+# IRS FATCA Form 8966 - Requirement Index
+# Report Type: FATCA_8966
+# Regulator: IRS
+# Jurisdiction: US
+# Total Requirements: 97
+
+report_metadata:
+  report_type: "FATCA_8966"
+  report_name: "FATCA Report"
+  regulator: "IRS"
+  jurisdiction: "US"
+  form_number: "Form 8966"
+  regulation: "Internal Revenue Code Sections 1471-1474"
+  effective_date: "2014-07-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "ANNUAL"
+  filing_deadline: "March 31 following calendar year"
+  output_format: "XML"
+  submission_method: "IDES (International Data Exchange Service)"
+  submission_url: "https://www.irs.gov/businesses/corporations/fatca-ides-technical-faqs"
+
+requirement_summary:
+  total: 97
+  by_category:
+    ELIGIBILITY: 8
+    FIELD: 72
+    VALIDATION: 10
+    FORMAT: 4
+    TIMING: 3
+  by_criticality:
+    MANDATORY: 85
+    RECOMMENDED: 10
+    OPTIONAL: 2
+
+requirements:
+  eligibility:
+    - id: "REQ-FATCA-001"
+      title: "US Account Holder Identification"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Account held by US person or US-owned foreign entity"
+
+    - id: "REQ-FATCA-002"
+      title: "US Indicia Detection"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Presence of US indicia (citizenship, residence, birthplace, phone, address)"
+
+    - id: "REQ-FATCA-003"
+      title: "Account Balance Threshold"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Depository accounts over $50,000, custodial accounts any balance"
+
+    - id: "REQ-FATCA-004"
+      title: "Substantial US Owner"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "10%+ ownership by US person"
+
+    - id: "REQ-FATCA-005"
+      title: "Non-Participating FFI"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Payments to non-participating foreign financial institutions"
+
+    - id: "REQ-FATCA-006"
+      title: "Recalcitrant Account Holder"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Account holders who fail to provide required documentation"
+
+    - id: "REQ-FATCA-007"
+      title: "New vs Preexisting Account"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Different thresholds for new vs preexisting accounts"
+
+    - id: "REQ-FATCA-008"
+      title: "High Value Account Review"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Enhanced review for accounts over $1 million"
+
+  fields_account:
+    - id: "REQ-FATCA-020"
+      title: "Account Holder Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-021"
+      title: "Account Holder TIN (SSN/EIN)"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-022"
+      title: "Account Holder Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-023"
+      title: "Account Holder Date of Birth"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-024"
+      title: "Account Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-025"
+      title: "Account Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Depository, Custodial, Debt, Equity, Insurance, Annuity"
+
+    - id: "REQ-FATCA-026"
+      title: "Account Balance/Value"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-027"
+      title: "Currency of Balance"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-028"
+      title: "Interest Paid"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-FATCA-029"
+      title: "Dividends Paid"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-FATCA-030"
+      title: "Gross Proceeds"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-FATCA-031"
+      title: "Other Income"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+  fields_ffi:
+    - id: "REQ-FATCA-040"
+      title: "FFI Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-041"
+      title: "FFI GIIN"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Global Intermediary Identification Number"
+
+    - id: "REQ-FATCA-042"
+      title: "FFI Country"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-043"
+      title: "Reporting Period"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-FATCA-090"
+      title: "March 31 Annual Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-091"
+      title: "Reporting Period Calendar Year"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+    - id: "REQ-FATCA-092"
+      title: "Correction Period"
+      category: "TIMING"
+      criticality: "MANDATORY"

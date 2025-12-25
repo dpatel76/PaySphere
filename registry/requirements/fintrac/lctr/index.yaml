@@ -1,0 +1,236 @@
+# FINTRAC Large Cash Transaction Report (LCTR) - Requirement Index
+# Report Type: LCTR
+# Regulator: FINTRAC
+# Jurisdiction: CA
+# Total Requirements: 95
+
+report_metadata:
+  report_type: "LCTR"
+  report_name: "Large Cash Transaction Report"
+  regulator: "FINTRAC"
+  jurisdiction: "CA"
+  regulation: "Proceeds of Crime (Money Laundering) and Terrorist Financing Act"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-21"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "15 calendar days after transaction"
+  output_format: "XML"
+  submission_method: "FINTRAC Web Reporting System"
+  submission_url: "https://www.fintrac-canafe.gc.ca/reporting-declaration/Info/rptng-eng"
+
+threshold:
+  amount: 10000
+  currency: "CAD"
+  description: "Cash transactions of CAD 10,000 or more"
+  aggregation: "Within 24-hour period by same individual"
+
+requirement_summary:
+  total: 95
+  by_category:
+    ELIGIBILITY: 6
+    FIELD: 72
+    VALIDATION: 10
+    FORMAT: 4
+    TIMING: 2
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 82
+    RECOMMENDED: 10
+    OPTIONAL: 3
+
+requirements:
+  eligibility:
+    - id: "REQ-LCTR-001"
+      title: "Large Cash Transaction Threshold"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Cash receipt/disbursement of CAD 10,000 or more"
+      cdm_mapping:
+        entity: "Payment"
+        field: "amount"
+        transformation: "amount >= 10000 AND currency = 'CAD' AND cash_transaction = TRUE"
+
+    - id: "REQ-LCTR-002"
+      title: "24-Hour Aggregation Rule"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Multiple transactions totaling CAD 10,000+ within 24 hours"
+
+    - id: "REQ-LCTR-003"
+      title: "Reporting Entity Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Financial entities, MSBs, casinos, accountants, real estate"
+
+  fields_part_a:
+    - id: "REQ-LCTR-010"
+      title: "Reporting Entity Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "FinancialInstitution"
+        field: "name"
+
+    - id: "REQ-LCTR-011"
+      title: "Reporting Entity Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "FinancialInstitution"
+        field: "registration_number"
+
+    - id: "REQ-LCTR-012"
+      title: "Reporting Entity Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "FinancialInstitution"
+        field: "address"
+
+  fields_part_b:
+    - id: "REQ-LCTR-020"
+      title: "Transaction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+        format: "YYYY-MM-DD"
+
+    - id: "REQ-LCTR-021"
+      title: "Transaction Time"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+        format: "HH:MM:SS"
+
+    - id: "REQ-LCTR-022"
+      title: "Transaction Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_amount"
+
+    - id: "REQ-LCTR-023"
+      title: "Transaction Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_currency"
+
+    - id: "REQ-LCTR-024"
+      title: "Transaction Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "payment_type"
+      valid_values:
+        - "deposit"
+        - "withdrawal"
+        - "currency_exchange"
+
+  fields_part_c:
+    - id: "REQ-LCTR-030"
+      title: "Individual Surname"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Person"
+        field: "last_name"
+
+    - id: "REQ-LCTR-031"
+      title: "Individual Given Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Person"
+        field: "first_name"
+
+    - id: "REQ-LCTR-032"
+      title: "Individual Date of Birth"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Person"
+        field: "date_of_birth"
+
+    - id: "REQ-LCTR-033"
+      title: "Individual Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "address"
+
+    - id: "REQ-LCTR-034"
+      title: "Individual Occupation"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Person"
+        field: "occupation"
+
+    - id: "REQ-LCTR-035"
+      title: "Individual Identification Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PartyIdentification"
+        field: "id_type"
+
+    - id: "REQ-LCTR-036"
+      title: "Individual Identification Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PartyIdentification"
+        field: "id_number"
+
+    - id: "REQ-LCTR-037"
+      title: "Individual Identification Jurisdiction"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PartyIdentification"
+        field: "issuing_country"
+
+  validations:
+    - id: "REQ-LCTR-080"
+      title: "Amount Must Meet Threshold"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+      rule: "amount >= 10000"
+
+    - id: "REQ-LCTR-081"
+      title: "Valid Canadian Province/Territory"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+    - id: "REQ-LCTR-082"
+      title: "Valid Identification Document"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-LCTR-090"
+      title: "15 Calendar Day Filing Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      rule: "filing_date <= transaction_date + 15 days"
+
+cdm_coverage:
+  entities_used:
+    - Payment
+    - PaymentInstruction
+    - Party
+    - Person
+    - PartyIdentification
+    - Account
+    - FinancialInstitution
+  coverage_percentage: 100
+  unmapped_fields: 0

@@ -1,0 +1,132 @@
+purpose_code_id,jurisdiction,code_value,code_description,category,sub_category,iso20022_mapping,applicable_payment_types,requires_supporting_documents,effective_from,effective_to
+# ============================================================================
+# CHINA (PBoC) - SAMPLE OF 190 TOTAL CODES
+# ============================================================================
+# Trade in Goods (121010-122999)
+550e8400-e29b-41d4-a716-446655440001,CN,121010,General merchandise trade - export,Trade in Goods,Export,GDDS,"[""SWIFT"",""Wire"",""RTGS""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440002,CN,121020,General merchandise trade - import,Trade in Goods,Import,GDDS,"[""SWIFT"",""Wire"",""RTGS""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440003,CN,122010,Processing with imported materials - export,Trade in Goods,Processing Trade,GDDS,"[""SWIFT"",""Wire""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440004,CN,122020,Processing with imported materials - import,Trade in Goods,Processing Trade,GDDS,"[""SWIFT"",""Wire""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440005,CN,122030,Processing with supplied materials - export,Trade in Goods,Processing Trade,GDDS,"[""SWIFT"",""Wire""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440006,CN,122040,Processing with supplied materials - import,Trade in Goods,Processing Trade,GDDS,"[""SWIFT"",""Wire""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440007,CN,123010,Bonded warehouse trade - export,Trade in Goods,Bonded Trade,GDDS,"[""SWIFT"",""Wire""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440008,CN,123020,Bonded warehouse trade - import,Trade in Goods,Bonded Trade,GDDS,"[""SWIFT"",""Wire""]",true,2015-01-01,
+# Trade in Services (221010-229999)
+550e8400-e29b-41d4-a716-446655440010,CN,221010,Transportation services - international freight,Trade in Services,Transportation,TRPT,"[""SWIFT"",""Wire""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440011,CN,222010,Tourism and travel services,Trade in Services,Tourism,TRFR,"[""SWIFT"",""Wire"",""Mobile""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440012,CN,223010,Construction services - overseas,Trade in Services,Construction,CBFF,"[""SWIFT"",""Wire""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440013,CN,224010,Insurance services,Trade in Services,Insurance,INSU,"[""SWIFT"",""Wire""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440014,CN,225010,Financial services,Trade in Services,Financial,FINA,"[""SWIFT"",""Wire""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440015,CN,226010,Intellectual property royalties,Trade in Services,IP,ROYA,"[""SWIFT"",""Wire""]",true,2015-01-01,
+550e8400-e29b-41d4-a716-446655440016,CN,227010,Telecommunications services,Trade in Services,Telecom,TELE,"[""SWIFT"",""Wire""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440017,CN,228010,Information technology services,Trade in Services,IT,SERV,"[""SWIFT"",""Wire""]",true,2015-01-01,
+# Income (321010-329999)
+550e8400-e29b-41d4-a716-446655440020,CN,321010,Employee compensation - salary,Income,Compensation,SALA,"[""Wire"",""ACH""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440021,CN,322010,Investment income - dividends,Income,Investment,DIVI,"[""SWIFT"",""Wire""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440022,CN,322020,Investment income - interest,Income,Investment,INTC,"[""SWIFT"",""Wire""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440023,CN,323010,Rental income - property,Income,Property,RENT,"[""Wire""]",false,2015-01-01,
+# Current Transfers (421010-429999)
+550e8400-e29b-41d4-a716-446655440030,CN,421010,Personal remittances - family support,Current Transfers,Remittances,FAMI,"[""Wire"",""Mobile""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440031,CN,422010,Charitable donations,Current Transfers,Donations,CHAR,"[""Wire""]",false,2015-01-01,
+550e8400-e29b-41d4-a716-446655440032,CN,423010,Government transfers,Current Transfers,Government,TAXS,"[""Wire""]",false,2015-01-01,
+
+# ============================================================================
+# INDIA (RBI) - SAMPLE OF 80 TOTAL CODES
+# ============================================================================
+# Export of Goods and Services (S0001-S0099)
+550e8400-e29b-41d4-a716-446655440100,IN,S0001,Exports of goods,Export of Goods and Services,Goods,GDDS,"[""Wire"",""RTGS""]",true,2016-01-01,
+550e8400-e29b-41d4-a716-446655440101,IN,S0002,Exports of software services,Export of Goods and Services,Software,SERV,"[""Wire"",""RTGS""]",false,2016-01-01,
+550e8400-e29b-41d4-a716-446655440102,IN,S0003,Business and management consultancy services,Export of Goods and Services,Consultancy,SERV,"[""Wire""]",false,2016-01-01,
+550e8400-e29b-41d4-a716-446655440103,IN,S0004,Architectural and engineering services,Export of Goods and Services,Professional,SERV,"[""Wire""]",false,2016-01-01,
+550e8400-e29b-41d4-a716-446655440104,IN,S0005,Educational services,Export of Goods and Services,Education,EDUC,"[""Wire""]",false,2016-01-01,
+# Remittances (S0201-S0299)
+550e8400-e29b-41d4-a716-446655440110,IN,S0201,Maintenance of close relatives,Remittances,Family,FAMI,"[""Wire"",""Mobile"",""UPI""]",false,2016-01-01,
+550e8400-e29b-41d4-a716-446655440111,IN,S0202,Remittances for living expenses of students,Remittances,Education,EDUC,"[""Wire""]",false,2016-01-01,
+550e8400-e29b-41d4-a716-446655440112,IN,S0203,Medical treatment abroad,Remittances,Medical,MDCS,"[""Wire""]",false,2016-01-01,
+550e8400-e29b-41d4-a716-446655440113,IN,S0204,Gifts and donations,Remittances,Gifts,CHAR,"[""Wire""]",false,2016-01-01,
+550e8400-e29b-41d4-a716-446655440114,IN,S0205,Remittances for purchase of residential property,Remittances,Property,RENT,"[""Wire""]",true,2016-01-01,
+# Investment (S0301-S0399)
+550e8400-e29b-41d4-a716-446655440120,IN,S0301,Investment in equity,Investment,Equity,DIVI,"[""Wire"",""RTGS""]",true,2016-01-01,
+550e8400-e29b-41d4-a716-446655440121,IN,S0302,Investment in debt instruments,Investment,Debt,INTC,"[""Wire"",""RTGS""]",true,2016-01-01,
+550e8400-e29b-41d4-a716-446655440122,IN,S0303,Repatriation of investment,Investment,Repatriation,DIVI,"[""Wire"",""RTGS""]",false,2016-01-01,
+# Trade Finance (S0401-S0499)
+550e8400-e29b-41d4-a716-446655440130,IN,S0401,Advance payment for imports,Trade Finance,Import,GDDS,"[""Wire"",""RTGS""]",true,2016-01-01,
+550e8400-e29b-41d4-a716-446655440131,IN,S0402,Payment against Letter of Credit,Trade Finance,LC,GDDS,"[""Wire"",""RTGS""]",true,2016-01-01,
+550e8400-e29b-41d4-a716-446655440132,IN,S0403,Payment for import of goods,Trade Finance,Import,GDDS,"[""Wire"",""RTGS""]",true,2016-01-01,
+
+# ============================================================================
+# BRAZIL (BACEN) - SAMPLE OF 40 TOTAL CODES
+# ============================================================================
+550e8400-e29b-41d4-a716-446655440200,BR,10101,Export of goods - general merchandise,Export,Goods,GDDS,"[""Wire"",""PIX""]",true,2020-01-01,
+550e8400-e29b-41d4-a716-446655440201,BR,10102,Export of services,Export,Services,SERV,"[""Wire"",""PIX""]",false,2020-01-01,
+550e8400-e29b-41d4-a716-446655440202,BR,20101,Import of goods - general merchandise,Import,Goods,GDDS,"[""Wire""]",true,2020-01-01,
+550e8400-e29b-41d4-a716-446655440203,BR,20102,Import of services,Import,Services,SERV,"[""Wire""]",false,2020-01-01,
+550e8400-e29b-41d4-a716-446655440204,BR,30101,Personal remittances - family support,Remittances,Family,FAMI,"[""Wire"",""PIX""]",false,2020-01-01,
+550e8400-e29b-41d4-a716-446655440205,BR,30102,Salary payments,Remittances,Salary,SALA,"[""Wire"",""PIX""]",false,2020-01-01,
+550e8400-e29b-41d4-a716-446655440206,BR,40101,Foreign direct investment - equity,Investment,FDI,DIVI,"[""Wire""]",true,2020-01-01,
+550e8400-e29b-41d4-a716-446655440207,BR,40102,Portfolio investment - securities,Investment,Portfolio,DIVI,"[""Wire""]",true,2020-01-01,
+550e8400-e29b-41d4-a716-446655440208,BR,50101,Loan disbursement,Loan,Disbursement,LOAN,"[""Wire""]",true,2020-01-01,
+550e8400-e29b-41d4-a716-446655440209,BR,50102,Loan repayment,Loan,Repayment,LOAN,"[""Wire""]",false,2020-01-01,
+
+# ============================================================================
+# OTHER JURISDICTIONS - SAMPLE
+# ============================================================================
+# Korea
+550e8400-e29b-41d4-a716-446655440300,KR,1001,Trade settlement - export,Trade,Export,GDDS,"[""Wire"",""RTGS""]",true,2018-01-01,
+550e8400-e29b-41d4-a716-446655440301,KR,1002,Trade settlement - import,Trade,Import,GDDS,"[""Wire"",""RTGS""]",true,2018-01-01,
+550e8400-e29b-41d4-a716-446655440302,KR,2001,Service payment - professional fees,Services,Professional,SERV,"[""Wire""]",false,2018-01-01,
+550e8400-e29b-41d4-a716-446655440303,KR,3001,Personal transfer - family support,Remittances,Family,FAMI,"[""Wire""]",false,2018-01-01,
+
+# Singapore
+550e8400-e29b-41d4-a716-446655440310,SG,T01,Trade in goods,Trade,Goods,GDDS,"[""Wire"",""RTGS"",""PayNow""]",true,2019-01-01,
+550e8400-e29b-41d4-a716-446655440311,SG,S01,Trade in services,Services,Services,SERV,"[""Wire"",""RTGS""]",false,2019-01-01,
+550e8400-e29b-41d4-a716-446655440312,SG,I01,Investment income,Investment,Income,DIVI,"[""Wire"",""RTGS""]",false,2019-01-01,
+550e8400-e29b-41d4-a716-446655440313,SG,R01,Personal remittances,Remittances,Personal,FAMI,"[""Wire"",""PayNow""]",false,2019-01-01,
+
+# Philippines
+550e8400-e29b-41d4-a716-446655440320,PH,OF01,Overseas Filipino Worker remittance,Remittances,OFW,FAMI,"[""Wire"",""Mobile"",""GCash""]",false,2017-01-01,
+550e8400-e29b-41d4-a716-446655440321,PH,BPO01,Business Process Outsourcing payment,Services,BPO,SERV,"[""Wire""]",false,2017-01-01,
+550e8400-e29b-41d4-a716-446655440322,PH,EX01,Export proceeds,Trade,Export,GDDS,"[""Wire""]",true,2017-01-01,
+
+# UAE
+550e8400-e29b-41d4-a716-446655440330,AE,UAE01,Trade in goods - general,Trade,Goods,GDDS,"[""Wire"",""RTGS""]",true,2019-01-01,
+550e8400-e29b-41d4-a716-446655440331,AE,UAE02,Personal transfer - family support,Remittances,Family,FAMI,"[""Wire"",""Mobile""]",false,2019-01-01,
+550e8400-e29b-41d4-a716-446655440332,AE,UAE03,Salary transfer,Salary,Employment,SALA,"[""Wire""]",false,2019-01-01,
+
+# Saudi Arabia
+550e8400-e29b-41d4-a716-446655440340,SA,SA01,Remittance - family maintenance,Remittances,Family,FAMI,"[""Wire"",""Mobile""]",false,2019-01-01,
+550e8400-e29b-41d4-a716-446655440341,SA,SA02,Trade payment,Trade,Goods,GDDS,"[""Wire""]",true,2019-01-01,
+550e8400-e29b-41d4-a716-446655440342,SA,SA03,Investment transfer,Investment,Investment,DIVI,"[""Wire""]",true,2019-01-01,
+
+# Malaysia
+550e8400-e29b-41d4-a716-446655440350,MY,MY01,Export proceeds,Trade,Export,GDDS,"[""Wire"",""RTGS""]",true,2018-01-01,
+550e8400-e29b-41d4-a716-446655440351,MY,MY02,Import payment,Trade,Import,GDDS,"[""Wire"",""RTGS""]",true,2018-01-01,
+550e8400-e29b-41d4-a716-446655440352,MY,MY03,Services payment,Services,Services,SERV,"[""Wire""]",false,2018-01-01,
+
+# Thailand
+550e8400-e29b-41d4-a716-446655440360,TH,TH01,Trade payment,Trade,Goods,GDDS,"[""Wire"",""PromptPay""]",true,2019-01-01,
+550e8400-e29b-41d4-a716-446655440361,TH,TH02,Personal remittance,Remittances,Personal,FAMI,"[""Wire"",""PromptPay""]",false,2019-01-01,
+
+# Indonesia
+550e8400-e29b-41d4-a716-446655440370,ID,ID01,Export of goods,Trade,Export,GDDS,"[""Wire""]",true,2018-01-01,
+550e8400-e29b-41d4-a716-446655440371,ID,ID02,Import of goods,Trade,Import,GDDS,"[""Wire""]",true,2018-01-01,
+550e8400-e29b-41d4-a716-446655440372,ID,ID03,Personal transfer,Remittances,Personal,FAMI,"[""Wire"",""Mobile""]",false,2018-01-01,
+
+# Vietnam
+550e8400-e29b-41d4-a716-446655440380,VN,VN01,Export proceeds,Trade,Export,GDDS,"[""Wire""]",true,2019-01-01,
+550e8400-e29b-41d4-a716-446655440381,VN,VN02,Remittance from overseas Vietnamese,Remittances,Overseas Vietnamese,FAMI,"[""Wire"",""Mobile""]",false,2019-01-01,
+
+# Hong Kong
+550e8400-e29b-41d4-a716-446655440390,HK,HK01,Trade settlement,Trade,Goods,GDDS,"[""Wire"",""RTGS"",""FPS""]",true,2018-01-01,
+550e8400-e29b-41d4-a716-446655440391,HK,HK02,Investment transaction,Investment,Investment,DIVI,"[""Wire"",""RTGS""]",false,2018-01-01,
+
+# Taiwan
+550e8400-e29b-41d4-a716-446655440400,TW,TW01,Export payment,Trade,Export,GDDS,"[""Wire""]",true,2018-01-01,
+550e8400-e29b-41d4-a716-446655440401,TW,TW02,Import payment,Trade,Import,GDDS,"[""Wire""]",true,2018-01-01,
+
+# Mexico
+550e8400-e29b-41d4-a716-446655440410,MX,MX01,Trade payment,Trade,Goods,GDDS,"[""Wire"",""SPEI""]",true,2019-01-01,
+550e8400-e29b-41d4-a716-446655440411,MX,MX02,Remittance from USA,Remittances,USA,FAMI,"[""Wire"",""Mobile""]",false,2019-01-01,
+
+# NOTE: This is a sample of 75 codes. Full dataset contains 350+ codes.
+# Distribution: China (190), India (80), Brazil (40), Others (40+)

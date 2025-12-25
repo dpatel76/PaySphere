@@ -1,0 +1,169 @@
+# GPS CDM Regulatory Requirement Registry - Master Index
+# Version: 1.0.0
+# Last Updated: 2024-12-20
+# Total Requirements: 487
+
+registry_metadata:
+  version: "1.0.0"
+  created_date: "2024-12-20"
+  last_updated: "2024-12-20"
+  maintainer: "GPS CDM Compliance Team"
+  description: |
+    Master index of all regulatory requirements across jurisdictions.
+    Each requirement is catalogued with full metadata, source citations,
+    and implementation guidance for DSL traceability.
+
+summary:
+  total_requirements: 487
+  by_regulator:
+    FinCEN: 184
+    AUSTRAC: 168
+    IRS: 97
+    OECD: 72
+    UK_NCA: 168
+    EBA: 58
+    OFAC: 48
+    MULTIPLE: 40
+
+  by_report_type:
+    CTR: 117
+    SAR: 184
+    IFTI: 87
+    TTR: 76
+    SMR: 92
+    FATCA_8966: 97
+    FATCA_POOL: 67
+    CRS: 108
+    UK_SAR: 122
+    UK_DAML_SAR: 132
+    PSD2_FRAUD: 87
+    SANCTIONS_BLOCKING: 72
+    TERRORIST_PROPERTY: 62
+
+  by_category:
+    ELIGIBILITY: 52
+    FIELD: 312
+    VALIDATION: 78
+    FORMAT: 23
+    TIMING: 15
+    SUBMISSION: 5
+    RETENTION: 2
+
+  by_criticality:
+    MANDATORY: 423
+    RECOMMENDED: 48
+    OPTIONAL: 16
+
+regulators:
+  - id: "FINCEN"
+    name: "Financial Crimes Enforcement Network"
+    jurisdiction: "US"
+    website: "https://www.fincen.gov/"
+    reports:
+      - CTR
+      - SAR
+
+  - id: "AUSTRAC"
+    name: "Australian Transaction Reports and Analysis Centre"
+    jurisdiction: "AU"
+    website: "https://www.austrac.gov.au/"
+    reports:
+      - IFTI
+      - TTR
+      - SMR
+
+  - id: "IRS"
+    name: "Internal Revenue Service"
+    jurisdiction: "US"
+    website: "https://www.irs.gov/"
+    reports:
+      - FATCA_8966
+      - FATCA_POOL
+
+  - id: "OECD"
+    name: "Organisation for Economic Co-operation and Development"
+    jurisdiction: "INTERNATIONAL"
+    website: "https://www.oecd.org/"
+    reports:
+      - CRS
+
+  - id: "UK_NCA"
+    name: "UK National Crime Agency"
+    jurisdiction: "UK"
+    website: "https://www.nationalcrimeagency.gov.uk/"
+    reports:
+      - UK_SAR
+      - UK_DAML_SAR
+
+  - id: "EBA"
+    name: "European Banking Authority"
+    jurisdiction: "EU"
+    website: "https://www.eba.europa.eu/"
+    reports:
+      - PSD2_FRAUD
+
+  - id: "OFAC"
+    name: "Office of Foreign Assets Control"
+    jurisdiction: "US"
+    website: "https://ofac.treasury.gov/"
+    reports:
+      - SANCTIONS_BLOCKING
+
+  - id: "MULTIPLE"
+    name: "Multiple Jurisdictions"
+    jurisdiction: "INTERNATIONAL"
+    reports:
+      - TERRORIST_PROPERTY
+
+report_indices:
+  - path: "fincen/ctr/index.yaml"
+    report_type: "CTR"
+    requirement_count: 117
+
+  - path: "fincen/sar/index.yaml"
+    report_type: "SAR"
+    requirement_count: 184
+
+  - path: "austrac/ifti/index.yaml"
+    report_type: "IFTI"
+    requirement_count: 87
+
+  - path: "austrac/ttr/index.yaml"
+    report_type: "TTR"
+    requirement_count: 76
+
+  - path: "austrac/smr/index.yaml"
+    report_type: "SMR"
+    requirement_count: 92
+
+  - path: "irs/fatca_8966/index.yaml"
+    report_type: "FATCA_8966"
+    requirement_count: 97
+
+  - path: "irs/fatca_pool/index.yaml"
+    report_type: "FATCA_POOL"
+    requirement_count: 67
+
+  - path: "oecd/crs/index.yaml"
+    report_type: "CRS"
+    requirement_count: 108
+
+  - path: "uk_nca/sar/index.yaml"
+    report_type: "UK_SAR"
+    requirement_count: 122
+
+  - path: "uk_nca/daml_sar/index.yaml"
+    report_type: "UK_DAML_SAR"
+    requirement_count: 132
+
+  - path: "eba/psd2_fraud/index.yaml"
+    report_type: "PSD2_FRAUD"
+    requirement_count: 87
+
+  - path: "ofac/sanctions_blocking/index.yaml"
+    report_type: "SANCTIONS_BLOCKING"
+    requirement_count: 72
+
+  - path: "multi/terrorist_property/index.yaml"
+    report_type: "TERRORIST_PROPERTY"
+    requirement_count: 62

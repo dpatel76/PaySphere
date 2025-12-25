@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gps-cdm/schemas/audit_trail.schema.json",
+  "title": "AuditTrail",
+  "description": "Audit trail for all entity changes in the GPS CDM",
+  "type": "object",
+  "required": [
+    "audit_id",
+    "entity_type",
+    "entity_id",
+    "action",
+    "action_timestamp",
+    "actor",
+    "actor_type"
+  ],
+  "properties": {
+    "audit_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Primary key"
+    },
+    "entity_type": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "Entity type"
+    },
+    "entity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Entity ID"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "CREATE",
+        "UPDATE",
+        "DELETE",
+        "SOFT_DELETE",
+        "RESTORE",
+        "READ",
+        "EXPORT",
+        "ARCHIVE",
+        "MERGE",
+        "SPLIT"
+      ],
+      "description": "Type of action performed"
+    },
+    "action_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the action occurred"
+    },
+    "actor": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Actor identifier"
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": ["USER", "SYSTEM", "API", "BATCH", "SCHEDULER", "EXTERNAL"],
+      "description": "Type of actor"
+    },
+    "actor_ip": {
+      "type": ["string", "null"],
+      "maxLength": 45,
+      "description": "Actor IP address (IPv4/IPv6)"
+    },
+    "actor_location": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "session_id": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "request_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "API request ID"
+    },
+    "correlation_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Request correlation ID"
+    },
+    "old_values": {
+      "type": ["object", "null"],
+      "description": "Previous field values (for UPDATE/DELETE)",
+      "additionalProperties": true
+    },
+    "new_values": {
+      "type": ["object", "null"],
+      "description": "New field values (for CREATE/UPDATE)",
+      "additionalProperties": true
+    },
+    "changed_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of changed field names"
+    },
+    "change_reason": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Reason for change"
+    },
+    "change_ticket": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "Change ticket/JIRA reference"
+    },
+    "approval_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Approval workflow ID if applicable"
+    },
+    "approved_by": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "approval_timestamp": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "data_classification": {
+      "type": "string",
+      "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED", "PII", "PHI"],
+      "description": "Data classification level"
+    },
+    "retention_period_days": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Audit record retention period"
+    },
+    "is_sensitive": {
+      "type": "boolean",
+      "default": false,
+      "description": "Contains sensitive data flag"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional audit metadata",
+      "additionalProperties": true
+    },
+    "partition_year": {
+      "type": "integer",
+      "minimum": 2020,
+      "maximum": 2100
+    },
+    "partition_month": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12
+    }
+  },
+  "additionalProperties": false
+}

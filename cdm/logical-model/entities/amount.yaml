@@ -1,0 +1,234 @@
+# Amount Domain Entities
+# Version: 1.0.0
+# Entities: Amount, CurrencyExchange, Charges
+
+domain:
+  name: amount
+  description: Monetary amounts, currency exchange, and charges
+  entity_count: 3
+
+entities:
+  - name: Amount
+    description: Monetary amount entity
+    table_name: amount
+    primary_key: amount_id
+    attributes:
+      - name: amount_id
+        type: uuid
+        required: true
+
+      - name: value
+        type: decimal
+        precision: 18
+        scale: 4
+        required: true
+        description: Amount value
+
+      - name: currency
+        type: string
+        max_length: 3
+        pattern: "^[A-Z]{3}$"
+        required: true
+        description: ISO 4217 currency code
+
+      - name: amount_type
+        type: enum
+        required: true
+        values:
+          - INSTRUCTED        # Original instructed amount
+          - SETTLEMENT        # Interbank settlement amount
+          - EQUIVALENT        # Equivalent amount in different currency
+          - RETURN            # Return amount
+          - REVERSAL          # Reversal amount
+          - CHARGE            # Charge/fee amount
+          - TAX               # Tax amount
+          - DECLARED          # Declared amount (customs/regulatory)
+          - THRESHOLD         # Threshold amount for reporting
+
+      - name: precision
+        type: integer
+        required: false
+        description: Decimal precision
+
+      - name: minor_units
+        type: integer
+        required: false
+        description: Currency minor units (e.g., 2 for USD, 0 for JPY)
+
+      - name: amount_qualifier
+        type: enum
+        values: [EXACT, APPROXIMATE, MINIMUM, MAXIMUM]
+        required: false
+        default: EXACT
+
+      - name: control_sum
+        type: decimal
+        precision: 18
+        scale: 4
+        required: false
+        description: Batch control sum
+
+      - name: created_timestamp
+        type: timestamp
+        required: true
+
+  - name: CurrencyExchange
+    description: Currency exchange details
+    table_name: currency_exchange
+    primary_key: exchange_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: exchange_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: source_currency
+        type: string
+        max_length: 3
+        pattern: "^[A-Z]{3}$"
+        required: true
+        description: Source currency code
+
+      - name: target_currency
+        type: string
+        max_length: 3
+        pattern: "^[A-Z]{3}$"
+        required: true
+        description: Target currency code
+
+      - name: exchange_rate
+        type: decimal
+        precision: 18
+        scale: 10
+        required: true
+        description: Exchange rate
+
+      - name: unit_currency
+        type: string
+        max_length: 3
+        required: false
+        description: Unit currency for rate
+
+      - name: contract_id
+        type: string
+        max_length: 35
+        required: false
+        description: FX contract reference
+
+      - name: quotation_date
+        type: date
+        required: false
+        description: Rate quotation date
+
+      - name: rate_type
+        type: enum
+        values:
+          - SPOT      # Spot rate
+          - FORWARD   # Forward rate
+          - AGREED    # Pre-agreed rate
+          - INDICATIVE # Indicative rate
+        required: false
+
+      - name: source_amount_id
+        type: uuid
+        required: false
+        description: FK to source Amount
+
+      - name: target_amount_id
+        type: uuid
+        required: false
+        description: FK to target Amount
+
+      - name: rate_source
+        type: string
+        max_length: 50
+        required: false
+        description: Rate source (e.g., Reuters, Bloomberg)
+
+      - name: rate_reference_number
+        type: string
+        max_length: 35
+        required: false
+
+  - name: Charges
+    description: Payment charges and fees
+    table_name: charges
+    primary_key: charge_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: charge_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: charge_type
+        type: enum
+        required: true
+        values:
+          - AGENT           # Agent charges
+          - CLEARING        # Clearing charges
+          - TRANSFER        # Transfer charges
+          - CORRESPONDENT   # Correspondent bank charges
+          - CURRENCY_CONV   # Currency conversion charges
+          - CABLE           # Cable/SWIFT charges
+          - INVESTIGATION   # Investigation charges
+          - AMENDMENT       # Amendment charges
+          - CANCELLATION    # Cancellation charges
+          - SERVICE         # Service charges
+          - LATE_PAYMENT    # Late payment charges
+          - OTHER           # Other charges
+
+      - name: charge_bearer
+        type: enum
+        required: true
+        values: [DEBT, CRED, SHAR]
+        description: Who bears the charge
+
+      - name: amount_id
+        type: uuid
+        required: true
+        description: FK to Amount
+
+      - name: agent_id
+        type: uuid
+        required: false
+        description: FK to FinancialInstitution (charging agent)
+
+      - name: tax_amount_id
+        type: uuid
+        required: false
+        description: FK to Amount (tax component)
+
+      - name: charge_reason
+        type: string
+        max_length: 140
+        required: false
+        description: Charge description
+
+      - name: charge_included
+        type: boolean
+        required: false
+        default: false
+        description: Charge included in payment amount
+
+      - name: charge_date
+        type: date
+        required: false
+
+      - name: charge_reference
+        type: string
+        max_length: 35
+        required: false

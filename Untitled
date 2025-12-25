@@ -1,0 +1,3989 @@
+markdown# PAYMENTS DATA ANALYTICS PLATFORM - COMPREHENSIVE DESIGN & IMPLEMENTATION GUIDE
+
+## PROJECT METADATA
+```
+Project Name: PaymentsCDM Analytics Platform
+Version: 2.0
+Last Updated: [Current Date]
+Primary Technologies: Python, ReactJS, Databricks, Starburst, Neo4J
+Target Capacity: 50M messages/day
+Deployment Model: Multi-tenant product for enterprise clients
+```
+
+---
+
+## EXECUTIVE SUMMARY
+
+Build an enterprise-grade payments data analytics platform that:
+1. Standardizes payments data using a Common Domain Model (CDM) aligned with ISO 20022
+2. Ingests ALL global payment standards and message types
+3. Implements medallion architecture across multiple data platforms
+4. Provides comprehensive data quality management
+5. Supports ALL payments regulatory reporting via domain-specific language
+6. Enables self-service data provisioning with full governance
+7. Delivers end-to-end field-level lineage tracking
+8. Supports fraud detection via graph analytics
+
+---
+
+## CRITICAL DIRECTIVES FOR CLAUDE CODE
+```
+⚠️ MANDATORY BEHAVIORS:
+
+1. RESEARCH FIRST, CODE SECOND
+   - Complete ALL research tasks before writing implementation code
+   - Review ALL existing project artifacts before creating new ones
+   - Understand ISDA CDM and DRR patterns thoroughly
+
+2. NO OMISSIONS
+   - Implement ALL payment standards (not a subset)
+   - Implement ALL regulatory reports (not a subset)
+   - Create complete inventories BEFORE implementation
+
+3. CHECKPOINT DISCIPLINE
+   - STOP at designated checkpoints and present work for approval
+   - DO NOT proceed past checkpoints without explicit user confirmation
+
+4. PROGRESS TRACKING
+   - Update checklists after EVERY implementation session
+   - Report progress with FACTS only (files created, tests passed, etc.)
+   - No assumptions or estimations in progress reports
+
+5. ARTIFACT REUSE
+   - Review existing code in reference directories FIRST
+   - Reuse patterns and components where applicable
+   - Document what was reused vs. created new
+
+6. LINEAGE BY DEFAULT
+   - Every data transformation MUST include lineage capture
+   - No data movement without lineage registration
+   - Lineage is not optional - it's a core requirement
+```
+
+---
+
+## REFERENCE DIRECTORIES
+```
+MUST REVIEW BEFORE ANY IMPLEMENTATION:
+
+/Users/dineshpatel/code/projects/RegSphere/
+├── [Scan for: ReactJS components, Python services, API patterns]
+├── [Scan for: ISDA CDM reference implementations]
+├── [Scan for: Regulatory report implementations]
+└── [Document findings in artifact inventory]
+
+/Users/dineshpatel/code/projects/SynapseDTE2/
+├── [Scan for: Data processing patterns]
+├── [Scan for: Existing CDM JSON schemas]
+├── [Scan for: Database schemas and models]
+└── [Document findings in artifact inventory]
+```
+
+---
+
+## PROJECT DIRECTORY STRUCTURE
+```
+/payments-cdm-platform/
+│
+├── docs/
+│   ├── research/
+│   │   ├── isda-cdm-analysis.md
+│   │   ├── isda-drr-analysis.md
+│   │   ├── iso20022-inventory.md
+│   │   ├── payment-standards-inventory.md
+│   │   ├── regulatory-reports-inventory.md
+│   │   └── existing-artifacts-inventory.md
+│   ├── design/
+│   │   ├── architecture-design.md
+│   │   ├── cdm-design.md
+│   │   ├── lineage-design.md
+│   │   ├── dsl-design.md
+│   │   └── ui-wireframes/
+│   ├── api/
+│   │   └── openapi-specs/
+│   └── user-guides/
+│
+├── cdm/
+│   ├── logical-model/
+│   │   ├── entities/
+│   │   ├── relationships/
+│   │   └── diagrams/
+│   ├── json-schemas/
+│   │   ├── core/
+│   │   ├── parties/
+│   │   ├── accounts/
+│   │   ├── transactions/
+│   │   ├── settlements/
+│   │   ├── references/
+│   │   └── events/
+│   └── physical-models/
+│       ├── databricks/
+│       ├── starburst/
+│       └── neo4j/
+│
+├── lineage/
+│   ├── definitions/
+│   │   ├── ingestion/
+│   │   ├── transformations/
+│   │   └── consumers/
+│   ├── schemas/
+│   └── queries/
+│
+├── dsl/
+│   ├── grammar/
+│   ├── compiler/
+│   ├── runtime/
+│   └── templates/
+│
+├── src/
+│   ├── backend/
+│   │   ├── common/
+│   │   │   ├── config/
+│   │   │   ├── logging/
+│   │   │   ├── exceptions/
+│   │   │   └── utils/
+│   │   ├── ingestion/
+│   │   │   ├── parsers/
+│   │   │   ├── connectors/
+│   │   │   └── validators/
+│   │   ├── processing/
+│   │   │   ├── bronze/
+│   │   │   ├── silver/
+│   │   │   └── gold/
+│   │   ├── lineage/
+│   │   │   ├── capture/
+│   │   │   ├── graph/
+│   │   │   └── api/
+│   │   ├── quality/
+│   │   │   ├── rules/
+│   │   │   ├── engine/
+│   │   │   └── metrics/
+│   │   ├── regulatory/
+│   │   │   ├── dsl/
+│   │   │   ├── eligibility/
+│   │   │   ├── reports/
+│   │   │   └── output/
+│   │   ├── provisioning/
+│   │   │   ├── engine/
+│   │   │   ├── templates/
+│   │   │   └── jobs/
+│   │   ├── fraud/
+│   │   │   ├── models/
+│   │   │   ├── detection/
+│   │   │   └── alerts/
+│   │   ├── catalog/
+│   │   │   ├── unity/
+│   │   │   └── collibra/
+│   │   └── api/
+│   │       ├── routes/
+│   │       ├── schemas/
+│   │       └── middleware/
+│   │
+│   └── frontend/
+│       ├── common/
+│       │   ├── components/
+│       │   ├── hooks/
+│       │   ├── services/
+│       │   └── utils/
+│       ├── data-owner/
+│       │   ├── catalog/
+│       │   ├── quality/
+│       │   ├── approvals/
+│       │   └── metrics/
+│       ├── data-consumer/
+│       │   ├── browse/
+│       │   ├── selection/
+│       │   ├── requests/
+│       │   └── tracking/
+│       ├── admin/
+│       │   ├── monitoring/
+│       │   ├── jobs/
+│       │   └── system/
+│       └── lineage/
+│           ├── explorer/
+│           ├── impact/
+│           └── visualization/
+│
+├── pipelines/
+│   ├── nifi/
+│   ├── orchestration/
+│   └── schedules/
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── e2e/
+│   ├── performance/
+│   └── regulatory/
+│
+├── config/
+│   ├── environments/
+│   ├── clients/
+│   └── features/
+│
+├── scripts/
+│   ├── setup/
+│   ├── migration/
+│   └── utilities/
+│
+├── deployment/
+│   ├── docker/
+│   ├── kubernetes/
+│   └── terraform/
+│
+└── inventory/
+    ├── master-checklist.md
+    ├── standards-checklist.md
+    ├── reports-checklist.md
+    ├── lineage-checklist.md
+    └── daily-progress/
+```
+
+---
+
+## PHASE 0: RESEARCH & DISCOVERY
+
+### Duration: Complete before any implementation
+### Checkpoint: 🛑 STOP - User approval required before Phase 1
+
+---
+
+### 0.1 Existing Artifact Analysis
+```
+TASK: Catalog all existing project artifacts
+
+ACTION ITEMS:
+1. Scan /Users/dineshpatel/code/projects/RegSphere/
+   - List all Python files with descriptions
+   - List all ReactJS components with descriptions
+   - Identify reusable patterns and utilities
+   - Document ISDA CDM implementations found
+   - Document any regulatory report code found
+
+2. Scan /Users/dineshpatel/code/projects/SynapseDTE2/
+   - List all data processing code
+   - Identify existing CDM JSON schemas
+   - Document database schemas found
+   - Identify API patterns and implementations
+
+3. Create artifact inventory
+   OUTPUT: /docs/research/existing-artifacts-inventory.md
+   
+   FORMAT:
+   | File Path | Type | Description | Reusable? | Notes |
+   |-----------|------|-------------|-----------|-------|
+   | /path/to/file | Python/React/Schema | Description | Yes/No/Partial | Notes |
+
+DELIVERABLE CHECKLIST:
+- [ ] RegSphere directory fully scanned
+- [ ] SynapseDTE2 directory fully scanned
+- [ ] Inventory document created
+- [ ] Reusable components identified and tagged
+```
+
+---
+
+### 0.2 ISDA CDM Reverse Engineering
+```
+TASK: Fully understand and document ISDA CDM patterns
+
+ACTION ITEMS:
+1. Research ISDA CDM specification
+   - Core domain model structure
+   - Entity design patterns
+   - Relationship modeling approach
+   - Event modeling patterns
+   - Qualification and validation patterns
+
+2. Analyze reference implementations in existing codebase
+
+3. Extract applicable patterns for Payments CDM
+
+OUTPUT: /docs/research/isda-cdm-analysis.md
+
+REQUIRED SECTIONS:
+1. Executive Summary
+2. CDM Core Concepts
+   - Product model
+   - Event model
+   - Legal agreement model
+   - Party model
+3. Design Patterns Identified
+   - Entity inheritance patterns
+   - Composition patterns
+   - Reference data patterns
+   - Temporal patterns
+4. Naming Conventions
+5. Validation Approach
+6. Applicability to Payments CDM
+   - Patterns to adopt
+   - Patterns to adapt
+   - Patterns not applicable
+7. Recommendations for Payments CDM Design
+
+DELIVERABLE CHECKLIST:
+- [ ] ISDA CDM specification researched
+- [ ] Existing implementations analyzed
+- [ ] Design patterns documented
+- [ ] Recommendations formulated
+- [ ] Analysis document complete
+```
+
+---
+
+### 0.3 ISDA DRR Reverse Engineering
+```
+TASK: Fully understand and document ISDA Digital Regulatory Reporting approach
+
+ACTION ITEMS:
+1. Research ISDA DRR specification
+   - DSL structure and syntax
+   - Rule definition approach
+   - Eligibility determination patterns
+   - Output generation patterns
+
+2. Analyze any DRR implementations in existing codebase
+
+3. Design equivalent approach for Payments regulatory reporting
+
+OUTPUT: /docs/research/isda-drr-analysis.md
+
+REQUIRED SECTIONS:
+1. Executive Summary
+2. DRR Core Concepts
+   - Domain-specific language design
+   - Rule expression syntax
+   - Data selection patterns
+   - Transformation patterns
+   - Validation patterns
+   - Output formatting
+3. Eligibility Service Design
+   - Criteria definition
+   - Evaluation logic
+   - Override mechanisms
+4. Report Definition Structure
+5. Implementation Patterns
+6. Payments DRR Design Recommendations
+   - Proposed DSL syntax
+   - Proposed rule structure
+   - Proposed eligibility framework
+7. Sample Report Definition (mock)
+
+DELIVERABLE CHECKLIST:
+- [ ] ISDA DRR specification researched
+- [ ] DSL patterns documented
+- [ ] Eligibility patterns documented
+- [ ] Payments DRR design proposed
+- [ ] Analysis document complete
+```
+
+---
+
+### 0.4 ISO 20022 Standards Inventory
+```
+TASK: Create complete inventory of ALL relevant ISO 20022 message types
+
+ACTION ITEMS:
+1. Research ISO 20022 message catalogue
+2. Identify ALL payment-related message categories
+3. Document each message type with details
+
+OUTPUT: /docs/research/iso20022-inventory.md
+
+REQUIRED CATEGORIES (ensure completeness):
+
+PAYMENTS INITIATION (pain.xxx)
+| Message ID | Name | Description | Priority |
+|------------|------|-------------|----------|
+| pain.001 | CustomerCreditTransferInitiation | ... | High |
+| pain.002 | CustomerPaymentStatusReport | ... | High |
+| [Continue for ALL pain messages] |
+
+PAYMENTS CLEARING AND SETTLEMENT (pacs.xxx)
+| Message ID | Name | Description | Priority |
+|------------|------|-------------|----------|
+| pacs.002 | FIToFIPaymentStatusReport | ... | High |
+| pacs.003 | FIToFICustomerDirectDebit | ... | High |
+| pacs.004 | PaymentReturn | ... | High |
+| pacs.007 | FIToFIPaymentReversal | ... | High |
+| pacs.008 | FIToFICustomerCreditTransfer | ... | High |
+| pacs.009 | FinancialInstitutionCreditTransfer | ... | High |
+| pacs.010 | FinancialInstitutionDirectDebit | ... | Medium |
+| pacs.028 | FIToFIPaymentStatusRequest | ... | Medium |
+| pacs.029 | StatusRequestForInstruction | ... | Medium |
+| [Continue for ALL pacs messages] |
+
+CASH MANAGEMENT (camt.xxx)
+| Message ID | Name | Description | Priority |
+|------------|------|-------------|----------|
+| camt.052 | BankToCustomerAccountReport | ... | High |
+| camt.053 | BankToCustomerStatement | ... | High |
+| camt.054 | BankToCustomerDebitCreditNotification | ... | High |
+| camt.056 | FIToFIPaymentCancellationRequest | ... | High |
+| camt.029 | ResolutionOfInvestigation | ... | Medium |
+| [Continue for ALL camt messages] |
+
+ACCOUNT MANAGEMENT (acmt.xxx)
+| Message ID | Name | Description | Priority |
+|------------|------|-------------|----------|
+| [List ALL relevant acmt messages] |
+
+AUTHORITIES (auth.xxx)
+| Message ID | Name | Description | Priority |
+|------------|------|-------------|----------|
+| [List ALL relevant auth messages] |
+
+REFERENCE DATA (reda.xxx)
+| Message ID | Name | Description | Priority |
+|------------|------|-------------|----------|
+| [List ALL relevant reda messages] |
+
+SUMMARY TABLE:
+| Category | Total Messages | High Priority | Medium Priority | Low Priority |
+|----------|---------------|---------------|-----------------|--------------|
+| pain.xxx | X | X | X | X |
+| pacs.xxx | X | X | X | X |
+| camt.xxx | X | X | X | X |
+| acmt.xxx | X | X | X | X |
+| auth.xxx | X | X | X | X |
+| reda.xxx | X | X | X | X |
+| TOTAL | X | X | X | X |
+
+DELIVERABLE CHECKLIST:
+- [ ] All pain.xxx messages catalogued
+- [ ] All pacs.xxx messages catalogued
+- [ ] All camt.xxx messages catalogued
+- [ ] All acmt.xxx messages catalogued
+- [ ] All auth.xxx messages catalogued
+- [ ] All reda.xxx messages catalogued
+- [ ] Priority assigned to each message
+- [ ] Summary statistics complete
+```
+
+---
+
+### 0.5 Global Payment Standards Inventory
+```
+TASK: Create complete inventory of ALL global payment standards and message formats
+
+OUTPUT: /docs/research/payment-standards-inventory.md
+
+REQUIRED SECTIONS:
+
+1. SWIFT MT MESSAGES
+   | Category | Message Types | Description | Volume (Est.) |
+   |----------|--------------|-------------|---------------|
+   | MT1xx | MT101, MT103, MT103+, etc. | Customer Transfers | High |
+   | MT2xx | MT200, MT202, MT202COV, etc. | Financial Institution Transfers | High |
+   | MT3xx | MT300, MT305, etc. | FX and Derivatives | Medium |
+   | MT5xx | MT535, MT536, etc. | Securities | Medium |
+   | MT7xx | MT700, MT760, etc. | Documentary Credits | Medium |
+   | MT9xx | MT900, MT910, MT940, MT950, etc. | Cash Management | High |
+   [Document ALL MT message types with full details]
+
+2. FEDWIRE
+   | Message Type | Description | Priority |
+   |--------------|-------------|----------|
+   | Funds Transfer | ... | High |
+   | Drawdown Request | ... | Medium |
+   | Service Message | ... | Medium |
+   [Document ALL FedWire message types]
+
+3. CHIPS
+   | Message Type | Description | Priority |
+   |--------------|-------------|----------|
+   [Document ALL CHIPS message types]
+
+4. ACH/NACHA
+   | Record Type | Description | Priority |
+   |-------------|-------------|----------|
+   | File Header (1) | ... | High |
+   | Batch Header (5) | ... | High |
+   | Entry Detail (6) | ... | High |
+   | Addenda (7) | ... | High |
+   | Batch Control (8) | ... | High |
+   | File Control (9) | ... | High |
+   [Document ALL ACH record types and transaction codes]
+
+5. SEPA
+   | Scheme | Message Types | Description | Priority |
+   |--------|--------------|-------------|----------|
+   | SCT | pain.001, pacs.008 | Credit Transfer | High |
+   | SDD Core | pain.008, pacs.003 | Direct Debit Core | High |
+   | SDD B2B | pain.008, pacs.003 | Direct Debit B2B | Medium |
+   | SCT Inst | pain.001, pacs.008 | Instant Credit Transfer | High |
+   [Document ALL SEPA schemes and messages]
+
+6. FASTER PAYMENTS (UK)
+   | Message Type | Description | Priority |
+   |--------------|-------------|----------|
+   [Document ALL Faster Payments message types]
+
+7. REAL-TIME PAYMENT SYSTEMS
+   | System | Region | Message Types | Priority |
+   |--------|--------|--------------|----------|
+   | RTP (TCH) | US | ... | High |
+   | FedNow | US | ... | High |
+   | NPP | Australia | ... | Medium |
+   | IMPS/UPI | India | ... | Medium |
+   | PIX | Brazil | ... | Medium |
+   | TIPS | EU | ... | Medium |
+   [Document ALL major real-time payment systems globally]
+
+8. CARD NETWORKS
+   | Network | Message Standards | Description | Priority |
+   |---------|------------------|-------------|----------|
+   | Visa | ISO 8583, Visa specs | ... | High |
+   | Mastercard | ISO 8583, MC specs | ... | High |
+   | Amex | ... | ... | Medium |
+   | Discover | ... | ... | Medium |
+   [Document ALL card network message types]
+
+9. CORRESPONDENT BANKING
+   | Standard | Description | Priority |
+   |----------|-------------|----------|
+   | Nostro/Vostro reconciliation | ... | High |
+   | SWIFT gpi | ... | High |
+   [Document correspondent banking standards]
+
+10. REGIONAL STANDARDS
+    | Region | Standard | Description | Priority |
+    |--------|----------|-------------|----------|
+    | Japan | Zengin | ... | Medium |
+    | China | CNAPS/CIPS | ... | Medium |
+    | Hong Kong | CHATS | ... | Medium |
+    | Singapore | FAST/MEPS | ... | Medium |
+    [Document ALL major regional payment standards]
+
+SUMMARY TABLE:
+| Standard Category | Total Message Types | High Priority | To Implement |
+|-------------------|--------------------:|---------------:|-------------:|
+| ISO 20022 | X | X | X |
+| SWIFT MT | X | X | X |
+| FedWire | X | X | X |
+| CHIPS | X | X | X |
+| ACH/NACHA | X | X | X |
+| SEPA | X | X | X |
+| Real-Time Systems | X | X | X |
+| Card Networks | X | X | X |
+| Regional | X | X | X |
+| TOTAL | X | X | X |
+
+DELIVERABLE CHECKLIST:
+- [ ] All SWIFT MT messages documented
+- [ ] All FedWire messages documented
+- [ ] All CHIPS messages documented
+- [ ] All ACH/NACHA records documented
+- [ ] All SEPA schemes documented
+- [ ] All UK Faster Payments documented
+- [ ] All real-time payment systems documented
+- [ ] All card network standards documented
+- [ ] All regional standards documented
+- [ ] Summary statistics complete
+```
+
+---
+
+### 0.6 Regulatory Reports Inventory
+```
+TASK: Create complete inventory of ALL payments regulatory reports globally
+
+OUTPUT: /docs/research/regulatory-reports-inventory.md
+
+REQUIRED FORMAT FOR EACH REPORT:
+| Field | Value |
+|-------|-------|
+| Report ID | Unique identifier |
+| Report Name | Official name |
+| Regulator | Regulatory body |
+| Jurisdiction | Country/Region |
+| Frequency | Daily/Weekly/Monthly/Quarterly/Annual/Event-based |
+| Data Scope | Transaction types covered |
+| Format | XML/CSV/JSON/Fixed-width/Other |
+| Key Data Elements | List of required fields |
+| Submission Method | API/Portal/File upload |
+| Effective Date | When requirement started |
+| Priority | Critical/High/Medium/Low |
+
+REQUIRED JURISDICTIONS & REPORTS:
+
+UNITED STATES
+| Report | Regulator | Frequency | Priority |
+|--------|-----------|-----------|----------|
+| CFTC Part 43 Real-Time Reporting | CFTC | Real-time | Critical |
+| CFTC Part 45 SDR Reporting | CFTC | T+1 | Critical |
+| SEC CAT Reporting | SEC | Daily | Critical |
+| FinCEN CTR | FinCEN | Event-based | Critical |
+| FinCEN SAR | FinCEN | Event-based | Critical |
+| FFIEC 031/041 Call Reports | FFIEC | Quarterly | High |
+| FR 2900 | Federal Reserve | Weekly | High |
+| FR Y-9C | Federal Reserve | Quarterly | High |
+| FATCA Reporting | IRS | Annual | High |
+| 1099 Series | IRS | Annual | Medium |
+[Continue for ALL US regulatory reports]
+
+EUROPEAN UNION
+| Report | Regulator | Frequency | Priority |
+|--------|-----------|-----------|----------|
+| EMIR Trade Reporting | ESMA | T+1 | Critical |
+| SFTR Reporting | ESMA | T+1 | Critical |
+| MiFID II/MiFIR Transaction Reporting | ESMA | T+1 | Critical |
+| PSD2 Fraud Reporting | EBA | Quarterly | High |
+| COREP | EBA | Quarterly | High |
+| FINREP | EBA | Quarterly | High |
+| AnaCredit | ECB | Monthly | High |
+| TARGET2 Reporting | ECB | Daily | High |
+[Continue for ALL EU regulatory reports]
+
+UNITED KINGDOM
+| Report | Regulator | Frequency | Priority |
+|--------|-----------|-----------|----------|
+| EMIR UK Trade Reporting | FCA | T+1 | Critical |
+| MiFID II UK Transaction Reporting | FCA | T+1 | Critical |
+| Payment Services Fraud Reporting | FCA | Bi-annual | High |
+| PRA110 Liquidity Reporting | PRA | Daily/Monthly | High |
+| CASS Reports | FCA | Monthly | High |
+[Continue for ALL UK regulatory reports]
+
+ASIA PACIFIC
+| Report | Jurisdiction | Regulator | Frequency | Priority |
+|--------|--------------|-----------|-----------|----------|
+| ASIC Derivative Trade Reporting | Australia | ASIC | T+1 | High |
+| MAS OTC Derivatives Reporting | Singapore | MAS | T+2 | High |
+| HKMA Trade Reporting | Hong Kong | HKMA | T+2 | High |
+| JFSA Derivative Reporting | Japan | JFSA | T+1 | High |
+[Continue for ALL APAC regulatory reports]
+
+OTHER JURISDICTIONS
+| Report | Jurisdiction | Regulator | Frequency | Priority |
+|--------|--------------|-----------|-----------|----------|
+[Document reports for: Canada, Switzerland, Middle East, Latin America, Africa]
+
+CROSS-BORDER REQUIREMENTS
+| Report | Scope | Governing Body | Frequency | Priority |
+|--------|-------|---------------|-----------|----------|
+| SWIFT gpi Reporting | Global | SWIFT | Daily | High |
+| CRS Reporting | Global | OECD | Annual | High |
+| FATF Requirements | Global | FATF | Various | High |
+[Document ALL cross-border reporting requirements]
+
+SUMMARY TABLE:
+| Jurisdiction | Total Reports | Critical | High | Medium | Low |
+|--------------|---------------|----------|------|--------|-----|
+| United States | X | X | X | X | X |
+| European Union | X | X | X | X | X |
+| United Kingdom | X | X | X | X | X |
+| Asia Pacific | X | X | X | X | X |
+| Other | X | X | X | X | X |
+| Cross-Border | X | X | X | X | X |
+| TOTAL | X | X | X | X | X |
+
+DELIVERABLE CHECKLIST:
+- [ ] All US regulatory reports documented
+- [ ] All EU regulatory reports documented
+- [ ] All UK regulatory reports documented
+- [ ] All APAC regulatory reports documented
+- [ ] All other jurisdiction reports documented
+- [ ] All cross-border requirements documented
+- [ ] Priority assigned to each report
+- [ ] Data elements documented for each report
+- [ ] Summary statistics complete
+```
+
+---
+
+### 0.7 Architecture Design Document
+```
+TASK: Create comprehensive architecture design document
+
+OUTPUT: /docs/design/architecture-design.md
+
+REQUIRED SECTIONS:
+
+1. EXECUTIVE SUMMARY
+   - Project objectives
+   - Key design decisions
+   - Technology choices summary
+
+2. SYSTEM CONTEXT DIAGRAM
+   [ASCII or Mermaid diagram showing:]
+   - External systems (source systems, regulatory bodies)
+   - Platform boundary
+   - User types
+   - Data flows
+
+3. HIGH-LEVEL ARCHITECTURE DIAGRAM
+   [ASCII or Mermaid diagram showing:]
+   - All major components
+   - Data flow directions
+   - Integration points
+   - Platform boundaries (Databricks, Starburst, Neo4J)
+
+4. COMPONENT ARCHITECTURE
+   For each component, document:
+   - Purpose
+   - Responsibilities
+   - Interfaces (inputs/outputs)
+   - Dependencies
+   - Technology stack
+   - Scalability approach
+
+   Components to document:
+   a. Ingestion Layer
+   b. Bronze Zone Processing
+   c. Silver Zone Processing (CDM)
+   d. Gold Zone Processing
+   e. Lineage Service
+   f. Data Quality Service
+   g. Regulatory Reporting Engine
+   h. DSL Compiler and Runtime
+   i. Provisioning Service
+   j. Catalog Service
+   k. Fraud Detection Service
+   l. API Gateway
+   m. Frontend Applications
+   n. Job Orchestration
+
+5. DATA ARCHITECTURE
+   a. Medallion Architecture Design
+      - Bronze zone specifications
+      - Silver zone specifications
+      - Gold zone specifications
+      - Zone transition rules
+   
+   b. Multi-Platform Strategy
+      - Databricks implementation approach
+      - Starburst implementation approach
+      - Neo4J implementation approach
+      - Data synchronization strategy
+   
+   c. Data Lakehouse Best Practices
+      - Change Data Capture approach
+      - Delta/incremental processing strategy
+      - Bi-temporal history implementation
+      - Partitioning strategy by platform
+      - Query optimization approach
+      - Read/write optimization patterns
+      - Data compression strategy
+      - Data retention policies
+
+6. LINEAGE ARCHITECTURE
+   - Lineage capture points
+   - Lineage storage design
+   - Query patterns supported
+   - Integration with other components
+
+7. INTEGRATION ARCHITECTURE
+   - External system integrations
+   - API design principles
+   - Event-driven patterns
+   - Batch integration patterns
+
+8. SCALABILITY DESIGN
+   - Target: 50M messages/day
+   - Horizontal scaling approach
+   - Bottleneck analysis
+   - Performance targets by component
+
+9. RESILIENCE & RECOVERY
+   - Restartability approach
+   - Checkpoint strategy
+   - Failure recovery patterns
+   - Data consistency guarantees
+   - Apache NiFi evaluation (or alternatives)
+
+10. SECURITY ARCHITECTURE
+    - Authentication approach
+    - Authorization model
+    - Data encryption (at rest, in transit)
+    - Audit logging
+    - Compliance considerations
+
+11. DEPLOYMENT ARCHITECTURE
+    - Container strategy
+    - Kubernetes deployment
+    - Environment strategy (dev, test, prod)
+    - CI/CD approach
+
+12. CONFIGURABILITY & MULTI-TENANCY
+    - Client configuration approach
+    - Feature flags
+    - Customization points
+    - Tenant isolation
+
+13. TECHNOLOGY STACK DECISIONS
+    | Layer | Technology | Rationale |
+    |-------|------------|-----------|
+    | Backend API | Python/FastAPI | ... |
+    | Frontend | ReactJS | ... |
+    | Job Queue | Celery/Redis | ... |
+    | Orchestration | Apache NiFi/Airflow | ... |
+    | Data Lake | Databricks Delta | ... |
+    | Query Engine | Starburst/Trino | ... |
+    | Graph DB | Neo4J | ... |
+    | Catalog | Unity + Collibra | ... |
+    | [Continue for all technologies] |
+
+14. RISK ASSESSMENT
+    | Risk | Impact | Probability | Mitigation |
+    |------|--------|-------------|------------|
+    | [Identify all technical risks] |
+
+15. IMPLEMENTATION PHASES
+    - Phase breakdown
+    - Dependencies between phases
+    - Estimated effort per phase
+    - Milestones and checkpoints
+
+DELIVERABLE CHECKLIST:
+- [ ] Executive summary complete
+- [ ] All diagrams created
+- [ ] All components documented
+- [ ] Data architecture complete
+- [ ] Lineage architecture complete
+- [ ] Scalability design complete
+- [ ] Security architecture complete
+- [ ] Technology decisions documented
+- [ ] Risk assessment complete
+- [ ] Implementation phases defined
+```
+
+---
+
+### 0.8 Phase 0 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 1:
+
+1. Present to user for review:
+   - /docs/research/existing-artifacts-inventory.md
+   - /docs/research/isda-cdm-analysis.md
+   - /docs/research/isda-drr-analysis.md
+   - /docs/research/iso20022-inventory.md
+   - /docs/research/payment-standards-inventory.md
+   - /docs/research/regulatory-reports-inventory.md
+   - /docs/design/architecture-design.md
+
+2. Obtain explicit approval:
+   - User must confirm inventories are complete
+   - User must approve architecture design
+   - User must confirm priority order for implementation
+
+3. Create implementation tracking:
+   - Initialize /inventory/master-checklist.md
+   - Initialize /inventory/standards-checklist.md
+   - Initialize /inventory/reports-checklist.md
+   - Initialize /inventory/lineage-checklist.md
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 1: FOUNDATION & CDM DESIGN
+
+### Duration: After Phase 0 approval
+### Checkpoint: 🛑 STOP - User approval required before Phase 2
+
+---
+
+### 1.1 Project Initialization
+```
+TASK: Initialize project structure and development environment
+
+ACTION ITEMS:
+
+1. Create directory structure (as specified above)
+
+2. Initialize Python backend:
+   - Python 3.11+ virtual environment
+   - Requirements.txt with core dependencies:
+     * fastapi
+     * uvicorn
+     * celery
+     * redis
+     * sqlalchemy
+     * pydantic
+     * pytest
+     * neo4j
+     * databricks-connect
+     * pyarrow
+     * pandas
+   - Setup.py or pyproject.toml
+   - Pre-commit hooks (black, flake8, mypy)
+
+3. Initialize ReactJS frontend:
+   - Create React App or Vite setup
+   - TypeScript configuration
+   - Core dependencies:
+     * react-router
+     * axios
+     * react-query
+     * tailwindcss or material-ui
+     * d3 or vis.js (for lineage visualization)
+   - ESLint and Prettier configuration
+
+4. Initialize testing frameworks:
+   - pytest configuration
+   - Jest configuration
+   - Test directory structure
+
+5. Initialize documentation:
+   - README.md with project overview
+   - CONTRIBUTING.md
+   - API documentation setup (OpenAPI)
+
+6. Initialize configuration management:
+   - Environment configuration templates
+   - Client configuration templates
+   - Feature flag structure
+
+DELIVERABLE CHECKLIST:
+- [ ] All directories created
+- [ ] Python environment initialized
+- [ ] React application initialized
+- [ ] Testing frameworks configured
+- [ ] Documentation structure created
+- [ ] Configuration templates created
+```
+
+---
+
+### 1.2 Payments CDM - Logical Model
+```
+TASK: Design complete logical model for Payments CDM
+
+DESIGN PRINCIPLES:
+1. Follow ISO 20022 naming conventions throughout
+2. Apply ISDA CDM patterns where applicable (from research)
+3. Support ALL payment types from standards inventory
+4. Design for lineage tracking from inception
+5. Support bi-temporal versioning
+6. Enable multi-platform physical implementation
+
+OUTPUT: /cdm/logical-model/
+
+REQUIRED ENTITIES:
+
+CORE PAYMENT ENTITIES:
+1. Payment
+   - Unique identifier (ISO 20022 aligned)
+   - Payment type classification
+   - Status lifecycle
+   - Temporal attributes (transaction date, value date, etc.)
+   
+2. PaymentInstruction
+   - Instruction details
+   - Requested execution date
+   - Priority
+   - Instruction status
+
+3. CreditTransfer
+   - Transfer specifics
+   - Charge bearer
+   - Purpose codes
+
+4. DirectDebit
+   - Mandate reference
+   - Sequence type
+   - Collection specifics
+
+5. PaymentReturn
+   - Return reason
+   - Original payment reference
+   - Return amounts
+
+6. PaymentReversal
+   - Reversal reason
+   - Original instruction reference
+
+7. PaymentStatusReport
+   - Status codes
+   - Status reason
+   - Effective timestamps
+
+PARTY ENTITIES:
+8. Party
+   - Party identification (multiple schemes)
+   - Party type
+   - Legal entity indicator
+
+9. PartyIdentification
+   - BIC
+   - LEI
+   - National identifiers
+   - Proprietary identifiers
+
+10. FinancialInstitution
+    - Institution identification
+    - Branch identification
+    - Clearing system membership
+
+11. Person
+    - Name components
+    - Contact details
+
+12. Organisation
+    - Organisation name
+    - Registration details
+
+ACCOUNT ENTITIES:
+13. Account
+    - Account identification
+    - Account type
+    - Currency
+    - Servicer reference
+
+14. CashAccount
+    - IBAN
+    - Account number
+    - Account type code
+
+15. AccountOwner
+    - Ownership type
+    - Ownership percentage
+
+AMOUNT ENTITIES:
+16. Amount
+    - Value (decimal precision)
+    - Currency
+
+17. CurrencyExchange
+    - Source currency
+    - Target currency
+    - Exchange rate
+    - Contract reference
+
+18. Charges
+    - Charge amount
+    - Charge type
+    - Charge bearer
+
+SETTLEMENT ENTITIES:
+19. Settlement
+    - Settlement method
+    - Settlement date
+    - Settlement status
+
+20. SettlementInstruction
+    - Settlement account
+    - Settlement priority
+
+21. ClearingSystem
+    - System identification
+    - Member identification
+
+REFERENCE DATA ENTITIES:
+22. PaymentTypeInformation
+    - Service level
+    - Local instrument
+    - Category purpose
+
+23. RegulatoryReporting
+    - Reporting jurisdiction
+    - Reporting code
+    - Amount
+
+24. RemittanceInformation
+    - Structured remittance
+    - Unstructured remittance
+
+25. Document
+    - Document type
+    - Document reference
+
+EVENT ENTITIES:
+26. PaymentEvent
+    - Event type
+    - Event timestamp
+    - Event status
+
+27. WorkflowEvent
+    - Workflow state
+    - Transition trigger
+
+LINEAGE ENTITIES (Built-in):
+28. LineageMetadata
+    - Source system
+    - Source entity
+    - Source fields
+    - Ingestion timestamp
+    - Transformation identifier
+
+29. AuditTrail
+    - Action type
+    - Actor
+    - Timestamp
+    - Before/after values
+
+ENTITY RELATIONSHIP DIAGRAM:
+[Create Mermaid or ASCII ERD showing all relationships]
+
+DELIVERABLE CHECKLIST:
+- [ ] All core payment entities defined
+- [ ] All party entities defined
+- [ ] All account entities defined
+- [ ] All amount entities defined
+- [ ] All settlement entities defined
+- [ ] All reference data entities defined
+- [ ] All event entities defined
+- [ ] Lineage entities integrated
+- [ ] Entity relationships documented
+- [ ] ERD diagram created
+- [ ] ISO 20022 mapping documented
+```
+
+---
+
+### 1.3 Payments CDM - JSON Schemas
+TASK: Create JSON schemas for all CDM entities
+OUTPUT: /cdm/json-schemas/
+SCHEMA DESIGN REQUIREMENTS:
+
+JSON Schema draft-07 or later
+Include $id for all schemas
+Include descriptions for all properties
+Include examples where helpful
+Use $ref for reusable components
+Include validation constraints (required, patterns, enums)
+Include lineage metadata in every entity schema
+
+DIRECTORY STRUCTURE:
+/cdm/json-schemas/
+├── common/
+│   ├── amount.schema.json
+│   ├── identifier.schema.json
+│   ├── temporal.schema.json
+│   ├── lineage-metadata.schema.json
+│   └── audit-trail.schema.json
+├── parties/
+│   ├── party.schema.json
+│   ├── party-identification.schema.json
+│   ├── financial-institution.schema.json
+│   ├── person.schema.json
+│   └── organisation.schema.json
+├── accounts/
+│   ├── account.schema.json
+│   ├── cash-account.schema.json
+│   └── account-owner.schema.json
+├── payments/
+│   ├── payment.schema.json
+│   ├── payment-instruction.schema.json
+│   ├── credit-transfer.schema.json
+│   ├── direct-debit.schema.json
+│   ├── payment-return.schema.json
+│   ├── payment-reversal.schema.json
+│   └── payment-status-report.schema.json
+├── settlement/
+│   ├── settlement.schema.json
+│   ├── settlement-instruction.schema.json
+│   └── clearing-system.schema.json
+├── reference/
+│   ├── payment-type-information.schema.json
+│   ├── regulatory-reporting.schema.json
+│   ├── remittance-information.schema.json
+│   └── document.schema.json
+├── events/
+│   ├── payment-event.schema.json
+│   └── workflow-event.schema.json
+└── index.schema.json (master schema with all refs)
+EXAMPLE SCHEMA STRUCTURE (payment.schema.json):
+json{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://payments-cdm/schemas/payments/payment.schema.json",
+  "title": "Payment",
+  "description": "Core payment entity representing a payment instruction or transaction",
+  "type": "object",
+  "properties": {
+    "paymentIdentification": {
+      "$ref": "../common/identifier.schema.json",
+      "description": "Unique identification of the payment"
+    },
+    "creationDateTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date and time at which the payment was created"
+    },
+    "instructedAmount": {
+      "$ref": "../common/amount.schema.json",
+      "description": "Amount instructed to be moved"
+    },
+    "debtor": {
+      "$ref": "../parties/party.schema.json",
+      "description": "Party that owes the amount"
+    },
+    "creditor": {
+      "$ref": "../parties/party.schema.json",
+      "description": "Party to which the amount is owed"
+    },
+    "_lineage": {
+      "$ref": "../common/lineage-metadata.schema.json",
+      "description": "Lineage tracking metadata"
+    },
+    "_audit": {
+      "$ref": "../common/audit-trail.schema.json",
+      "description": "Audit trail information"
+    }
+  },
+  "required": ["paymentIdentification", "creationDateTime", "instructedAmount"],
+  "additionalProperties": false
+}
+LINEAGE METADATA SCHEMA (required in all entities):
+json{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://payments-cdm/schemas/common/lineage-metadata.schema.json",
+  "title": "LineageMetadata",
+  "description": "Lineage tracking metadata embedded in every CDM entity",
+  "type": "object",
+  "properties": {
+    "sourceSystem": {
+      "type": "string",
+      "description": "Originating system identifier"
+    },
+    "sourceEntity": {
+      "type": "string",
+      "description": "Source entity or message type"
+    },
+    "sourceFields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fieldPath": { "type": "string" },
+          "originalValue": { "type": "string" }
+        }
+      },
+      "description": "Array of source field mappings"
+    },
+    "ingestionTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "transformationId": {
+      "type": "string",
+      "description": "Reference to transformation rule applied"
+    },
+    "lineageVersion": {
+      "type": "integer",
+      "description": "Version of lineage metadata schema"
+    }
+  },
+  "required": ["sourceSystem", "sourceEntity", "ingestionTimestamp"]
+}
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Common schemas created
+- [ ] Party schemas created
+- [ ] Account schemas created
+- [ ] Payment schemas created
+- [ ] Settlement schemas created
+- [ ] Reference data schemas created
+- [ ] Event schemas created
+- [ ] Lineage metadata schema created
+- [ ] All schemas validated
+- [ ] Schema documentation generated
+- [ ] Update /inventory/standards-checklist.md
+```
+
+---
+
+### 1.4 Payments CDM - Physical Models
+TASK: Create physical data models for each platform
+PLATFORMS:
+
+Databricks (Delta Lake)
+Starburst (Iceberg/Hive)
+Neo4J (Graph)
+
+
+1.4.1 Databricks Physical Model
+OUTPUT: /cdm/physical-models/databricks/
+DESIGN REQUIREMENTS:
+
+Delta Lake format
+Unity Catalog integration
+Optimized partitioning
+Z-ordering for query performance
+Change data capture support
+Bi-temporal versioning columns
+
+TABLE STRUCTURE PATTERN:
+sqlCREATE TABLE silver.cdm.payment (
+    -- Business Keys
+    payment_id STRING NOT NULL,
+    
+    -- Core Attributes (from CDM)
+    payment_type STRING,
+    creation_date_time TIMESTAMP,
+    instructed_amount DECIMAL(18,5),
+    instructed_currency STRING,
+    debtor_id STRING,
+    creditor_id STRING,
+    status STRING,
+    
+    -- Bi-Temporal Columns
+    valid_from TIMESTAMP,
+    valid_to TIMESTAMP,
+    transaction_from TIMESTAMP,
+    transaction_to TIMESTAMP,
+    
+    -- Lineage Columns (MANDATORY)
+    _source_system STRING,
+    _source_entity STRING,
+    _source_fields ARRAY<STRUCT<field_path: STRING, original_value: STRING>>,
+    _ingestion_timestamp TIMESTAMP,
+    _transformation_id STRING,
+    _lineage_version INT,
+    
+    -- Audit Columns
+    _created_at TIMESTAMP,
+    _created_by STRING,
+    _updated_at TIMESTAMP,
+    _updated_by STRING,
+    
+    -- Technical Columns
+    _record_hash STRING,
+    _batch_id STRING
+)
+USING DELTA
+PARTITIONED BY (DATE(creation_date_time), payment_type)
+TBLPROPERTIES (
+    'delta.enableChangeDataFeed' = 'true',
+    'delta.autoOptimize.optimizeWrite' = 'true',
+    'delta.autoOptimize.autoCompact' = 'true'
+);
+
+-- Z-ordering for common query patterns
+OPTIMIZE silver.cdm.payment ZORDER BY (debtor_id, creditor_id, creation_date_time);
+TABLES TO CREATE:
+
+silver.cdm.payment
+silver.cdm.payment_instruction
+silver.cdm.credit_transfer
+silver.cdm.direct_debit
+silver.cdm.payment_return
+silver.cdm.payment_reversal
+silver.cdm.payment_status
+silver.cdm.party
+silver.cdm.party_identification
+silver.cdm.financial_institution
+silver.cdm.account
+silver.cdm.settlement
+silver.cdm.regulatory_reporting
+[Create for ALL CDM entities]
+
+DELIVERABLE:
+
+/cdm/physical-models/databricks/ddl/
+/cdm/physical-models/databricks/migrations/
+/cdm/physical-models/databricks/optimization/
+
+
+1.4.2 Starburst Physical Model
+OUTPUT: /cdm/physical-models/starburst/
+DESIGN REQUIREMENTS:
+
+Iceberg or Hive format
+Trino-optimized queries
+Predicate pushdown enabled
+ORC/Parquet with compression
+
+TABLE STRUCTURE PATTERN:
+sqlCREATE TABLE silver_cdm.payment (
+    payment_id VARCHAR NOT NULL,
+    payment_type VARCHAR,
+    creation_date_time TIMESTAMP(6),
+    instructed_amount DECIMAL(18,5),
+    instructed_currency VARCHAR(3),
+    debtor_id VARCHAR,
+    creditor_id VARCHAR,
+    status VARCHAR,
+    
+    -- Bi-Temporal
+    valid_from TIMESTAMP(6),
+    valid_to TIMESTAMP(6),
+    transaction_from TIMESTAMP(6),
+    transaction_to TIMESTAMP(6),
+    
+    -- Lineage (MANDATORY)
+    _source_system VARCHAR,
+    _source_entity VARCHAR,
+    _source_fields JSON,
+    _ingestion_timestamp TIMESTAMP(6),
+    _transformation_id VARCHAR,
+    _lineage_version INTEGER,
+    
+    -- Audit
+    _created_at TIMESTAMP(6),
+    _updated_at TIMESTAMP(6)
+)
+WITH (
+    format = 'PARQUET',
+    partitioning = ARRAY['day(creation_date_time)', 'payment_type']
+);
+DELIVERABLE:
+
+/cdm/physical-models/starburst/ddl/
+/cdm/physical-models/starburst/views/
+
+
+1.4.3 Neo4J Physical Model
+OUTPUT: /cdm/physical-models/neo4j/
+DESIGN REQUIREMENTS:
+
+Optimized for graph traversal
+Fraud detection query patterns
+Relationship-centric design
+Lineage as first-class relationships
+
+NODE LABELS:
+cypher// Payment Node
+CREATE (p:Payment {
+    paymentId: 'string',
+    paymentType: 'string',
+    creationDateTime: datetime(),
+    instructedAmount: 0.0,
+    instructedCurrency: 'string',
+    status: 'string',
+    
+    // Lineage Properties (MANDATORY)
+    _sourceSystem: 'string',
+    _sourceEntity: 'string',
+    _ingestionTimestamp: datetime(),
+    _transformationId: 'string'
+})
+
+// Party Node
+CREATE (party:Party {
+    partyId: 'string',
+    partyType: 'string',
+    name: 'string'
+})
+
+// Account Node
+CREATE (acc:Account {
+    accountId: 'string',
+    accountType: 'string',
+    currency: 'string'
+})
+RELATIONSHIPS:
+cypher// Payment Relationships
+(p:Payment)-[:DEBTOR]->(party:Party)
+(p:Payment)-[:CREDITOR]->(party:Party)
+(p:Payment)-[:DEBTOR_ACCOUNT]->(acc:Account)
+(p:Payment)-[:CREDITOR_ACCOUNT]->(acc:Account)
+(p:Payment)-[:SETTLED_BY]->(s:Settlement)
+(p:Payment)-[:HAS_STATUS]->(status:PaymentStatus)
+
+// Party Relationships
+(party:Party)-[:OWNS]->(acc:Account)
+(party:Party)-[:RELATED_TO {type: 'string'}]->(party2:Party)
+
+// Lineage Relationships (MANDATORY)
+(p:Payment)-[:DERIVED_FROM {transformation: 'string'}]->(source:SourceRecord)
+(p:Payment)-[:USED_IN]->(report:RegulatoryReport)
+(p:Payment)-[:PROVISIONED_TO]->(feed:DataFeed)
+INDEXES FOR FRAUD DETECTION:
+cypherCREATE INDEX payment_debtor_idx FOR (p:Payment) ON (p.debtorId);
+CREATE INDEX payment_creditor_idx FOR (p:Payment) ON (p.creditorId);
+CREATE INDEX payment_amount_idx FOR (p:Payment) ON (p.instructedAmount);
+CREATE INDEX party_name_idx FOR (party:Party) ON (party.name);
+```
+
+FRAUD DETECTION QUERIES:
+- Ring detection patterns
+- Velocity analysis patterns
+- Network analysis patterns
+
+DELIVERABLE:
+- /cdm/physical-models/neo4j/schema/
+- /cdm/physical-models/neo4j/constraints/
+- /cdm/physical-models/neo4j/indexes/
+- /cdm/physical-models/neo4j/queries/fraud-patterns/
+
+DELIVERABLE CHECKLIST:
+- [ ] Databricks schema complete
+- [ ] Databricks migrations created
+- [ ] Starburst schema complete
+- [ ] Neo4J schema complete
+- [ ] Neo4J constraints created
+- [ ] Neo4J indexes created
+- [ ] Fraud detection queries created
+- [ ] All schemas include lineage columns
+- [ ] Bi-temporal support implemented
+```
+
+---
+
+### 1.5 Phase 1 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 2:
+
+1. Present to user for review:
+   - /cdm/logical-model/ (all entities and relationships)
+   - /cdm/json-schemas/ (all schemas)
+   - /cdm/physical-models/databricks/
+   - /cdm/physical-models/starburst/
+   - /cdm/physical-models/neo4j/
+
+2. Validation checks:
+   - [ ] All CDM entities map to ISO 20022 elements
+   - [ ] All schemas include lineage metadata
+   - [ ] All physical models include bi-temporal columns
+   - [ ] Neo4J model supports fraud detection patterns
+
+3. Update tracking:
+   - Update /inventory/master-checklist.md
+   - Update /inventory/standards-checklist.md
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 2: DATA INGESTION LAYER
+
+### Duration: After Phase 1 approval
+### Checkpoint: 🛑 STOP - User approval required before Phase 3
+
+---
+
+### 2.1 Ingestion Architecture
+```
+TASK: Design and implement ingestion layer for all payment standards
+
+OUTPUT: /src/backend/ingestion/
+
+ARCHITECTURE REQUIREMENTS:
+1. Support 50M messages/day throughput
+2. Real-time and batch processing
+3. Restartable/checkpoint-based processing
+4. Lineage capture at point of ingestion
+5. Dead-letter queue for failed messages
+6. Metrics collection for all operations
+
+SOURCE CONNECTORS:
+
+2.1.1 Oracle Exadata Connector
+Location: /src/backend/ingestion/connectors/oracle/
+Features:
+- Connection pooling
+- Cursor-based pagination
+- Incremental extraction (CDC)
+- Parallel query execution
+- Lineage capture per record
+
+2.1.2 File Connector
+Location: /src/backend/ingestion/connectors/file/
+Supported formats:
+- CSV (configurable delimiters)
+- TSV
+- Fixed-width
+- JSON
+- XML
+Features:
+- Large file streaming
+- Checkpointing by line/record
+- Schema inference
+- Lineage capture per record
+
+2.1.3 Message Queue Connector
+Location: /src/backend/ingestion/connectors/mq/
+Supported systems:
+- Kafka
+- IBM MQ
+- RabbitMQ
+- Azure Service Bus
+Features:
+- Consumer group management
+- Offset tracking
+- At-least-once delivery
+- Lineage capture per message
+
+2.1.4 API Connector
+Location: /src/backend/ingestion/connectors/api/
+Features:
+- REST client
+- OAuth/API key authentication
+- Rate limiting
+- Retry with backoff
+- Pagination handling
+- Lineage capture per response
+
+DELIVERABLE CHECKLIST:
+- [ ] Oracle connector implemented
+- [ ] File connector implemented (all formats)
+- [ ] Message queue connector implemented
+- [ ] API connector implemented
+- [ ] All connectors include lineage capture
+- [ ] All connectors support checkpointing
+- [ ] Unit tests for each connector
+```
+
+---
+
+### 2.2 Message Parsers
+TASK: Implement parsers for ALL payment standards from inventory
+OUTPUT: /src/backend/ingestion/parsers/
+PARSER REQUIREMENTS:
+
+Parse to intermediate JSON structure
+Capture source field lineage for EVERY field
+Validate against source schema
+Handle malformed messages gracefully
+Emit parsing metrics
+
+PARSER INTERFACE:
+pythonfrom abc import ABC, abstractmethod
+from typing import Dict, List, Any
+from dataclasses import dataclass
+
+@dataclass
+class LineageField:
+    source_path: str
+    source_value: Any
+    target_path: str
+    transformation: str = "DIRECT_MAP"
+
+@dataclass
+class ParseResult:
+    success: bool
+    parsed_data: Dict[str, Any]
+    lineage_fields: List[LineageField]
+    errors: List[str]
+    source_message_id: str
+    source_system: str
+    source_entity: str
+    parse_timestamp: datetime
+
+class BaseParser(ABC):
+    @abstractmethod
+    def parse(self, raw_message: bytes, metadata: Dict) -> ParseResult:
+        pass
+    
+    @abstractmethod
+    def get_supported_message_types(self) -> List[str]:
+        pass
+    
+    @abstractmethod
+    def validate(self, raw_message: bytes) -> bool:
+        pass
+PARSERS TO IMPLEMENT (from standards inventory):
+ISO 20022 PARSERS:
+Location: /src/backend/ingestion/parsers/iso20022/
+ParserMessage TypesPriorityStatusPainParserpain.001, pain.002, pain.007, pain.008High[ ]PacsParserpacs.002, pacs.003, pacs.004, pacs.007, pacs.008, pacs.009, pacs.010, pacs.028, pacs.029High[ ]CamtParsercamt.029, camt.052, camt.053, camt.054, camt.056, camt.057, camt.058, camt.059High[ ]AcmtParseracmt.*Medium[ ]AuthParserauth.*Medium[ ]RedaParserreda.*Medium[ ][Continue for ALL ISO 20022 message types from inventory]
+SWIFT MT PARSERS:
+Location: /src/backend/ingestion/parsers/swift/
+ParserMessage TypesPriorityStatusMT1xxParserMT101, MT103, MT103+, MT104, MT107High[ ]MT2xxParserMT200, MT201, MT202, MT202COV, MT203, MT204, MT205, MT210High[ ]MT3xxParserMT300, MT303, MT304, MT305, MT306, MT320, MT330, MT340, MT360, MT361, MT362, MT364, MT365Medium[ ]MT4xxParserMT400, MT405, MT410, MT412, MT416, MT420, MT422, MT430, MT450, MT455, MT456Medium[ ]MT5xxParserMT500, MT502, MT509, MT513, MT515, MT518, MT524, MT535, MT536, MT537, MT538, MT540, MT541, MT542, MT543, MT544, MT545, MT546, MT547, MT548, MT549, MT558, MT564, MT565, MT566, MT567, MT568, MT569, MT574, MT575, MT576, MT578, MT579, MT581, MT584, MT586, MT587, MT588Medium[ ]MT7xxParserMT700, MT701, MT705, MT707, MT710, MT711, MT720, MT721, MT730, MT732, MT734, MT740, MT742, MT747, MT750, MT752, MT754, MT756, MT760, MT767, MT768, MT769, MT795, MT796, MT798, MT799Medium[ ]MT9xxParserMT900, MT910, MT920, MT935, MT940, MT941, MT942, MT950, MT970, MT971, MT972, MT973, MT985, MT986High[ ][Continue for ALL MT message types from inventory]
+US PAYMENT SYSTEM PARSERS:
+Location: /src/backend/ingestion/parsers/us/
+ParserMessage TypesPriorityStatusFedWireParserAll FedWire message typesHigh[ ]CHIPSParserAll CHIPS message typesHigh[ ]ACHParserAll ACH record typesHigh[ ]RTPParserTCH RTP messagesHigh[ ]FedNowParserFedNow messagesHigh[ ]
+UK/EU PAYMENT SYSTEM PARSERS:
+Location: /src/backend/ingestion/parsers/eu/
+ParserMessage TypesPriorityStatusFasterPaymentsParserUK FPS messagesHigh[ ]SEPAParserSCT, SDD, SCT InstHigh[ ]TIPSParserTIPS messagesMedium[ ]TARGET2ParserTARGET2 messagesMedium[ ]
+CARD NETWORK PARSERS:
+Location: /src/backend/ingestion/parsers/cards/
+ParserMessage TypesPriorityStatusISO8583ParserISO 8583 baseHigh[ ]VisaParserVisa-specific extensionsHigh[ ]MastercardParserMC-specific extensionsHigh[ ]
+REGIONAL PARSERS:
+Location: /src/backend/ingestion/parsers/regional/
+ParserMessage TypesPriorityStatus[One parser per regional system from inventory]Medium[ ]
+PARSER FACTORY:
+pythonclass ParserFactory:
+    """Factory to instantiate appropriate parser based on message type"""
+    
+    _parsers: Dict[str, Type[BaseParser]] = {}
+    
+    @classmethod
+    def register(cls, message_type: str, parser_class: Type[BaseParser]):
+        cls._parsers[message_type] = parser_class
+    
+    @classmethod
+    def get_parser(cls, message_type: str) -> BaseParser:
+        if message_type not in cls._parsers:
+            raise UnsupportedMessageTypeError(message_type)
+        return cls._parsers[message_type]()
+    
+    @classmethod
+    def parse_with_lineage(cls, message_type: str, raw_message: bytes, metadata: Dict) -> ParseResult:
+        parser = cls.get_parser(message_type)
+        result = parser.parse(raw_message, metadata)
+        # Emit lineage event
+        LineageEventEmitter.emit_parsing_lineage(result)
+        return result
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Parser interface defined
+- [ ] Parser factory implemented
+- [ ] All ISO 20022 parsers implemented
+- [ ] All SWIFT MT parsers implemented
+- [ ] All US payment parsers implemented
+- [ ] All EU payment parsers implemented
+- [ ] All card network parsers implemented
+- [ ] All regional parsers implemented
+- [ ] All parsers emit lineage events
+- [ ] Unit tests for each parser
+- [ ] Integration tests for parser factory
+- [ ] Update /inventory/standards-checklist.md with parser status
+```
+
+---
+
+### 2.3 Medallion Architecture Implementation
+TASK: Implement medallion architecture (Bronze, Silver, Gold) for all platforms
+OUTPUT: /src/backend/processing/
+
+2.3.1 Bronze Zone
+PURPOSE: Raw data landing with minimal transformation
+REQUIREMENTS:
+
+Preserve original message format
+Add ingestion metadata
+Partition by date and source
+Enable append-only writes
+Capture initial lineage
+
+BRONZE SCHEMA (per platform):
+python@dataclass
+class BronzeRecord:
+    # Technical identifiers
+    bronze_id: str  # UUID
+    batch_id: str
+    
+    # Source identification
+    source_system: str
+    source_entity: str  # e.g., "swift.mt103", "iso20022.pacs.008"
+    source_file: Optional[str]
+    source_offset: Optional[int]
+    
+    # Raw content
+    raw_message: bytes
+    raw_format: str  # JSON, XML, FIXED_WIDTH, etc.
+    
+    # Parsing result
+    parsed_json: Dict[str, Any]
+    parse_status: str  # SUCCESS, PARTIAL, FAILED
+    parse_errors: List[str]
+    
+    # Initial lineage
+    lineage_fields: List[Dict]  # Field-level source mappings
+    
+    # Timestamps
+    message_timestamp: datetime  # From source
+    ingestion_timestamp: datetime  # When received
+    
+    # Partitioning
+    ingestion_date: date
+BRONZE PROCESSOR:
+Location: /src/backend/processing/bronze/
+pythonclass BronzeProcessor:
+    """Process raw messages into bronze zone"""
+    
+    def __init__(self, platform: str):  # databricks, starburst, neo4j
+        self.platform = platform
+        self.writer = BronzeWriterFactory.get_writer(platform)
+        self.lineage_emitter = LineageEventEmitter()
+    
+    def process(self, parse_result: ParseResult) -> BronzeRecord:
+        # Create bronze record
+        bronze_record = self._create_bronze_record(parse_result)
+        
+        # Write to bronze zone
+        self.writer.write(bronze_record)
+        
+        # Emit lineage event
+        self.lineage_emitter.emit_bronze_lineage(
+            source=parse_result,
+            target=bronze_record
+        )
+        
+        return bronze_record
+    
+    def process_batch(self, parse_results: List[ParseResult]) -> List[BronzeRecord]:
+        """Batch processing with checkpointing"""
+        checkpoint = self._load_checkpoint()
+        results = []
+        
+        for i, parse_result in enumerate(parse_results[checkpoint:]):
+            try:
+                result = self.process(parse_result)
+                results.append(result)
+                self._save_checkpoint(checkpoint + i + 1)
+            except Exception as e:
+                self._handle_error(parse_result, e)
+        
+        return results
+
+2.3.2 Silver Zone
+PURPOSE: CDM-conformant, cleansed, validated data
+REQUIREMENTS:
+
+Transform to Payments CDM structure
+Apply data quality rules
+Deduplicate records
+Enforce referential integrity
+Full lineage from bronze to CDM fields
+Bi-temporal versioning
+
+SILVER PROCESSOR:
+Location: /src/backend/processing/silver/
+pythonclass SilverProcessor:
+    """Transform bronze records to CDM-conformant silver records"""
+    
+    def __init__(self, platform: str):
+        self.platform = platform
+        self.transformer = CDMTransformerFactory.get_transformer(platform)
+        self.quality_engine = DataQualityEngine()
+        self.lineage_emitter = LineageEventEmitter()
+    
+    def process(self, bronze_record: BronzeRecord) -> Optional[CDMRecord]:
+        # Load transformation rules
+        rules = self._load_transformation_rules(bronze_record.source_entity)
+        
+        # Transform to CDM with lineage tracking
+        cdm_record, field_lineage = self.transformer.transform(
+            bronze_record,
+            rules
+        )
+        
+        # Apply data quality rules
+        quality_result = self.quality_engine.validate(cdm_record)
+        
+        if not quality_result.passed:
+            self._handle_quality_failure(bronze_record, quality_result)
+            return None
+        
+        # Write to silver zone
+        self.writer.write(cdm_record)
+        
+        # Emit comprehensive lineage
+        self.lineage_emitter.emit_silver_lineage(
+            source_bronze=bronze_record,
+            target_cdm=cdm_record,
+            field_mappings=field_lineage,
+            transformation_rules=rules
+        )
+        
+        return cdm_record
+TRANSFORMATION RULES:
+Location: /src/backend/processing/silver/transformations/
+yaml# Example: swift_mt103_to_cdm.yaml
+transformation:
+  source_entity: "swift.mt103"
+  target_entity: "cdm.payment"
+  version: "1.0"
+  
+  field_mappings:
+    - source: "field_20"
+      target: "paymentIdentification.instructionIdentification"
+      transformation: "DIRECT_MAP"
+      
+    - source: "field_32A.date"
+      target: "requestedExecutionDate"
+      transformation: "PARSE_DATE"
+      format: "YYMMDD"
+      
+    - source: "field_32A.currency"
+      target: "instructedAmount.currency"
+      transformation: "DIRECT_MAP"
+      
+    - source: "field_32A.amount"
+      target: "instructedAmount.value"
+      transformation: "PARSE_DECIMAL"
+      
+    - source: "field_50K"
+      target: "debtor"
+      transformation: "PARSE_PARTY"
+      sub_mappings:
+        - source: "line1"
+          target: "name"
+        - source: "lines2-4"
+          target: "postalAddress"
+      
+    - source: "field_59"
+      target: "creditor"
+      transformation: "PARSE_PARTY"
+      
+  derived_fields:
+    - target: "paymentType"
+      logic: "'CREDIT_TRANSFER'"
+      
+    - target: "status"
+      logic: "'RECEIVED'"
+
+2.3.3 Gold Zone
+PURPOSE: Business-ready aggregations and analytics views
+REQUIREMENTS:
+
+Pre-computed aggregations
+Regulatory report-ready datasets
+Analytics-optimized structures
+Lineage to source CDM fields
+
+GOLD PROCESSOR:
+Location: /src/backend/processing/gold/
+pythonclass GoldProcessor:
+    """Create gold zone aggregations from silver CDM data"""
+    
+    def __init__(self, platform: str):
+        self.platform = platform
+        self.aggregator = AggregatorFactory.get_aggregator(platform)
+        self.lineage_emitter = LineageEventEmitter()
+    
+    def process_aggregation(self, aggregation_config: Dict) -> None:
+        # Execute aggregation
+        result = self.aggregator.aggregate(aggregation_config)
+        
+        # Emit lineage for aggregation
+        self.lineage_emitter.emit_gold_lineage(
+            source_cdm_fields=aggregation_config['source_fields'],
+            target_gold_fields=aggregation_config['target_fields'],
+            aggregation_logic=aggregation_config['logic']
+        )
+```
+
+GOLD AGGREGATIONS:
+- Daily payment volumes by type
+- Payment value aggregations by corridor
+- Regulatory report staging tables
+- Fraud detection feature tables
+
+DELIVERABLE CHECKLIST:
+- [ ] Bronze processor implemented (all platforms)
+- [ ] Silver processor implemented (all platforms)
+- [ ] Gold processor implemented (all platforms)
+- [ ] Transformation rules for all message types
+- [ ] Zone transitions emit lineage events
+- [ ] Checkpointing implemented
+- [ ] Dead-letter queue handling
+- [ ] Unit tests for each processor
+- [ ] Integration tests for full pipeline
+```
+
+---
+
+### 2.4 Orchestration and Restartability
+TASK: Implement pipeline orchestration with full restartability
+TECHNOLOGY EVALUATION:
+Option 1: Apache NiFi
+Pros:
+
+Visual flow design
+Built-in provenance tracking
+Checkpoint/restart built-in
+Back pressure handling
+Cons:
+Java-based, separate runtime
+Learning curve
+
+Option 2: Apache Airflow
+Pros:
+
+Python-native
+Strong scheduling
+Good monitoring
+Wide adoption
+Cons:
+Task-level restart, not record-level
+Additional retry logic needed
+
+Option 3: Prefect/Dagster
+Pros:
+
+Python-native
+Modern architecture
+Good for data workflows
+Cons:
+Newer, less mature
+
+RECOMMENDATION: [To be determined after research]
+REQUIREMENTS:
+
+Record-level checkpointing
+Failed record recovery
+Pipeline state persistence
+Metrics collection
+Alert integration
+Visual monitoring
+
+IMPLEMENTATION:
+Location: /pipelines/orchestration/
+pythonclass PipelineOrchestrator:
+    """Manage pipeline execution with restartability"""
+    
+    def __init__(self, pipeline_id: str):
+        self.pipeline_id = pipeline_id
+        self.checkpoint_store = CheckpointStore()
+        self.metrics_collector = MetricsCollector()
+    
+    def run(self, config: PipelineConfig) -> PipelineResult:
+        # Load checkpoint
+        checkpoint = self.checkpoint_store.load(self.pipeline_id)
+        
+        try:
+            # Execute with checkpoint awareness
+            result = self._execute(config, checkpoint)
+            
+            # Clear checkpoint on success
+            self.checkpoint_store.clear(self.pipeline_id)
+            
+            return result
+        
+        except Exception as e:
+            # Save checkpoint for restart
+            self.checkpoint_store.save(self.pipeline_id, self._get_current_state())
+            raise
+    
+    def restart(self) -> PipelineResult:
+        """Restart from last checkpoint"""
+        checkpoint = self.checkpoint_store.load(self.pipeline_id)
+        if not checkpoint:
+            raise NoCheckpointError(self.pipeline_id)
+        
+        return self._execute_from_checkpoint(checkpoint)
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Orchestration technology selected and documented
+- [ ] Pipeline orchestrator implemented
+- [ ] Checkpoint store implemented
+- [ ] Failed record handling implemented
+- [ ] Metrics collection integrated
+- [ ] Monitoring dashboard configured
+- [ ] Alert rules configured
+```
+
+---
+
+### 2.5 Phase 2 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 3:
+
+1. Present to user for review:
+   - All connector implementations
+   - All parser implementations
+   - Bronze/Silver/Gold processors
+   - Orchestration implementation
+   - Lineage capture verification
+
+2. Validation checks:
+   - [ ] All parsers from inventory implemented
+   - [ ] All parsers emit lineage events
+   - [ ] Zone transitions include lineage
+   - [ ] Restartability tested
+   - [ ] 50M/day throughput tested
+
+3. Update tracking:
+   - Update /inventory/master-checklist.md
+   - Update /inventory/standards-checklist.md with parser status
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 3: LINEAGE FRAMEWORK
+
+### Duration: After Phase 2 approval
+### Checkpoint: 🛑 STOP - User approval required before Phase 4
+
+---
+
+### 3.1 Lineage Data Model
+TASK: Implement comprehensive lineage data model
+OUTPUT: /src/backend/lineage/
+LINEAGE ENTITIES:
+
+LineageNode
+
+python@dataclass
+class LineageNode:
+    node_id: str  # UUID
+    node_type: LineageNodeType  # SOURCE_FIELD, BRONZE_FIELD, SILVER_FIELD, GOLD_FIELD, REPORT_FIELD, FEED_FIELD, API_FIELD
+    system_name: str  # e.g., "swift", "cdm", "regulatory"
+    entity_name: str  # e.g., "mt103", "payment", "cftc_report"
+    field_name: str  # e.g., "field_32A.amount", "instructedAmount.value"
+    field_path: str  # Fully qualified: swift.mt103.field_32A.amount
+    data_type: str
+    description: str
+    created_at: datetime
+    updated_at: datetime
+
+class LineageNodeType(Enum):
+    SOURCE_FIELD = "SOURCE_FIELD"
+    BRONZE_FIELD = "BRONZE_FIELD"
+    SILVER_FIELD = "SILVER_FIELD"
+    GOLD_FIELD = "GOLD_FIELD"
+    REPORT_FIELD = "REPORT_FIELD"
+    FEED_FIELD = "FEED_FIELD"
+    API_FIELD = "API_FIELD"
+
+LineageEdge
+
+python@dataclass
+class LineageEdge:
+    edge_id: str  # UUID
+    source_node_id: str
+    target_node_id: str
+    transformation_type: TransformationType
+    transformation_logic: str  # Expression or rule reference
+    transformation_rule_id: Optional[str]
+    confidence: LineageConfidence
+    effective_from: datetime
+    effective_to: Optional[datetime]  # null if current
+
+class TransformationType(Enum):
+    DIRECT_MAP = "DIRECT_MAP"
+    DERIVATION = "DERIVATION"
+    AGGREGATION = "AGGREGATION"
+    LOOKUP = "LOOKUP"
+    CONDITIONAL = "CONDITIONAL"
+    SPLIT = "SPLIT"
+    MERGE = "MERGE"
+
+class LineageConfidence(Enum):
+    EXACT = "EXACT"  # Direct mapping
+    DERIVED = "DERIVED"  # Calculated/transformed
+    INFERRED = "INFERRED"  # System-inferred
+
+TransformationRule
+
+python@dataclass
+class TransformationRule:
+    rule_id: str  # UUID
+    rule_name: str
+    rule_type: str
+    rule_definition: Dict  # Full logic specification
+    input_fields: List[str]
+    output_fields: List[str]
+    version: int
+    created_by: str
+    created_at: datetime
+
+LineageConsumer
+
+python@dataclass
+class LineageConsumer:
+    consumer_id: str  # UUID
+    consumer_type: ConsumerType
+    consumer_name: str
+    consumer_description: str
+    owner: str
+    frequency: str
+    criticality: Criticality
+    fields_consumed: List[str]  # List of node_ids
+
+class ConsumerType(Enum):
+    REGULATORY_REPORT = "REGULATORY_REPORT"
+    DATA_FEED = "DATA_FEED"
+    API_ENDPOINT = "API_ENDPOINT"
+    DASHBOARD = "DASHBOARD"
+    AD_HOC_QUERY = "AD_HOC_QUERY"
+    PROVISIONING_REQUEST = "PROVISIONING_REQUEST"
+
+class Criticality(Enum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+LineageImpactCache
+
+python@dataclass
+class LineageImpactCache:
+    source_node_id: str
+    impacted_consumer_id: str
+    impact_path: List[str]  # Array of node_ids
+    hop_count: int
+    last_refreshed: datetime
+NEO4J SCHEMA FOR LINEAGE:
+Location: /src/backend/lineage/graph/neo4j_schema.cypher
+cypher// Constraints
+CREATE CONSTRAINT lineage_node_id IF NOT EXISTS
+FOR (n:LineageNode) REQUIRE n.node_id IS UNIQUE;
+
+CREATE CONSTRAINT lineage_consumer_id IF NOT EXISTS
+FOR (c:LineageConsumer) REQUIRE c.consumer_id IS UNIQUE;
+
+// Node labels by type
+CREATE (n:LineageNode:SourceField { ... })
+CREATE (n:LineageNode:BronzeField { ... })
+CREATE (n:LineageNode:SilverField { ... })
+CREATE (n:LineageNode:GoldField { ... })
+CREATE (n:LineageNode:ReportField { ... })
+CREATE (n:LineageNode:FeedField { ... })
+
+// Relationship types
+(source:LineageNode)-[:TRANSFORMS_TO {
+    transformation_type: 'string',
+    transformation_logic: 'string',
+    confidence: 'string',
+    effective_from: datetime,
+    effective_to: datetime
+}]->(target:LineageNode)
+
+(consumer:LineageConsumer)-[:CONSUMES]->(field:LineageNode)
+
+// Indexes for traversal
+CREATE INDEX lineage_node_path IF NOT EXISTS
+FOR (n:LineageNode) ON (n.field_path);
+
+CREATE INDEX lineage_node_system IF NOT EXISTS
+FOR (n:LineageNode) ON (n.system_name);
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] LineageNode model implemented
+- [ ] LineageEdge model implemented
+- [ ] TransformationRule model implemented
+- [ ] LineageConsumer model implemented
+- [ ] LineageImpactCache model implemented
+- [ ] Neo4J schema created
+- [ ] Relational backup schema created
+- [ ] Unit tests for models
+```
+
+---
+
+### 3.2 Lineage Capture Service
+TASK: Implement lineage capture across all data processing
+OUTPUT: /src/backend/lineage/capture/
+LINEAGE EVENT EMITTER:
+pythonclass LineageEventEmitter:
+    """Emit lineage events to graph and event stream"""
+    
+    def __init__(self):
+        self.graph_writer = LineageGraphWriter()
+        self.event_publisher = LineageEventPublisher()
+    
+    def emit_parsing_lineage(self, parse_result: ParseResult) -> None:
+        """Emit lineage from source to bronze"""
+        for field in parse_result.lineage_fields:
+            edge = LineageEdge(
+                edge_id=str(uuid.uuid4()),
+                source_node_id=self._get_or_create_source_node(field.source_path),
+                target_node_id=self._get_or_create_bronze_node(field.target_path),
+                transformation_type=TransformationType.DIRECT_MAP,
+                transformation_logic=field.transformation,
+                confidence=LineageConfidence.EXACT,
+                effective_from=datetime.utcnow()
+            )
+            self.graph_writer.write_edge(edge)
+            self.event_publisher.publish(edge)
+    
+    def emit_silver_lineage(
+        self,
+        source_bronze: BronzeRecord,
+        target_cdm: CDMRecord,
+        field_mappings: List[FieldMapping],
+        transformation_rules: List[TransformationRule]
+    ) -> None:
+        """Emit lineage from bronze to silver CDM"""
+        for mapping in field_mappings:
+            edge = LineageEdge(
+                edge_id=str(uuid.uuid4()),
+                source_node_id=self._get_bronze_node(mapping.source_field),
+                target_node_id=self._get_or_create_silver_node(mapping.target_field),
+                transformation_type=mapping.transformation_type,
+                transformation_logic=mapping.logic,
+                transformation_rule_id=mapping.rule_id,
+                confidence=LineageConfidence.DERIVED,
+                effective_from=datetime.utcnow()
+            )
+            self.graph_writer.write_edge(edge)
+            self.event_publisher.publish(edge)
+    
+    def emit_gold_lineage(
+        self,
+        source_cdm_fields: List[str],
+        target_gold_fields: List[str],
+        aggregation_logic: str
+    ) -> None:
+        """Emit lineage from silver to gold"""
+        # Implementation for aggregation lineage
+        pass
+    
+    def emit_consumer_lineage(
+        self,
+        consumer: LineageConsumer,
+        consumed_fields: List[str]
+    ) -> None:
+        """Register consumer and fields consumed"""
+        self.graph_writer.write_consumer(consumer)
+        for field_path in consumed_fields:
+            node = self._get_node_by_path(field_path)
+            self.graph_writer.write_consumption(consumer.consumer_id, node.node_id)
+LINEAGE DECORATOR:
+pythondef track_lineage(inputs: List[str], outputs: List[str], transformation_type: str):
+    """Decorator to automatically capture lineage for transformations"""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Execute function
+            result = func(*args, **kwargs)
+            
+            # Emit lineage
+            emitter = LineageEventEmitter()
+            for input_field in inputs:
+                for output_field in outputs:
+                    emitter.emit_transformation_lineage(
+                        source=input_field,
+                        target=output_field,
+                        transformation_type=transformation_type,
+                        function_name=func.__name__
+                    )
+            
+            return result
+        return wrapper
+    return decorator
+
+# Usage
+@track_lineage(
+    inputs=["bronze.swift.mt103.field_32A.amount"],
+    outputs=["silver.cdm.payment.instructedAmount.value"],
+    transformation_type="DERIVATION"
+)
+def parse_amount(raw_amount: str) -> Decimal:
+    return Decimal(raw_amount.replace(',', ''))
+DECLARATIVE LINEAGE DEFINITIONS:
+Location: /lineage/definitions/
+yaml# Example: ingestion/swift_mt103_lineage.yaml
+lineage_definition:
+  source_system: "swift"
+  source_entity: "mt103"
+  version: "1.0"
+  
+  field_mappings:
+    - source_path: "swift.mt103.field_20"
+      target_path: "bronze.swift.mt103.transaction_reference"
+      transformation: "DIRECT_MAP"
+      confidence: "EXACT"
+    
+    - source_path: "swift.mt103.field_32A"
+      target_path: "bronze.swift.mt103.value_date_amount"
+      transformation: "DIRECT_MAP"
+      sub_fields:
+        - source_path: "swift.mt103.field_32A.date"
+          target_path: "bronze.swift.mt103.value_date"
+        - source_path: "swift.mt103.field_32A.currency"
+          target_path: "bronze.swift.mt103.currency"
+        - source_path: "swift.mt103.field_32A.amount"
+          target_path: "bronze.swift.mt103.amount"
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] LineageEventEmitter implemented
+- [ ] Lineage decorator implemented
+- [ ] Declarative lineage parser implemented
+- [ ] Lineage definitions for all parsers created
+- [ ] Lineage definitions for all transformations created
+- [ ] Event stream publisher implemented
+- [ ] Graph writer implemented
+- [ ] Unit tests for capture service
+```
+
+---
+
+### 3.3 Lineage Query Service
+TASK: Implement lineage query APIs
+OUTPUT: /src/backend/lineage/api/
+LINEAGE QUERY SERVICE:
+pythonclass LineageQueryService:
+    """Query lineage graph for impact and root cause analysis"""
+    
+    def __init__(self):
+        self.graph_reader = LineageGraphReader()
+        self.cache = LineageImpactCache()
+    
+    def get_forward_lineage(
+        self,
+        field_path: str,
+        max_depth: int = 10
+    ) -> ForwardLineageResult:
+        """Get all downstream impacts of a field"""
+        source_node = self.graph_reader.get_node_by_path(field_path)
+        
+        # Traverse graph forward
+        impacted_nodes = self.graph_reader.traverse_forward(
+            source_node.node_id,
+            max_depth=max_depth
+        )
+        
+        # Group by consumer type
+        consumers = self._group_by_consumer(impacted_nodes)
+        
+        return ForwardLineageResult(
+            source_field=field_path,
+            impacted_reports=[c for c in consumers if c.type == "REGULATORY_REPORT"],
+            impacted_feeds=[c for c in consumers if c.type == "DATA_FEED"],
+            impacted_apis=[c for c in consumers if c.type == "API_ENDPOINT"],
+            total_impacted_fields=len(impacted_nodes),
+            lineage_paths=self._build_paths(source_node, impacted_nodes)
+        )
+    
+    def get_backward_lineage(
+        self,
+        field_path: str,
+        max_depth: int = 10
+    ) -> BackwardLineageResult:
+        """Trace field back to original sources"""
+        target_node = self.graph_reader.get_node_by_path(field_path)
+        
+        # Traverse graph backward
+        source_nodes = self.graph_reader.traverse_backward(
+            target_node.node_id,
+            max_depth=max_depth
+        )
+        
+        return BackwardLineageResult(
+            target_field=field_path,
+            source_systems=self._extract_source_systems(source_nodes),
+            lineage_paths=self._build_backward_paths(target_node, source_nodes),
+            transformations_applied=self._count_transformations(source_nodes)
+        )
+    
+    def get_bulk_impact(
+        self,
+        field_paths: List[str]
+    ) -> BulkImpactResult:
+        """Analyze impact of multiple field issues"""
+        all_impacts = []
+        for path in field_paths:
+            impact = self.get_forward_lineage(path)
+            all_impacts.append(impact)
+        
+        # Aggregate and deduplicate
+        return self._aggregate_impacts(all_impacts)
+    
+    def get_consumer_lineage(
+        self,
+        consumer_type: str,
+        consumer_name: str,
+        field_name: Optional[str] = None
+    ) -> ConsumerLineageResult:
+        """Get complete lineage for a consumer (report, feed, etc.)"""
+        consumer = self.graph_reader.get_consumer(consumer_type, consumer_name)
+        
+        if field_name:
+            # Lineage for specific field
+            field_node = self.graph_reader.get_consumer_field(consumer.consumer_id, field_name)
+            lineage = self.get_backward_lineage(field_node.field_path)
+            return ConsumerLineageResult(
+                consumer=consumer,
+                field_lineage={field_name: lineage}
+            )
+        else:
+            # Lineage for all fields
+            field_lineage = {}
+            for field_id in consumer.fields_consumed:
+                node = self.graph_reader.get_node(field_id)
+                lineage = self.get_backward_lineage(node.field_path)
+                field_lineage[node.field_name] = lineage
+            
+            return ConsumerLineageResult(
+                consumer=consumer,
+                field_lineage=field_lineage
+            )
+API ENDPOINTS:
+Location: /src/backend/api/routes/lineage.py
+pythonrouter = APIRouter(prefix="/api/lineage", tags=["lineage"])
+
+@router.get("/impact/{field_path:path}")
+async def get_impact_analysis(
+    field_path: str,
+    max_depth: int = Query(default=10, ge=1, le=50)
+) -> ForwardLineageResponse:
+    """
+    Get downstream impact analysis for a field.
+    
+    Returns all reports, feeds, and APIs that would be affected
+    if this field has a data quality issue.
+    """
+    service = LineageQueryService()
+    result = service.get_forward_lineage(field_path, max_depth)
+    return ForwardLineageResponse(
+        source_field=result.source_field,
+        impacted_consumers=[
+            ImpactedConsumer(
+                consumer_type=c.consumer_type,
+                consumer_name=c.consumer_name,
+                criticality=c.criticality,
+                impacted_fields=c.impacted_fields,
+                path=[p.field_path for p in c.path]
+            )
+            for c in result.get_all_consumers()
+        ],
+        total_impacted_reports=len(result.impacted_reports),
+        total_impacted_feeds=len(result.impacted_feeds),
+        total_impacted_apis=len(result.impacted_apis)
+    )
+
+@router.get("/trace/{consumer_type}/{consumer_name}/{field_name}")
+async def get_root_cause_analysis(
+    consumer_type: str,
+    consumer_name: str,
+    field_name: str
+) -> BackwardLineageResponse:
+    """
+    Trace a consumer field back to its original sources.
+    
+    Useful for root cause analysis when a report field has incorrect data.
+    """
+    service = LineageQueryService()
+    result = service.get_consumer_lineage(consumer_type, consumer_name, field_name)
+    return BackwardLineageResponse(
+        target_field=f"{consumer_type}.{consumer_name}.{field_name}",
+        lineage_paths=[
+            LineagePath(
+                path=[PathNode(
+                    node=p.field_path,
+                    zone=p.node_type.value,
+                    transformation=p.transformation_logic
+                ) for p in path]
+            )
+            for path in result.field_lineage[field_name].lineage_paths
+        ],
+        source_systems=result.field_lineage[field_name].source_systems,
+        transformations_applied=result.field_lineage[field_name].transformations_applied
+    )
+
+@router.post("/bulk-impact")
+async def get_bulk_impact_analysis(
+    request: BulkImpactRequest
+) -> BulkImpactResponse:
+    """
+    Analyze impact of multiple field issues at once.
+    
+    Useful when a source system has multiple field issues.
+    """
+    service = LineageQueryService()
+    result = service.get_bulk_impact(request.affected_fields)
+    return BulkImpactResponse(
+        affected_fields=request.affected_fields,
+        aggregated_impact=result
+    )
+
+@router.get("/graph")
+async def get_lineage_graph(
+    root: str = Query(..., description="Root field path"),
+    direction: str = Query(default="forward", regex="^(forward|backward|both)$"),
+    depth: int = Query(default=5, ge=1, le=20)
+) -> LineageGraphResponse:
+    """
+    Get lineage graph structure for visualization.
+    """
+    service = LineageQueryService()
+    graph = service.get_graph_structure(root, direction, depth)
+    return LineageGraphResponse(
+        nodes=graph.nodes,
+        edges=graph.edges
+    )
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] LineageQueryService implemented
+- [ ] Forward lineage (impact analysis) working
+- [ ] Backward lineage (root cause) working
+- [ ] Bulk impact analysis working
+- [ ] Graph structure API working
+- [ ] All API endpoints implemented
+- [ ] API documentation generated
+- [ ] Unit tests for query service
+- [ ] Integration tests for APIs
+```
+
+---
+
+### 3.4 Lineage UI Components
+TASK: Implement lineage visualization UI
+OUTPUT: /src/frontend/lineage/
+COMPONENTS:
+
+LineageExplorer
+Location: /src/frontend/lineage/explorer/LineageExplorer.tsx
+
+typescriptinterface LineageExplorerProps {
+  initialFieldPath?: string;
+}
+
+const LineageExplorer: React.FC<LineageExplorerProps> = ({ initialFieldPath }) => {
+  const [selectedField, setSelectedField] = useState<string>(initialFieldPath || '');
+  const [direction, setDirection] = useState<'forward' | 'backward' | 'both'>('forward');
+  const [depth, setDepth] = useState<number>(5);
+  const [graphData, setGraphData] = useState<LineageGraph | null>(null);
+  
+  // Field search
+  // Graph visualization (D3.js or vis.js)
+  // Node details panel
+  // Edge details panel
+  // Export functionality
+};
+
+ImpactAnalysisDashboard
+Location: /src/frontend/lineage/impact/ImpactAnalysisDashboard.tsx
+
+typescriptinterface ImpactAnalysisProps {
+  fieldPath?: string;
+  dataQualityIssue?: DataQualityIssue;
+}
+
+const ImpactAnalysisDashboard: React.FC<ImpactAnalysisProps> = ({ fieldPath, dataQualityIssue }) => {
+  // Input: Field selection or DQ issue
+  // Impact summary cards
+  // Impacted reports list (with criticality)
+  // Impacted feeds list
+  // Impacted APIs list
+  // "Blast radius" visualization
+  // Stakeholder notification list
+};
+
+LineageGraphVisualization
+Location: /src/frontend/lineage/visualization/LineageGraph.tsx
+
+typescript// Using D3.js or vis.js for graph rendering
+interface LineageGraphProps {
+  nodes: LineageNode[];
+  edges: LineageEdge[];
+  onNodeClick: (node: LineageNode) => void;
+  onEdgeClick: (edge: LineageEdge) => void;
+  highlightPath?: string[];
+}
+
+const LineageGraph: React.FC<LineageGraphProps> = ({ nodes, edges, ... }) => {
+  // Color coding by zone (Bronze=copper, Silver=silver, Gold=gold, Report=blue, etc.)
+  // Interactive zoom/pan
+  // Node tooltips
+  // Edge labels (transformation type)
+  // Path highlighting
+  // Layout options (hierarchical, force-directed)
+};
+
+DataIssueImpactReport
+Location: /src/frontend/lineage/reports/DataIssueImpactReport.tsx
+
+typescriptinterface DataIssueImpactReportProps {
+  issue: DataQualityIssue;
+}
+
+const DataIssueImpactReport: React.FC<DataIssueImpactReportProps> = ({ issue }) => {
+  // Auto-generated report showing:
+  // - Issue summary
+  // - Affected source fields
+  // - Complete impact analysis
+  // - All impacted regulatory reports (sorted by criticality)
+  // - All impacted feeds
+  // - All impacted APIs
+  // - Recommended notification recipients
+  // - SLA implications
+  // - Export to PDF
+};
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] LineageExplorer component implemented
+- [ ] ImpactAnalysisDashboard implemented
+- [ ] LineageGraphVisualization implemented
+- [ ] DataIssueImpactReport implemented
+- [ ] Graph interactions working (zoom, pan, click)
+- [ ] Color coding by zone implemented
+- [ ] Path highlighting implemented
+- [ ] Export functionality working
+- [ ] Unit tests for components
+- [ ] Integration with backend APIs verified
+```
+
+---
+
+### 3.5 Phase 3 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 4:
+
+1. Present to user for review:
+   - Lineage data model
+   - Lineage capture implementation
+   - Lineage query APIs
+   - Lineage UI components
+
+2. Validation checks:
+   - [ ] Can trace any CDM field back to source
+   - [ ] Can determine all reports impacted by a field issue
+   - [ ] Lineage visualization working correctly
+   - [ ] Impact analysis API returns accurate results
+
+3. Demo scenarios:
+   - Show lineage for a payment amount field from MT103 to regulatory report
+   - Show impact analysis for a data quality issue
+   - Show root cause analysis for a report discrepancy
+
+4. Update tracking:
+   - Update /inventory/master-checklist.md
+   - Update /inventory/lineage-checklist.md
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 4: DATA QUALITY FRAMEWORK
+
+### Duration: After Phase 3 approval
+### Checkpoint: 🛑 STOP - User approval required before Phase 5
+
+---
+
+### 4.1 Data Quality Rules Engine
+TASK: Implement comprehensive data quality framework
+OUTPUT: /src/backend/quality/
+RULE CATEGORIES:
+
+Completeness - Required field validation
+Accuracy - Value range and format validation
+Consistency - Cross-field validation
+Timeliness - SLA compliance
+Uniqueness - Duplicate detection
+Referential Integrity - Relationship validation
+
+RULE DEFINITION SCHEMA:
+yaml# Example: /src/backend/quality/rules/payment_rules.yaml
+rules:
+  - rule_id: "PAY_COMP_001"
+    name: "Payment Amount Required"
+    category: "COMPLETENESS"
+    severity: "CRITICAL"
+    description: "Payment must have an instructed amount"
+    entity: "cdm.payment"
+    condition: "instructedAmount.value IS NOT NULL AND instructedAmount.value > 0"
+    error_message: "Payment amount is missing or invalid"
+    
+  - rule_id: "PAY_ACC_001"
+    name: "Valid Currency Code"
+    category: "ACCURACY"
+    severity: "HIGH"
+    description: "Currency must be valid ISO 4217 code"
+    entity: "cdm.payment"
+    condition: "instructedAmount.currency IN (SELECT code FROM reference.iso_currencies)"
+    error_message: "Invalid currency code: {instructedAmount.currency}"
+    
+  - rule_id: "PAY_CON_001"
+    name: "Debtor Creditor Different"
+    category: "CONSISTENCY"
+    severity: "HIGH"
+    description: "Debtor and creditor must be different parties"
+    entity: "cdm.payment"
+    condition: "debtor.partyId != creditor.partyId"
+    error_message: "Debtor and creditor are the same party"
+    
+  - rule_id: "PAY_REF_001"
+    name: "Valid Debtor Account"
+    category: "REFERENTIAL_INTEGRITY"
+    severity: "HIGH"
+    description: "Debtor account must exist"
+    entity: "cdm.payment"
+    condition: "EXISTS (SELECT 1 FROM cdm.account a WHERE a.accountId = debtorAccount.accountId)"
+    error_message: "Debtor account not found: {debtorAccount.accountId}"
+RULE ENGINE IMPLEMENTATION:
+pythonclass DataQualityEngine:
+    """Execute data quality rules against CDM records"""
+    
+    def __init__(self):
+        self.rule_registry = RuleRegistry()
+        self.metrics_collector = DQMetricsCollector()
+        self.lineage_service = LineageQueryService()
+    
+    def validate(
+        self,
+        record: CDMRecord,
+        rule_set: Optional[str] = None
+    ) -> DataQualityResult:
+        """Validate a record against applicable rules"""
+        rules = self.rule_registry.get_rules(
+            entity=record.entity_type,
+            rule_set=rule_set
+        )
+        
+        results = []
+        for rule in rules:
+            result = self._execute_rule(rule, record)
+            results.append(result)
+            self.metrics_collector.record(rule, result)
+        
+        # Calculate overall result
+        passed = all(r.passed or r.severity != "CRITICAL" for r in results)
+        
+        return DataQualityResult(
+            record_id=record.id,
+            passed=passed,
+            rule_results=results,
+            timestamp=datetime.utcnow()
+        )
+    
+    def validate_with_impact(
+        self,
+        record: CDMRecord,
+        rule_set: Optional[str] = None
+    ) -> DataQualityResultWithImpact:
+        """Validate and include impact analysis for failures"""
+        result = self.validate(record, rule_set)
+        
+        if not result.passed:
+            # Get impacted consumers for failed fields
+            failed_fields = [r.field for r in result.rule_results if not r.passed]
+            impact = self.lineage_service.get_bulk_impact(failed_fields)
+            
+            return DataQualityResultWithImpact(
+                **result.__dict__,
+                impacted_reports=impact.impacted_reports,
+                impacted_feeds=impact.impacted_feeds,
+                impacted_apis=impact.impacted_apis,
+                blast_radius=impact.total_impact_count
+            )
+        
+        return DataQualityResultWithImpact(**result.__dict__)
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Rule definition schema finalized
+- [ ] Rule registry implemented
+- [ ] Rule engine implemented
+- [ ] Rules defined for all CDM entities
+- [ ] Impact analysis integration complete
+- [ ] Metrics collection integrated
+- [ ] Unit tests for rule engine
+```
+
+---
+
+### 4.2 Data Quality Metrics Repository
+TASK: Implement DQ metrics collection and storage
+OUTPUT: /src/backend/quality/metrics/
+METRICS TO CAPTURE:
+
+Inbound Processing Metrics
+
+Feed-level: records received, parsed, failed, duration
+Message-level: parse success/failure by type
+Source system performance
+
+
+Quality Rule Metrics
+
+Rule execution counts
+Pass/fail rates by rule
+Pass/fail rates by entity
+Trend data over time
+
+
+Outbound Metrics
+
+File generation stats
+API call success/failure
+Query performance
+
+
+
+METRICS SCHEMA:
+python@dataclass
+class InboundMetric:
+    batch_id: str
+    source_system: str
+    source_entity: str
+    records_received: int
+    records_parsed: int
+    records_failed: int
+    start_time: datetime
+    end_time: datetime
+    duration_seconds: float
+
+@dataclass
+class QualityMetric:
+    rule_id: str
+    entity_type: str
+    execution_time: datetime
+    records_evaluated: int
+    records_passed: int
+    records_failed: int
+    pass_rate: float
+
+@dataclass
+class OutboundMetric:
+    output_id: str
+    output_type: str  # FILE, API, QUERY
+    consumer_name: str
+    records_output: int
+    start_time: datetime
+    end_time: datetime
+    duration_seconds: float
+    status: str
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Metrics schemas defined
+- [ ] Metrics collector implemented
+- [ ] Metrics storage implemented
+- [ ] Metrics APIs implemented
+- [ ] Metrics dashboard components created
+- [ ] Trend analysis queries implemented
+```
+
+---
+
+### 4.3 Phase 4 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 5:
+
+1. Present to user for review:
+   - Data quality rule definitions
+   - Rule engine implementation
+   - Metrics repository
+   - DQ-Lineage integration
+
+2. Validation checks:
+   - [ ] All CDM entities have quality rules
+   - [ ] Rule failures trigger impact analysis
+   - [ ] Metrics are being collected correctly
+   - [ ] DQ dashboard shows accurate data
+
+3. Update tracking:
+   - Update /inventory/master-checklist.md
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 5: REGULATORY REPORTING (DSL & REPORTS)
+
+### Duration: After Phase 4 approval
+### Checkpoint: 🛑 STOP - User approval required before Phase 6
+
+---
+
+### 5.1 Domain-Specific Language Design
+```
+TASK: Design and implement DSL for regulatory reporting
+
+OUTPUT: /dsl/
+
+DSL DESIGN (Based on ISDA DRR research):
+
+SYNTAX SPECIFICATION:
+```
+REPORT <ReportName>
+  VERSION <version>
+  JURISDICTION <jurisdiction>
+  REGULATOR <regulator>
+  FREQUENCY <frequency>
+  FORMAT <output_format>
+
+DATA_SOURCE
+  PRIMARY <cdm_entity>
+  [JOIN <cdm_entity> ON <condition>]*
+
+ELIGIBILITY
+  <eligibility_rules>
+
+FIELDS
+  FIELD <field_name>
+    SOURCE <cdm_path> [, <cdm_path>]*
+    [TRANSFORM <expression>]
+    [FORMAT <format_spec>]
+    [VALIDATE <validation_rule>]
+    [CONDITIONAL <condition>]
+
+VALIDATIONS
+  [VALIDATION <rule>]*
+
+OUTPUT
+  FORMAT <format_type>
+  TEMPLATE <template_ref>
+```
+
+EXAMPLE DSL:
+```
+REPORT CFTC_Part43_RealTime
+  VERSION "1.0"
+  JURISDICTION "US"
+  REGULATOR "CFTC"
+  FREQUENCY "REAL_TIME"
+  FORMAT "XML"
+
+DATA_SOURCE
+  PRIMARY cdm.payment
+  JOIN cdm.party AS debtor ON debtor.partyId = payment.debtorId
+  JOIN cdm.party AS creditor ON creditor.partyId = payment.creditorId
+
+ELIGIBILITY
+  payment.paymentType IN ('CREDIT_TRANSFER', 'DIRECT_DEBIT')
+  AND payment.instructedAmount.value >= 50000
+  AND payment.jurisdiction = 'US'
+  AND debtor.partyType = 'FINANCIAL_INSTITUTION'
+
+FIELDS
+  FIELD uniqueTransactionIdentifier
+    SOURCE payment.paymentIdentification.uetr
+    VALIDATE NOT_NULL
+    
+  FIELD executionTimestamp
+    SOURCE payment.creationDateTime
+    FORMAT "yyyy-MM-dd'T'HH:mm:ss'Z'"
+    
+  FIELD notionalAmount
+    SOURCE payment.instructedAmount.value
+    TRANSFORM ROUND(2)
+    FORMAT "DECIMAL(18,2)"
+    
+  FIELD notionalCurrency
+    SOURCE payment.instructedAmount.currency
+    VALIDATE IN(ISO_4217_CODES)
+    
+  FIELD reportingPartyId
+    SOURCE debtor.partyIdentification.lei
+    VALIDATE LEI_FORMAT
+    
+  FIELD counterpartyId
+    SOURCE creditor.partyIdentification.lei
+    TRANSFORM COALESCE(creditor.lei, 'UNKNOWN')
+
+VALIDATIONS
+  uniqueTransactionIdentifier IS_UNIQUE
+  notionalAmount > 0
+  executionTimestamp <= NOW()
+
+OUTPUT
+  FORMAT XML
+  TEMPLATE "cftc_part43_template.xml"
+DSL COMPILER:
+Location: /dsl/compiler/
+pythonclass DSLCompiler:
+    """Compile DSL to executable report definition"""
+    
+    def compile(self, dsl_text: str) -> CompiledReport:
+        # Parse DSL
+        ast = self.parser.parse(dsl_text)
+        
+        # Validate references
+        self._validate_cdm_references(ast)
+        
+        # Extract lineage
+        lineage = self._extract_lineage(ast)
+        
+        # Register lineage with graph
+        self.lineage_service.register_consumer(
+            consumer_type="REGULATORY_REPORT",
+            consumer_name=ast.report_name,
+            fields=lineage
+        )
+        
+        # Generate executable
+        return CompiledReport(
+            name=ast.report_name,
+            version=ast.version,
+            data_query=self._generate_query(ast),
+            eligibility_filter=self._compile_eligibility(ast),
+            field_transformers=self._compile_transformers(ast),
+            validators=self._compile_validators(ast),
+            output_generator=self._compile_output(ast),
+            lineage=lineage
+        )
+DSL RUNTIME:
+Location: /dsl/runtime/
+pythonclass DSLRuntime:
+    """Execute compiled report definitions"""
+    
+    def execute(
+        self,
+        report: CompiledReport,
+        parameters: Dict[str, Any]
+    ) -> ReportOutput:
+        # Fetch data
+        data = self.data_fetcher.fetch(report.data_query, parameters)
+        
+        # Apply eligibility
+        eligible_records = self.eligibility_service.filter(
+            data,
+            report.eligibility_filter
+        )
+        
+        # Transform fields
+        transformed = self.transformer.transform(
+            eligible_records,
+            report.field_transformers
+        )
+        
+        # Validate
+        validation_result = self.validator.validate(
+            transformed,
+            report.validators
+        )
+        
+        # Generate output
+        output = self.output_generator.generate(
+            transformed,
+            report.output_generator
+        )
+        
+        return ReportOutput(
+            report_name=report.name,
+            records_processed=len(data),
+            records_eligible=len(eligible_records),
+            validation_result=validation_result,
+            output=output
+        )
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] DSL grammar specification complete
+- [ ] DSL parser implemented
+- [ ] DSL compiler implemented
+- [ ] Eligibility service implemented
+- [ ] Field transformer implemented
+- [ ] Validator implemented
+- [ ] Output generator implemented
+- [ ] Lineage extraction implemented
+- [ ] DSL documentation created
+- [ ] Unit tests for compiler
+- [ ] Integration tests for runtime
+```
+
+---
+
+### 5.2 Regulatory Reports Implementation
+```
+TASK: Implement ALL regulatory reports from inventory
+
+OUTPUT: /src/backend/regulatory/reports/
+
+⚠️ CRITICAL: Every report from /docs/research/regulatory-reports-inventory.md 
+must be implemented. Track progress in /inventory/reports-checklist.md
+
+FOR EACH REPORT:
+1. Create DSL definition file
+2. Create output template
+3. Implement any custom transformations
+4. Create test data
+5. Create validation tests
+6. Update checklist
+
+REPORT IMPLEMENTATION TRACKING:
+/inventory/reports-checklist.md
+
+## US Reports
+| Report | DSL Created | Template | Tests | Status |
+|--------|-------------|----------|-------|--------|
+| CFTC Part 43 | [ ] | [ ] | [ ] | Not Started |
+| CFTC Part 45 | [ ] | [ ] | [ ] | Not Started |
+| SEC CAT | [ ] | [ ] | [ ] | Not Started |
+| FinCEN CTR | [ ] | [ ] | [ ] | Not Started |
+| FinCEN SAR | [ ] | [ ] | [ ] | Not Started |
+| [Continue for ALL US reports] |
+
+## EU Reports
+| Report | DSL Created | Template | Tests | Status |
+|--------|-------------|----------|-------|--------|
+| EMIR Trade Reporting | [ ] | [ ] | [ ] | Not Started |
+| SFTR | [ ] | [ ] | [ ] | Not Started |
+| MiFID II | [ ] | [ ] | [ ] | Not Started |
+| [Continue for ALL EU reports] |
+
+## UK Reports
+| Report | DSL Created | Template | Tests | Status |
+|--------|-------------|----------|-------|--------|
+| EMIR UK | [ ] | [ ] | [ ] | Not Started |
+| [Continue for ALL UK reports] |
+
+## APAC Reports
+| Report | DSL Created | Template | Tests | Status |
+|--------|-------------|----------|-------|--------|
+| [Continue for ALL APAC reports] |
+
+## Other Jurisdictions
+| Report | DSL Created | Template | Tests | Status |
+|--------|-------------|----------|-------|--------|
+| [Continue for ALL other reports] |
+
+DIRECTORY STRUCTURE:
+/src/backend/regulatory/reports/
+├── us/
+│   ├── cftc/
+│   │   ├── part43.dsl
+│   │   ├── part43_template.xml
+│   │   ├── part45.dsl
+│   │   └── part45_template.xml
+│   ├── sec/
+│   ├── fincen/
+│   └── fed/
+├── eu/
+│   ├── emir/
+│   ├── sftr/
+│   └── mifid/
+├── uk/
+├── apac/
+└── other/
+
+DELIVERABLE CHECKLIST:
+- [ ] All US reports implemented
+- [ ] All EU reports implemented
+- [ ] All UK reports implemented
+- [ ] All APAC reports implemented
+- [ ] All other jurisdiction reports implemented
+- [ ] All reports have DSL definitions
+- [ ] All reports have output templates
+- [ ] All reports have test data
+- [ ] All reports have validation tests
+- [ ] /inventory/reports-checklist.md 100% complete
+```
+
+---
+
+### 5.3 Phase 5 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 6:
+
+1. Present to user for review:
+   - DSL specification and examples
+   - Compiled report execution demo
+   - Report implementation progress (checklist)
+   - Lineage integration verification
+
+2. Validation checks:
+   - [ ] DSL compiles all report definitions
+   - [ ] Eligibility service correctly filters data
+   - [ ] Output matches regulatory format requirements
+   - [ ] Lineage registered for all report fields
+   - [ ] Reports checklist shows ALL reports implemented
+
+3. Update tracking:
+   - Update /inventory/master-checklist.md
+   - Update /inventory/reports-checklist.md
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 6: DATA PROVISIONING
+
+### Duration: After Phase 5 approval
+### Checkpoint: 🛑 STOP - User approval required before Phase 7
+
+---
+
+### 6.1 Provisioning Engine
+TASK: Implement data provisioning framework
+OUTPUT: /src/backend/provisioning/
+PROVISIONING MODES:
+
+Direct Query - Real-time SQL/API access
+Batch Feeds - Scheduled file generation
+API Provisioning - RESTful data access
+
+PROVISIONING REQUEST SCHEMA:
+python@dataclass
+class ProvisioningRequest:
+    request_id: str
+    requester_id: str
+    request_name: str
+    description: str
+    
+    # Data selection
+    entities: List[str]  # CDM entities
+    fields: List[FieldSelection]
+    filters: List[FilterCriteria]
+    
+    # Output configuration
+    output_type: OutputType  # FILE, API, QUERY
+    output_format: str  # CSV, JSON, PARQUET, etc.
+    output_name: str
+    
+    # Scheduling
+    frequency: str  # ONCE, DAILY, WEEKLY, etc.
+    schedule: Optional[str]  # Cron expression
+    
+    # Governance
+    status: RequestStatus
+    approved_by: Optional[str]
+    approved_at: Optional[datetime]
+
+@dataclass
+class FieldSelection:
+    entity: str
+    field_path: str
+    alias: Optional[str]
+    transformation: Optional[str]
+
+@dataclass  
+class FilterCriteria:
+    field_path: str
+    operator: str  # EQ, NE, GT, LT, IN, BETWEEN, etc.
+    value: Any
+GENERIC QUERY STORAGE FORMAT:
+json{
+  "version": "1.0",
+  "request_id": "uuid",
+  "query_definition": {
+    "select": [
+      {"entity": "cdm.payment", "field": "paymentIdentification", "alias": "payment_id"},
+      {"entity": "cdm.payment", "field": "instructedAmount.value", "alias": "amount"},
+      {"entity": "cdm.party", "field": "name", "alias": "debtor_name", "join": "debtor"}
+    ],
+    "from": {
+      "primary": "cdm.payment",
+      "joins": [
+        {"entity": "cdm.party", "alias": "debtor", "on": "payment.debtorId = debtor.partyId"}
+      ]
+    },
+    "where": [
+      {"field": "payment.creationDateTime", "op": ">=", "value": "${start_date}"},
+      {"field": "payment.jurisdiction", "op": "IN", "value": ["US", "UK"]}
+    ],
+    "parameters": {
+      "start_date": {"type": "DATE", "required": true}
+    }
+  },
+  "output": {
+    "type": "FILE",
+    "format": "CSV",
+    "name": "daily_payments_${date}.csv",
+    "compression": "GZIP"
+  },
+  "schedule": {
+    "frequency": "DAILY",
+    "cron": "0 6 * * *",
+    "timezone": "UTC"
+  }
+}
+PROVISIONING ENGINE:
+pythonclass ProvisioningEngine:
+    """Execute provisioning requests"""
+    
+    def __init__(self):
+        self.query_generator = QueryGenerator()
+        self.executor = QueryExecutor()
+        self.output_writer = OutputWriterFactory()
+        self.lineage_service = LineageService()
+    
+    def provision(
+        self,
+        request: ProvisioningRequest,
+        parameters: Dict[str, Any]
+    ) -> ProvisioningResult:
+        # Generate query from request
+        query = self.query_generator.generate(request.query_definition)
+        
+        # Execute query
+        data = self.executor.execute(query, parameters)
+        
+        # Write output
+        output_path = self.output_writer.write(
+            data,
+            request.output
+        )
+        
+        # Register lineage
+        self.lineage_service.register_consumer(
+            consumer_type="PROVISIONING_REQUEST",
+            consumer_name=request.request_name,
+            fields=[f.field_path for f in request.fields]
+        )
+        
+        return ProvisioningResult(
+            request_id=request.request_id,
+            output_path=output_path,
+            records_provisioned=len(data),
+            timestamp=datetime.utcnow()
+        )
+
+# Celery task for background processing
+@celery_app.task(bind=True, max_retries=3)
+def execute_provisioning_task(self, request_id: str, parameters: Dict):
+    """Background task for provisioning execution"""
+    try:
+        request = ProvisioningRequestRepository.get(request_id)
+        engine = ProvisioningEngine()
+        result = engine.provision(request, parameters)
+        
+        # Update request status
+        ProvisioningRequestRepository.update_status(
+            request_id,
+            status="COMPLETED",
+            result=result
+        )
+    except Exception as e:
+        self.retry(exc=e, countdown=60)
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Provisioning request schema implemented
+- [ ] Generic query storage format implemented
+- [ ] Query generator implemented
+- [ ] Output writers implemented (all formats)
+- [ ] Celery background processing implemented
+- [ ] Lineage registration integrated
+- [ ] Unit tests for engine
+```
+
+---
+
+### 6.2 Self-Service Portal
+```
+TASK: Implement self-service data provisioning UI
+
+OUTPUT: /src/frontend/
+
+---
+
+### 6.2.1 Data Owner View
+
+Location: /src/frontend/data-owner/
+
+COMPONENTS:
+1. CatalogManagement
+   - View/edit CDM entity descriptions
+   - Manage field descriptions
+   - Set data classification
+   - Configure access policies
+
+2. DataQualityDashboard
+   - Quality metrics by entity
+   - Rule execution results
+   - Trend charts
+   - Alert configuration
+
+3. ApprovalWorkflow
+   - Pending approval requests
+   - Request details with lineage
+   - Approve/reject actions
+   - Approval history
+
+4. ProvisioningMetrics
+   - Files generated (with stats)
+   - API usage metrics
+   - Consumer activity
+   - Performance trends
+
+---
+
+### 6.2.2 Data Consumer View
+
+Location: /src/frontend/data-consumer/
+
+COMPONENTS:
+1. CatalogBrowser
+   - Browse CDM entities
+   - View field descriptions
+   - View data lineage
+   - View data quality scores
+
+2. EntitySelector
+   - Select entities for provisioning
+   - View relationships
+   - Field selection with checkboxes
+   - Preview selected structure
+
+3. FilterBuilder
+   - Visual filter construction
+   - Support for: jurisdiction, message type, date range, etc.
+   - Filter preview with sample data
+
+4. ProvisioningRequestForm
+   - Selected fields summary
+   - Output format selection
+   - File naming configuration
+   - Frequency selection
+   - Submit for approval
+
+5. RequestTracker
+   - View submitted requests
+   - Track approval status
+   - View generated files
+   - Download outputs
+
+---
+
+### 6.2.3 Admin View
+
+Location: /src/frontend/admin/
+
+COMPONENTS:
+1. JobMonitoring
+   - Celery queue status
+   - Running/pending/failed jobs
+   - Job execution history
+   - Manual job triggers
+
+2. SystemMetrics
+   - Overall platform health
+   - Processing throughput
+   - Storage utilization
+   - API performance
+
+3. UserActivity
+   - Active users
+   - Request patterns
+   - Resource usage by user
+
+4. FileManagement
+   - Generated files inventory
+   - Storage management
+   - Cleanup policies
+   - File access logs
+
+DELIVERABLE CHECKLIST:
+- [ ] Data Owner view implemented
+- [ ] Data Consumer view implemented
+- [ ] Admin view implemented
+- [ ] Catalog browser working
+- [ ] Filter builder working
+- [ ] Provisioning request workflow working
+- [ ] Approval workflow working
+- [ ] Job monitoring working
+- [ ] Integration tests complete
+```
+
+---
+
+### 6.3 Phase 6 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 7:
+
+1. Present to user for review:
+   - Provisioning engine demo
+   - Self-service portal walkthrough
+   - Background job processing
+   - Lineage integration for provisioned data
+
+2. Validation checks:
+   - [ ] End-to-end provisioning workflow working
+   - [ ] Approval workflow working
+   - [ ] Background processing (Celery) working
+   - [ ] File generation working
+   - [ ] Lineage registered for all provisioning requests
+
+3. Update tracking:
+   - Update /inventory/master-checklist.md
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 7: CATALOG INTEGRATION
+
+### Duration: After Phase 6 approval
+### Checkpoint: 🛑 STOP - User approval required before Phase 8
+
+---
+
+### 7.1 Unity Catalog Integration
+TASK: Implement Databricks Unity Catalog integration
+OUTPUT: /src/backend/catalog/unity/
+FEATURES:
+
+Register CDM schemas in Unity Catalog
+Manage table metadata
+Configure access controls
+Track data lineage
+Integrate with Databricks governance
+
+IMPLEMENTATION:
+pythonclass UnityCatalogService:
+    """Manage Unity Catalog integration"""
+    
+    def register_cdm_schema(self, schema: CDMSchema) -> None:
+        """Register CDM schema in Unity Catalog"""
+        pass
+    
+    def sync_metadata(self) -> None:
+        """Sync metadata from CDM to Unity Catalog"""
+        pass
+    
+    def configure_access(self, entity: str, policy: AccessPolicy) -> None:
+        """Configure access controls"""
+        pass
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Unity Catalog service implemented
+- [ ] CDM schema registration working
+- [ ] Metadata sync working
+- [ ] Access control configuration working
+```
+
+---
+
+### 7.2 Collibra Integration
+TASK: Implement Collibra catalog synchronization
+OUTPUT: /src/backend/catalog/collibra/
+SYNC REQUIREMENTS:
+
+CDM data elements → Collibra assets
+Field descriptions → Collibra attributes
+Data quality metrics → Collibra quality scores
+Lineage relationships → Collibra lineage
+
+IMPLEMENTATION:
+pythonclass CollibraSyncService:
+    """Sync CDM metadata with Collibra"""
+    
+    def sync_cdm_elements(self) -> SyncResult:
+        """Sync all CDM elements to Collibra"""
+        pass
+    
+    def sync_descriptions(self) -> SyncResult:
+        """Sync element descriptions"""
+        pass
+    
+    def sync_quality_metrics(self) -> SyncResult:
+        """Sync data quality metrics"""
+        pass
+    
+    def sync_lineage(self) -> SyncResult:
+        """Sync lineage relationships"""
+        pass
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Collibra API client implemented
+- [ ] CDM element sync working
+- [ ] Description sync working
+- [ ] Quality metrics sync working
+- [ ] Lineage sync working
+- [ ] Bi-directional sync tested
+```
+
+---
+
+### 7.3 Phase 7 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 8:
+
+1. Present to user for review:
+   - Unity Catalog integration
+   - Collibra sync functionality
+   - Metadata consistency verification
+
+2. Validation checks:
+   - [ ] CDM schemas in Unity Catalog
+   - [ ] Collibra assets created
+   - [ ] Quality metrics synced
+   - [ ] Lineage visible in both catalogs
+
+3. Update tracking:
+   - Update /inventory/master-checklist.md
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 8: FRAUD DETECTION
+
+### Duration: After Phase 7 approval
+### Checkpoint: 🛑 STOP - User approval required before Phase 9
+
+---
+
+### 8.1 Graph-Based Fraud Detection
+TASK: Implement fraud detection using Neo4J
+OUTPUT: /src/backend/fraud/
+USE CASES:
+
+Fraud ring detection
+Unusual transaction pattern identification
+Network analysis
+Behavioral anomaly detection
+
+GRAPH PATTERNS:
+Location: /src/backend/fraud/patterns/
+
+Ring Detection
+
+cypher// Find circular payment patterns
+MATCH path = (p1:Party)-[:SENT_PAYMENT*3..10]->(p1)
+WHERE ALL(r IN relationships(path) WHERE r.amount > 10000)
+RETURN path, 
+       reduce(total = 0, r IN relationships(path) | total + r.amount) AS total_amount
+ORDER BY total_amount DESC
+
+Velocity Analysis
+
+cypher// High velocity payments from single party
+MATCH (p:Party)-[r:SENT_PAYMENT]->(other:Party)
+WHERE r.timestamp > datetime() - duration('PT1H')
+WITH p, count(r) as payment_count, sum(r.amount) as total_amount
+WHERE payment_count > 50 OR total_amount > 1000000
+RETURN p, payment_count, total_amount
+
+Structuring Detection
+
+cypher// Payments just under reporting threshold
+MATCH (p:Party)-[r:SENT_PAYMENT]->()
+WHERE r.amount >= 9000 AND r.amount < 10000
+  AND r.timestamp > datetime() - duration('P1D')
+WITH p, count(r) as structured_count
+WHERE structured_count > 3
+RETURN p, structured_count
+FRAUD DETECTION SERVICE:
+pythonclass FraudDetectionService:
+    """Execute fraud detection patterns"""
+    
+    def __init__(self):
+        self.graph = Neo4JClient()
+        self.ml_model = FraudMLModel()
+        self.alert_service = AlertService()
+    
+    def detect_rings(self, min_size: int = 3, max_size: int = 10) -> List[FraudRing]:
+        """Detect circular payment patterns"""
+        pass
+    
+    def analyze_velocity(self, party_id: str, window: timedelta) -> VelocityAnalysis:
+        """Analyze payment velocity for a party"""
+        pass
+    
+    def detect_structuring(self, threshold: Decimal) -> List[StructuringAlert]:
+        """Detect potential structuring behavior"""
+        pass
+    
+    def score_transaction(self, payment: Payment) -> FraudScore:
+        """Real-time fraud scoring for a transaction"""
+        pass
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Neo4J fraud patterns implemented
+- [ ] Ring detection working
+- [ ] Velocity analysis working
+- [ ] Structuring detection working
+- [ ] Real-time scoring implemented
+- [ ] Alert generation working
+- [ ] Fraud detection dashboard
+```
+
+---
+
+### 8.2 Phase 8 Checkpoint
+```
+🛑 MANDATORY CHECKPOINT
+
+BEFORE PROCEEDING TO PHASE 9:
+
+1. Present to user for review:
+   - Fraud detection patterns
+   - Detection results demo
+   - Alert generation
+   - Dashboard visualization
+
+2. Validation checks:
+   - [ ] All fraud patterns executing correctly
+   - [ ] Real-time scoring working
+   - [ ] Alerts being generated
+   - [ ] Dashboard showing results
+
+3. Update tracking:
+   - Update /inventory/master-checklist.md
+
+⏸️ WAIT FOR USER APPROVAL BEFORE CONTINUING
+```
+
+---
+
+## PHASE 9: TESTING & VALIDATION
+
+### Duration: After Phase 8 approval
+### Final Review Required
+
+---
+
+### 9.1 Comprehensive Testing
+TASK: Implement complete test coverage
+OUTPUT: /tests/
+TEST CATEGORIES:
+
+Unit Tests (/tests/unit/)
+
+All parsers
+All transformations
+All quality rules
+DSL compiler
+Lineage services
+Provisioning engine
+
+
+Integration Tests (/tests/integration/)
+
+End-to-end ingestion flows
+Medallion zone transitions
+Lineage capture verification
+API endpoint tests
+Database operations
+
+
+E2E Regulatory Tests (/tests/regulatory/)
+
+Test data generation for each report
+Full pipeline execution
+Output validation against regulatory specs
+Reconciliation testing
+
+
+Performance Tests (/tests/performance/)
+
+50M message/day load testing
+Concurrent user simulation
+Query performance benchmarks
+Lineage query performance
+
+
+
+TEST DATA GENERATION:
+pythonclass TestDataGenerator:
+    """Generate test data for all scenarios"""
+    
+    def generate_payment_test_data(
+        self,
+        count: int,
+        message_type: str,
+        scenario: str
+    ) -> List[Dict]:
+        """Generate test payments for specific scenarios"""
+        pass
+    
+    def generate_regulatory_test_data(
+        self,
+        report_name: str,
+        record_count: int
+    ) -> Tuple[List[Dict], ExpectedOutput]:
+        """Generate test data with expected regulatory output"""
+        pass
+```
+
+DELIVERABLE CHECKLIST:
+- [ ] Unit tests complete (>80% coverage)
+- [ ] Integration tests complete
+- [ ] E2E tests for ALL regulatory reports
+- [ ] Performance tests passing (50M/day)
+- [ ] Test documentation complete
+- [ ] CI/CD pipeline configured
+```
+
+---
+
+### 9.2 Final Validation
+```
+TASK: Complete system validation
+
+VALIDATION CHECKLIST:
+
+FUNCTIONAL VALIDATION:
+- [ ] All payment standards parseable
+- [ ] All CDM entities populated correctly
+- [ ] All regulatory reports generating correctly
+- [ ] All lineage traceable end-to-end
+- [ ] All data quality rules executing
+- [ ] All provisioning scenarios working
+- [ ] All fraud patterns detecting correctly
+
+NON-FUNCTIONAL VALIDATION:
+- [ ] 50M messages/day throughput achieved
+- [ ] Lineage queries respond in <2 seconds
+- [ ] Report generation completes within SLAs
+- [ ] System recovers from failures correctly
+- [ ] Security requirements met
+
+DOCUMENTATION VALIDATION:
+- [ ] API documentation complete
+- [ ] User guides complete
+- [ ] Operations guide complete
+- [ ] Deployment guide complete
+```
+
+---
+
+## INVENTORY & TRACKING
+
+### Master Checklist Location: /inventory/master-checklist.md
+```markdown
+# Payments CDM Platform - Implementation Progress
+
+## Overall Status
+| Phase | Status | Completion % | Notes |
+|-------|--------|--------------|-------|
+| Phase 0: Research | [ ] | 0% | |
+| Phase 1: CDM Design | [ ] | 0% | |
+| Phase 2: Ingestion | [ ] | 0% | |
+| Phase 3: Lineage | [ ] | 0% | |
+| Phase 4: Data Quality | [ ] | 0% | |
+| Phase 5: Regulatory | [ ] | 0% | |
+| Phase 6: Provisioning | [ ] | 0% | |
+| Phase 7: Catalog | [ ] | 0% | |
+| Phase 8: Fraud | [ ] | 0% | |
+| Phase 9: Testing | [ ] | 0% | |
+
+## Detailed Tracking
+[Link to detailed checklists for each phase]
+
+## Daily Progress Log
+| Date | Phase | Work Completed | Blockers |
+|------|-------|----------------|----------|
+| | | | |
+
+## Artifacts Created
+| Artifact | Location | Status |
+|----------|----------|--------|
+| | | |
+```
+
+---
+
+## FINAL NOTES
+```
+CRITICAL SUCCESS FACTORS:
+
+1. COMPLETENESS
+   - ALL payment standards implemented
+   - ALL regulatory reports implemented
+   - NO omissions allowed
+
+2. LINEAGE
+   - Every field traceable from source to consumer
+   - Impact analysis available for any field
+   - Root cause analysis available for any output
+
+3. SCALABILITY
+   - 50M messages/day capacity
+   - Sub-second lineage queries
+   - Horizontal scaling capability
+
+4. CONFIGURABILITY
+   - Multi-client deployment ready
+   - Feature flags for customization
+   - Client-specific configuration support
+
+5. DOCUMENTATION
+   - Complete API documentation
+   - User guides for all personas
+   - Operations and deployment guides
+
+REMEMBER:
+- Research FIRST, implement SECOND
+- Reuse existing artifacts where possible
+- Update checklists after EVERY session
+- Report progress with FACTS only
+- STOP at checkpoints for approval
+```

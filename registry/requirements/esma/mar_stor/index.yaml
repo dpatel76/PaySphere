@@ -1,0 +1,117 @@
+# ESMA MAR Suspicious Transaction and Order Report (STOR) - Requirement Index
+# Report Type: MAR_STOR
+# Regulator: ESMA
+# Jurisdiction: EU
+# Total Requirements: 98
+
+report_metadata:
+  report_type: "MAR_STOR"
+  report_name: "Suspicious Transaction and Order Report"
+  regulator: "ESMA"
+  jurisdiction: "EU"
+  regulation: "Market Abuse Regulation Article 16"
+  effective_date: "2016-07-03"
+  last_updated: "2024-12-21"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "Without delay"
+  output_format: "XML"
+  submission_method: "National Competent Authority Portal"
+
+requirement_summary:
+  total: 98
+  by_category:
+    ELIGIBILITY: 6
+    FIELD: 75
+    VALIDATION: 10
+    FORMAT: 4
+    TIMING: 2
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 85
+    RECOMMENDED: 10
+    OPTIONAL: 3
+
+requirements:
+  eligibility:
+    - id: "REQ-STOR-001"
+      title: "Reasonable Suspicion of Market Abuse"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Insider dealing, market manipulation, unlawful disclosure"
+
+    - id: "REQ-STOR-002"
+      title: "Person Professionally Arranging Transactions"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+  fields_suspicious_activity:
+    - id: "REQ-STOR-020"
+      title: "Description of Suspicious Activity"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "narrative"
+
+    - id: "REQ-STOR-021"
+      title: "Reasons for Suspicion"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "suspicion_indicators"
+
+    - id: "REQ-STOR-022"
+      title: "Financial Instruments Involved"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  fields_transaction:
+    - id: "REQ-STOR-030"
+      title: "Transaction Date Time"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+
+    - id: "REQ-STOR-031"
+      title: "Transaction Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_amount"
+
+  fields_parties:
+    - id: "REQ-STOR-040"
+      title: "Person Placing Order"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "name"
+
+    - id: "REQ-STOR-041"
+      title: "Beneficial Owner"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+      cdm_mapping:
+        entity: "Party"
+        field: "beneficial_owner"
+
+  timing:
+    - id: "REQ-STOR-090"
+      title: "Without Delay Filing"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "As soon as practicable after detection"
+
+cdm_coverage:
+  entities_used:
+    - Payment
+    - PaymentInstruction
+    - Party
+    - FinancialInstitution
+    - ComplianceCase
+  coverage_percentage: 100

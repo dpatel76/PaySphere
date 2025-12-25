@@ -1,0 +1,685 @@
+# GPS CDM - RTP Full Mapping
+# Real-Time Payments (The Clearing House)
+#
+# This file defines the complete transformation:
+#   Bronze (raw RTP) → Silver (stg_rtp) → Gold (cdm_payment_instruction)
+
+version: "2.0"
+
+mapping:
+  id: RTP_FULL
+  name: "RTP Real-Time Payment"
+  message_type: "RTP"
+  message_version: "2023"
+  description: |
+    Complete Bronze→Silver→Gold transformation for TCH RTP messages.
+    Based on ISO 20022 pacs.008 for credit transfers.
+
+  # ============================================================================
+  # STAGE 1: BRONZE → SILVER
+  # ============================================================================
+  bronze_to_silver:
+    source:
+      layer: bronze
+      table: raw_payment_messages
+      content_column: raw_content
+      format: XML
+      parser: iso20022
+      namespace: "urn:tch:rtp"
+      filter:
+        message_type: "RTP"
+
+    target:
+      layer: silver
+      table: stg_rtp
+
+    fields:
+      # --- Message Header ---
+      - source: BizMsgIdr
+        target: business_message_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: MsgDefIdr
+        target: message_definition_id
+        type: string
+        max_length: 35
+
+      - source: CreDt
+        target: creation_date
+        type: timestamp
+        required: true
+
+      # --- FI to FI Credit Transfer (pacs.008) ---
+      - source: FIToFICstmrCdtTrf/GrpHdr/MsgId
+        target: message_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/GrpHdr/CreDtTm
+        target: creation_datetime
+        type: timestamp
+        required: true
+
+      - source: FIToFICstmrCdtTrf/GrpHdr/NbOfTxs
+        target: number_of_transactions
+        type: integer
+
+      - source: FIToFICstmrCdtTrf/GrpHdr/SttlmInf/SttlmMtd
+        target: settlement_method
+        type: string
+        max_length: 4
+
+      - source: FIToFICstmrCdtTrf/GrpHdr/SttlmInf/ClrSys/Cd
+        target: clearing_system_code
+        type: string
+        max_length: 5
+
+      # --- Credit Transfer Transaction ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/PmtId/InstrId
+        target: instruction_id
+        type: string
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/PmtId/EndToEndId
+        target: end_to_end_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/PmtId/TxId
+        target: transaction_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/PmtId/UETR
+        target: uetr
+        type: string
+        max_length: 36
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/PmtTpInf/SvcLvl/Cd
+        target: service_level_code
+        type: string
+        max_length: 4
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/PmtTpInf/LclInstrm/Cd
+        target: local_instrument_code
+        type: string
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/PmtTpInf/CtgyPurp/Cd
+        target: category_purpose_code
+        type: string
+        max_length: 4
+
+      # --- Amounts ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/IntrBkSttlmAmt
+        target: interbank_settlement_amount
+        type: decimal
+        precision: 18
+        scale: 2
+        required: true
+        extract: text_content
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/IntrBkSttlmAmt/@Ccy
+        target: interbank_settlement_currency
+        type: string
+        required: true
+        max_length: 3
+        extract: attribute
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/IntrBkSttlmDt
+        target: interbank_settlement_date
+        type: date
+        required: true
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/InstdAmt
+        target: instructed_amount
+        type: decimal
+        precision: 18
+        scale: 2
+        extract: text_content
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/InstdAmt/@Ccy
+        target: instructed_currency
+        type: string
+        max_length: 3
+        extract: attribute
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/ChrgBr
+        target: charge_bearer
+        type: string
+        max_length: 4
+
+      # --- Instructing Agent ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/InstgAgt/FinInstnId/ClrSysMmbId/MmbId
+        target: instructing_agent_rtn
+        type: string
+        max_length: 9
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/InstgAgt/FinInstnId/Nm
+        target: instructing_agent_name
+        type: string
+        max_length: 140
+
+      # --- Instructed Agent ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/InstdAgt/FinInstnId/ClrSysMmbId/MmbId
+        target: instructed_agent_rtn
+        type: string
+        max_length: 9
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/InstdAgt/FinInstnId/Nm
+        target: instructed_agent_name
+        type: string
+        max_length: 140
+
+      # --- Debtor ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm
+        target: debtor_name
+        type: string
+        required: true
+        max_length: 140
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/StrtNm
+        target: debtor_street_name
+        type: string
+        max_length: 70
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/TwnNm
+        target: debtor_town_name
+        type: string
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/CtrySubDvsn
+        target: debtor_state
+        type: string
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/PstCd
+        target: debtor_postal_code
+        type: string
+        max_length: 16
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/Ctry
+        target: debtor_country
+        type: string
+        max_length: 2
+
+      # --- Debtor Account ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/DbtrAcct/Id/Othr/Id
+        target: debtor_account_number
+        type: string
+        max_length: 34
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/DbtrAcct/Tp/Cd
+        target: debtor_account_type
+        type: string
+        max_length: 4
+
+      # --- Debtor Agent ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/DbtrAgt/FinInstnId/ClrSysMmbId/MmbId
+        target: debtor_agent_rtn
+        type: string
+        required: true
+        max_length: 9
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/DbtrAgt/FinInstnId/Nm
+        target: debtor_agent_name
+        type: string
+        max_length: 140
+
+      # --- Creditor Agent ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/ClrSysMmbId/MmbId
+        target: creditor_agent_rtn
+        type: string
+        required: true
+        max_length: 9
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm
+        target: creditor_agent_name
+        type: string
+        max_length: 140
+
+      # --- Creditor ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm
+        target: creditor_name
+        type: string
+        required: true
+        max_length: 140
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/StrtNm
+        target: creditor_street_name
+        type: string
+        max_length: 70
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/TwnNm
+        target: creditor_town_name
+        type: string
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/CtrySubDvsn
+        target: creditor_state
+        type: string
+        max_length: 35
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/PstCd
+        target: creditor_postal_code
+        type: string
+        max_length: 16
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/Ctry
+        target: creditor_country
+        type: string
+        max_length: 2
+
+      # --- Creditor Account ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAcct/Id/Othr/Id
+        target: creditor_account_number
+        type: string
+        max_length: 34
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAcct/Tp/Cd
+        target: creditor_account_type
+        type: string
+        max_length: 4
+
+      # --- Purpose & Remittance ---
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/Purp/Cd
+        target: purpose_code
+        type: string
+        max_length: 4
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/RmtInf/Ustrd
+        target: remittance_unstructured
+        type: string
+        max_length: 140
+
+      - source: FIToFICstmrCdtTrf/CdtTrfTxInf/RmtInf/Strd
+        target: remittance_structured
+        type: json
+        transform:
+          type: xml_to_json
+
+  # ============================================================================
+  # STAGE 2: SILVER → GOLD
+  # ============================================================================
+  silver_to_gold:
+    source:
+      layer: silver
+      table: stg_rtp
+      filter:
+        processing_status: "PENDING"
+
+    target:
+      layer: gold
+      table: cdm_payment_instruction
+      source_message_type: "RTP"
+      source_stg_table: "stg_rtp"
+
+    fields:
+      - source: stg_id
+        target: source_stg_id
+        type: string
+        required: true
+
+      - source: end_to_end_id
+        target: end_to_end_id
+        type: string
+        required: true
+
+      - source: transaction_id
+        target: transaction_id
+        type: string
+
+      - source: uetr
+        target: uetr
+        type: string
+
+      - source: instruction_id
+        target: instruction_id_ext
+        type: string
+
+      - source: message_id
+        target: message_id
+        type: string
+
+      - target: payment_type
+        type: string
+        transform:
+          type: constant
+          value: "INSTANT_CREDIT_TRANSFER"
+
+      - target: scheme_code
+        type: string
+        transform:
+          type: constant
+          value: "RTP"
+
+      - target: direction
+        type: string
+        transform:
+          type: constant
+          value: "OUTBOUND"
+
+      - target: cross_border_flag
+        type: boolean
+        transform:
+          type: constant
+          value: false
+
+      - target: priority
+        type: string
+        transform:
+          type: constant
+          value: "HIGH"
+
+      - source: service_level_code
+        target: service_level
+        type: string
+
+      - source: local_instrument_code
+        target: local_instrument
+        type: string
+
+      - source: category_purpose_code
+        target: category_purpose
+        type: string
+
+      - source: interbank_settlement_amount
+        target: instructed_amount
+        type: decimal
+        required: true
+
+      - source: interbank_settlement_currency
+        target: instructed_currency
+        type: string
+        required: true
+
+      - source: interbank_settlement_amount
+        target: interbank_settlement_amount
+        type: decimal
+
+      - source: interbank_settlement_currency
+        target: interbank_settlement_currency
+        type: string
+
+      - source: creation_datetime
+        target: creation_datetime
+        type: timestamp
+
+      - source: interbank_settlement_date
+        target: value_date
+        type: date
+
+      - source: interbank_settlement_date
+        target: settlement_date
+        type: date
+
+      - source: purpose_code
+        target: purpose
+        type: string
+
+      - source: charge_bearer
+        target: charge_bearer
+        type: string
+
+      - source: remittance_unstructured
+        target: remittance_unstructured
+        type: array
+        transform:
+          type: wrap_array
+
+      - source: remittance_structured
+        target: remittance_structured
+        type: json
+
+      - target: current_status
+        type: string
+        transform:
+          type: constant
+          value: "RECEIVED"
+
+      - source: source_system
+        target: source_system
+        type: string
+
+      - source: interbank_settlement_date
+        target: partition_year
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(YEAR FROM interbank_settlement_date)"
+
+      - source: interbank_settlement_date
+        target: partition_month
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(MONTH FROM interbank_settlement_date)"
+
+      - target: region
+        type: string
+        transform:
+          type: constant
+          value: "US"
+
+    party_mappings:
+      - role: debtor
+        target_table: cdm_party
+        fields:
+          - source: debtor_name
+            target: name
+          - source: debtor_street_name
+            target: street_name
+          - source: debtor_town_name
+            target: town_name
+          - source: debtor_state
+            target: country_sub_division
+          - source: debtor_postal_code
+            target: post_code
+          - source: debtor_country
+            target: country
+
+      - role: creditor
+        target_table: cdm_party
+        fields:
+          - source: creditor_name
+            target: name
+          - source: creditor_street_name
+            target: street_name
+          - source: creditor_town_name
+            target: town_name
+          - source: creditor_state
+            target: country_sub_division
+          - source: creditor_postal_code
+            target: post_code
+          - source: creditor_country
+            target: country
+
+    account_mappings:
+      - role: debtor_account
+        target_table: cdm_account
+        fields:
+          - source: debtor_account_number
+            target: account_number
+          - source: debtor_account_type
+            target: account_type
+
+      - role: creditor_account
+        target_table: cdm_account
+        fields:
+          - source: creditor_account_number
+            target: account_number
+          - source: creditor_account_type
+            target: account_type
+
+    fi_mappings:
+      - role: debtor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: debtor_agent_rtn
+            target: national_clearing_code
+          - source: debtor_agent_name
+            target: institution_name
+          - target: national_clearing_system
+            transform:
+              type: constant
+              value: "USRTP"
+
+      - role: creditor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: creditor_agent_rtn
+            target: national_clearing_code
+          - source: creditor_agent_name
+            target: institution_name
+          - target: national_clearing_system
+            transform:
+              type: constant
+              value: "USRTP"
+
+      - role: instructing_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: instructing_agent_rtn
+            target: national_clearing_code
+          - source: instructing_agent_name
+            target: institution_name
+
+      - role: instructed_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: instructed_agent_rtn
+            target: national_clearing_code
+          - source: instructed_agent_name
+            target: institution_name
+
+  # ============================================================================
+  # VALIDATION RULES
+  # ============================================================================
+  validations:
+    - id: RTP_VAL001
+      stage: silver
+      rule: "end_to_end_id IS NOT NULL AND LENGTH(end_to_end_id) <= 35"
+      severity: ERROR
+      message: "EndToEndId is required (max 35 chars)"
+      error_code: AT01
+      dimension: completeness
+
+    - id: RTP_VAL002
+      stage: silver
+      rule: "transaction_id IS NOT NULL"
+      severity: ERROR
+      message: "Transaction ID is required for RTP"
+      error_code: AT02
+      dimension: completeness
+
+    - id: RTP_VAL003
+      stage: silver
+      rule: "interbank_settlement_amount > 0 AND interbank_settlement_amount <= 1000000"
+      severity: ERROR
+      message: "Amount must be between $0.01 and $1,000,000"
+      error_code: AM01
+      dimension: validity
+
+    - id: RTP_VAL004
+      stage: silver
+      rule: "interbank_settlement_currency = 'USD'"
+      severity: ERROR
+      message: "Currency must be USD for RTP"
+      error_code: AM03
+      dimension: validity
+
+    - id: RTP_VAL005
+      stage: silver
+      rule: "debtor_agent_rtn ~ '^[0-9]{9}$'"
+      severity: ERROR
+      message: "Debtor Agent RTN must be 9 digits"
+      error_code: RC01
+      dimension: accuracy
+
+    - id: RTP_VAL006
+      stage: silver
+      rule: "creditor_agent_rtn ~ '^[0-9]{9}$'"
+      severity: ERROR
+      message: "Creditor Agent RTN must be 9 digits"
+      error_code: RC02
+      dimension: accuracy
+
+    - id: RTP_VAL007
+      stage: silver
+      rule: "debtor_name IS NOT NULL"
+      severity: ERROR
+      message: "Debtor name is required"
+      error_code: BE01
+      dimension: completeness
+
+    - id: RTP_VAL008
+      stage: silver
+      rule: "creditor_name IS NOT NULL"
+      severity: ERROR
+      message: "Creditor name is required"
+      error_code: BE02
+      dimension: completeness
+
+    - id: RTP_VAL009
+      stage: silver
+      rule: "interbank_settlement_date = CURRENT_DATE"
+      severity: WARNING
+      message: "RTP settlement date should be today"
+      error_code: DT01
+      dimension: timeliness
+
+  quality:
+    completeness:
+      - field: end_to_end_id
+        weight: 1.0
+        required: true
+      - field: transaction_id
+        weight: 1.0
+        required: true
+      - field: interbank_settlement_amount
+        weight: 1.0
+        required: true
+      - field: debtor_agent_rtn
+        weight: 1.0
+        required: true
+      - field: creditor_agent_rtn
+        weight: 1.0
+        required: true
+      - field: debtor_name
+        weight: 1.0
+        required: true
+      - field: creditor_name
+        weight: 1.0
+        required: true
+
+    accuracy:
+      - field: debtor_agent_rtn
+        validation: validate_aba_routing
+      - field: creditor_agent_rtn
+        validation: validate_aba_routing
+
+    timeliness:
+      timestamp_field: creation_datetime
+      max_age_seconds: 60
+      notes: "RTP messages should be processed within seconds"
+
+    thresholds:
+      overall_pass: 0.95
+      completeness_pass: 0.98
+      accuracy_pass: 0.99
+      validity_pass: 0.99
+
+  optimization:
+    bronze_to_silver:
+      batch_size: 100
+      parallel_parse: true
+      notes: "Small batches for real-time processing"
+
+    silver_to_gold:
+      batch_size: 500
+      streaming_mode: true

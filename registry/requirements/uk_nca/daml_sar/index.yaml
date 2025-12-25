@@ -1,0 +1,146 @@
+# UK DAML SAR (Defence Against Money Laundering SAR) - Requirement Index
+# Report Type: UK_DAML_SAR
+# Regulator: UK NCA (National Crime Agency)
+# Jurisdiction: UK
+# Total Requirements: 132
+
+report_metadata:
+  report_type: "UK_DAML_SAR"
+  report_name: "Defence Against Money Laundering SAR"
+  regulator: "UK_NCA"
+  jurisdiction: "UK"
+  regulation: "Proceeds of Crime Act 2002 - Section 338"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "Before proceeding with transaction"
+  output_format: "XML"
+  submission_method: "SAR Online"
+  submission_url: "https://www.ukciu.gov.uk/"
+
+requirement_summary:
+  total: 132
+  by_category:
+    ELIGIBILITY: 12
+    FIELD: 98
+    VALIDATION: 14
+    FORMAT: 5
+    TIMING: 3
+  by_criticality:
+    MANDATORY: 118
+    RECOMMENDED: 11
+    OPTIONAL: 3
+
+requirements:
+  eligibility:
+    - id: "REQ-DAML-001"
+      title: "Consent Required Before Transaction"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Request consent to proceed with suspicious transaction"
+
+    - id: "REQ-DAML-002"
+      title: "Principal Offence Would Be Committed"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Proceeding would constitute money laundering offence"
+
+    - id: "REQ-DAML-003"
+      title: "Authorised Disclosure"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Disclosure made before act or with reasonable excuse"
+
+    - id: "REQ-DAML-004"
+      title: "Appropriate Consent Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "NCA consent or deemed consent after notice period"
+
+    - id: "REQ-DAML-005"
+      title: "Urgency Indicator"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Flag for time-sensitive consent requests"
+
+    - id: "REQ-DAML-006"
+      title: "Transaction Details Required"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Complete transaction details must be provided"
+
+  fields_transaction:
+    - id: "REQ-DAML-020"
+      title: "Transaction Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-DAML-021"
+      title: "Transaction Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-DAML-022"
+      title: "Transaction Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-DAML-023"
+      title: "Proposed Transaction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-DAML-024"
+      title: "Transaction Description"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-DAML-025"
+      title: "Source of Funds"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-DAML-026"
+      title: "Destination of Funds"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  fields_consent:
+    - id: "REQ-DAML-040"
+      title: "Consent Request Reason"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-DAML-041"
+      title: "Urgency Justification"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-DAML-042"
+      title: "Consequences of Refusal"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-DAML-043"
+      title: "Alternative Actions Considered"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+  timing:
+    - id: "REQ-DAML-100"
+      title: "Pre-Transaction Submission"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Must submit before transaction proceeds"
+
+    - id: "REQ-DAML-101"
+      title: "7 Working Day Notice Period"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "7 working days for NCA response"
+
+    - id: "REQ-DAML-102"
+      title: "Deemed Consent"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Consent deemed after notice period expires without refusal"

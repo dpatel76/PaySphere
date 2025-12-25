@@ -1,0 +1,116 @@
+# FINTRAC Terrorist Property Report (TPR) - Requirement Index
+# Report Type: TPR
+# Regulator: FINTRAC
+# Jurisdiction: CA
+# Total Requirements: 62
+
+report_metadata:
+  report_type: "TPR"
+  report_name: "Terrorist Property Report"
+  regulator: "FINTRAC"
+  jurisdiction: "CA"
+  regulation: "Criminal Code Section 83.1"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-21"
+  filing_frequency: "IMMEDIATE"
+  filing_deadline: "Immediately upon detection"
+  output_format: "XML"
+  submission_method: "FINTRAC Web Reporting System"
+
+requirement_summary:
+  total: 62
+  by_category:
+    ELIGIBILITY: 4
+    FIELD: 48
+    VALIDATION: 6
+    FORMAT: 2
+    TIMING: 1
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 55
+    RECOMMENDED: 5
+    OPTIONAL: 2
+
+requirements:
+  eligibility:
+    - id: "REQ-TPR-001"
+      title: "Listed Terrorist Entity Property"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Property owned/controlled by listed terrorist entity"
+      cdm_mapping:
+        entity: "Party"
+        field: "sanctions_status"
+        transformation: "sanctions_list CONTAINS 'TERRORIST'"
+
+    - id: "REQ-TPR-002"
+      title: "UN/Canada Listed Entities"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Match against Criminal Code listed entities"
+
+  fields_property:
+    - id: "REQ-TPR-020"
+      title: "Property Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      valid_values:
+        - "bank_account"
+        - "real_property"
+        - "securities"
+        - "cash"
+        - "other"
+
+    - id: "REQ-TPR-021"
+      title: "Property Value"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Account"
+        field: "balance"
+
+    - id: "REQ-TPR-022"
+      title: "Account Number (if applicable)"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+      cdm_mapping:
+        entity: "Account"
+        field: "account_number"
+
+  fields_entity:
+    - id: "REQ-TPR-030"
+      title: "Listed Entity Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "name"
+
+    - id: "REQ-TPR-031"
+      title: "Listed Entity Aliases"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+      cdm_mapping:
+        entity: "Party"
+        field: "aliases"
+
+    - id: "REQ-TPR-032"
+      title: "Listing Reference"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "UN/Canada listing reference number"
+
+  timing:
+    - id: "REQ-TPR-090"
+      title: "Immediate Filing Required"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "File immediately upon detection - no delay permitted"
+
+cdm_coverage:
+  entities_used:
+    - Party
+    - Account
+    - FinancialInstitution
+  coverage_percentage: 100
+  unmapped_fields: 0

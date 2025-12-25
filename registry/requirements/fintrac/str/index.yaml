@@ -1,0 +1,149 @@
+# FINTRAC Suspicious Transaction Report (STR) - Requirement Index
+# Report Type: STR
+# Regulator: FINTRAC
+# Jurisdiction: CA
+# Total Requirements: 125
+
+report_metadata:
+  report_type: "STR"
+  report_name: "Suspicious Transaction Report"
+  regulator: "FINTRAC"
+  jurisdiction: "CA"
+  regulation: "PCMLTFA Section 7"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-21"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "30 calendar days after determination"
+  output_format: "XML"
+  submission_method: "FINTRAC Web Reporting System"
+  submission_url: "https://www.fintrac-canafe.gc.ca/reporting-declaration/Info/rptng-eng"
+
+requirement_summary:
+  total: 125
+  by_category:
+    ELIGIBILITY: 8
+    FIELD: 95
+    VALIDATION: 14
+    FORMAT: 4
+    TIMING: 3
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 108
+    RECOMMENDED: 12
+    OPTIONAL: 5
+
+requirements:
+  eligibility:
+    - id: "REQ-STR-001"
+      title: "Reasonable Grounds to Suspect"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transaction related to ML/TF offense"
+
+    - id: "REQ-STR-002"
+      title: "Attempted Transaction Inclusion"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Include attempted suspicious transactions"
+
+  fields_suspicious_indicators:
+    - id: "REQ-STR-020"
+      title: "Suspicious Indicator Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "sar_indicators"
+      valid_values:
+        - "structuring"
+        - "unusual_transaction_pattern"
+        - "third_party_involvement"
+        - "inconsistent_with_customer_profile"
+        - "high_risk_jurisdiction"
+        - "terrorist_financing_indicators"
+
+    - id: "REQ-STR-021"
+      title: "Description of Suspicious Activity"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "narrative"
+
+  fields_transaction:
+    - id: "REQ-STR-030"
+      title: "Transaction Reference Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "payment_id"
+
+    - id: "REQ-STR-031"
+      title: "Transaction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+
+    - id: "REQ-STR-032"
+      title: "Transaction Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_amount"
+
+  fields_subject:
+    - id: "REQ-STR-040"
+      title: "Subject Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "name"
+
+    - id: "REQ-STR-041"
+      title: "Subject Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "address"
+
+    - id: "REQ-STR-042"
+      title: "Subject Date of Birth"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+      cdm_mapping:
+        entity: "Person"
+        field: "date_of_birth"
+
+    - id: "REQ-STR-043"
+      title: "Subject Identification"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PartyIdentification"
+        field: "id_number"
+
+  timing:
+    - id: "REQ-STR-090"
+      title: "30 Calendar Day Filing Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      rule: "filing_date <= detection_date + 30 days"
+
+cdm_coverage:
+  entities_used:
+    - Payment
+    - PaymentInstruction
+    - Party
+    - Person
+    - PartyIdentification
+    - Account
+    - FinancialInstitution
+    - ComplianceCase
+  coverage_percentage: 100
+  unmapped_fields: 0

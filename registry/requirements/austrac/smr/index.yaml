@@ -1,0 +1,126 @@
+# AUSTRAC Suspicious Matter Report (SMR) - Requirement Index
+# Report Type: SMR
+# Regulator: AUSTRAC
+# Jurisdiction: Australia
+# Total Requirements: 92
+
+report_metadata:
+  report_type: "SMR"
+  report_name: "Suspicious Matter Report"
+  regulator: "AUSTRAC"
+  jurisdiction: "AU"
+  regulation: "Anti-Money Laundering and Counter-Terrorism Financing Act 2006 - Section 41"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "Within 24 hours (terrorism) or 3 business days (other)"
+  output_format: "XML"
+  submission_method: "AUSTRAC Online"
+
+requirement_summary:
+  total: 92
+  by_category:
+    ELIGIBILITY: 8
+    FIELD: 68
+    VALIDATION: 10
+    FORMAT: 3
+    TIMING: 3
+  by_criticality:
+    MANDATORY: 82
+    RECOMMENDED: 8
+    OPTIONAL: 2
+
+requirements:
+  eligibility:
+    - id: "REQ-SMR-001"
+      title: "Suspicious Matter Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Reasonable grounds to suspect money laundering, terrorism financing, or other serious crime"
+
+    - id: "REQ-SMR-002"
+      title: "Money Laundering Suspicion"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Suspicion of proceeds of crime or tax evasion"
+
+    - id: "REQ-SMR-003"
+      title: "Terrorism Financing Suspicion"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Suspicion of terrorist financing or terrorist property"
+
+    - id: "REQ-SMR-004"
+      title: "Serious Crime Suspicion"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Other serious crimes including fraud and drug trafficking"
+
+    - id: "REQ-SMR-005"
+      title: "Unusual Transaction Patterns"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transactions inconsistent with customer profile"
+
+    - id: "REQ-SMR-006"
+      title: "Structuring Suspicion"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Deliberate structuring to avoid reporting thresholds"
+
+    - id: "REQ-SMR-007"
+      title: "Customer Identification Issues"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Failure to provide adequate identification"
+
+    - id: "REQ-SMR-008"
+      title: "Third Party Transactions"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Unexplained third party involvement"
+
+  fields_suspicion:
+    - id: "REQ-SMR-020"
+      title: "Reason for Suspicion"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SMR-021"
+      title: "Grounds for Suspicion Narrative"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SMR-022"
+      title: "Action Taken"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SMR-023"
+      title: "Suspicious Activity Period"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SMR-024"
+      title: "Total Value of Activity"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-SMR-080"
+      title: "24-Hour Terrorism Filing"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "File within 24 hours if terrorism-related"
+
+    - id: "REQ-SMR-081"
+      title: "3 Business Day Standard Filing"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "File within 3 business days for other suspicious matters"
+
+    - id: "REQ-SMR-082"
+      title: "Continuing Activity Updates"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Report updates for continuing suspicious activity"

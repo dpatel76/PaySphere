@@ -1,0 +1,84 @@
+relationship_code_id,code_value,description,applicable_jurisdictions,iso20022_equivalent
+# ============================================================================
+# RELATIONSHIP TO BENEFICIARY CODES (R01-R25)
+# ============================================================================
+# Complete reference data for all 25 relationship codes
+# Applicable across APAC, Middle East, and LatAm jurisdictions
+# ============================================================================
+
+# FAMILY RELATIONSHIPS (R01-R05)
+660e8400-e29b-41d4-a716-446655440001,R01,Spouse,"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",FAMI
+660e8400-e29b-41d4-a716-446655440002,R02,Parent,"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",FAMI
+660e8400-e29b-41d4-a716-446655440003,R03,Child,"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",FAMI
+660e8400-e29b-41d4-a716-446655440004,R04,Sibling,"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""BR""]",FAMI
+660e8400-e29b-41d4-a716-446655440005,R05,Other Family Member,"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",FAMI
+
+# EMPLOYMENT RELATIONSHIPS (R06-R07)
+660e8400-e29b-41d4-a716-446655440006,R06,Employee (remitter is employer),"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",SALA
+660e8400-e29b-41d4-a716-446655440007,R07,Employer (remitter is employee - salary),"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR""]",SALA
+
+# BUSINESS RELATIONSHIPS (R08-R10)
+660e8400-e29b-41d4-a716-446655440008,R08,Business Partner,"[""CN"",""IN"",""HK"",""SG"",""AE"",""SA"",""BR""]",BUSI
+660e8400-e29b-41d4-a716-446655440009,R09,Shareholder,"[""CN"",""IN"",""HK"",""SG"",""AE"",""BR""]",DIVI
+660e8400-e29b-41d4-a716-446655440010,R10,Director/Officer,"[""CN"",""IN"",""HK"",""SG"",""AE""]",
+
+# COMMERCIAL RELATIONSHIPS (R11-R12)
+660e8400-e29b-41d4-a716-446655440011,R11,Customer (payment for goods/services purchased),"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",GDDS
+660e8400-e29b-41d4-a716-446655440012,R12,Supplier (payment for goods/services sold),"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",GDDS
+
+# FINANCIAL RELATIONSHIPS (R13-R16)
+660e8400-e29b-41d4-a716-446655440013,R13,Lender (loan repayment),"[""CN"",""IN"",""HK"",""SG"",""AE"",""BR""]",LOAN
+660e8400-e29b-41d4-a716-446655440014,R14,Borrower (loan disbursement),"[""CN"",""IN"",""HK"",""SG"",""AE"",""BR""]",LOAN
+660e8400-e29b-41d4-a716-446655440015,R15,Investor (investment distribution),"[""CN"",""IN"",""HK"",""SG"",""AE"",""BR""]",DIVI
+660e8400-e29b-41d4-a716-446655440016,R16,Investee (capital contribution),"[""CN"",""IN"",""HK"",""SG"",""AE"",""BR""]",
+
+# PROPERTY RELATIONSHIPS (R17-R18)
+660e8400-e29b-41d4-a716-446655440017,R17,Tenant (rent payment),"[""CN"",""IN"",""PH"",""HK"",""SG"",""AE"",""BR""]",RENT
+660e8400-e29b-41d4-a716-446655440018,R18,Landlord (property owner),"[""CN"",""IN"",""PH"",""HK"",""SG"",""AE"",""BR""]",
+
+# EDUCATIONAL RELATIONSHIPS (R19-R20)
+660e8400-e29b-41d4-a716-446655440019,R19,Student (tuition payment),"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",EDUC
+660e8400-e29b-41d4-a716-446655440020,R20,Educational Institution,"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR""]",EDUC
+
+# MEDICAL RELATIONSHIP (R21)
+660e8400-e29b-41d4-a716-446655440021,R21,Medical Provider/Patient,"[""IN"",""PH"",""SG"",""TH"",""MY"",""AE"",""SA"",""BR""]",MDCS
+
+# INSTITUTIONAL RELATIONSHIPS (R22-R23)
+660e8400-e29b-41d4-a716-446655440022,R22,Government Entity,"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",TAXS
+660e8400-e29b-41d4-a716-446655440023,R23,Charity/Non-Profit,"[""IN"",""PH"",""SG"",""AE"",""SA"",""BR"",""MX""]",CHAR
+
+# OTHER RELATIONSHIPS (R24-R25)
+660e8400-e29b-41d4-a716-446655440024,R24,Self (own accounts),"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH"",""MY"",""ID"",""VN"",""AE"",""SA"",""BR"",""MX""]",
+660e8400-e29b-41d4-a716-446655440025,R25,No Relationship (third party),"[""CN"",""IN"",""PH"",""HK"",""SG"",""TH""]",
+
+# ============================================================================
+# JURISDICTION SUMMARY:
+# - China (CN): 21 codes
+# - India (IN): 23 codes
+# - Philippines (PH): 19 codes
+# - Hong Kong (HK): 21 codes
+# - Singapore (SG): 23 codes
+# - Thailand (TH): 17 codes
+# - Malaysia (MY): 16 codes
+# - Indonesia (ID): 16 codes
+# - Vietnam (VN): 16 codes
+# - UAE (AE): 20 codes
+# - Saudi Arabia (SA): 18 codes
+# - Brazil (BR): 21 codes
+# - Mexico (MX): 14 codes
+# ============================================================================
+
+# ============================================================================
+# ISO 20022 PURPOSE CODE MAPPING:
+# - FAMI: Family Maintenance
+# - SALA: Salary Payment
+# - BUSI: Business
+# - DIVI: Dividend
+# - GDDS: Goods
+# - LOAN: Loan
+# - RENT: Rent
+# - EDUC: Education
+# - MDCS: Medical Services
+# - TAXS: Tax Payment
+# - CHAR: Charity
+# ============================================================================

@@ -1,0 +1,221 @@
+# AUSTRAC International Funds Transfer Instruction (IFTI) - Requirement Index
+# Report Type: IFTI
+# Regulator: AUSTRAC
+# Jurisdiction: Australia
+# Total Requirements: 87
+
+report_metadata:
+  report_type: "IFTI"
+  report_name: "International Funds Transfer Instruction"
+  regulator: "AUSTRAC"
+  jurisdiction: "AU"
+  regulation: "Anti-Money Laundering and Counter-Terrorism Financing Act 2006 - Part 4"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "REAL_TIME"
+  filing_deadline: "Within 10 business days"
+  output_format: "XML"
+  submission_method: "AUSTRAC Online"
+  submission_url: "https://online.austrac.gov.au/"
+
+requirement_summary:
+  total: 87
+  by_category:
+    ELIGIBILITY: 6
+    FIELD: 68
+    VALIDATION: 8
+    FORMAT: 3
+    TIMING: 2
+  by_criticality:
+    MANDATORY: 78
+    RECOMMENDED: 7
+    OPTIONAL: 2
+
+requirements:
+  # ===== ELIGIBILITY REQUIREMENTS =====
+  eligibility:
+    - id: "REQ-IFTI-001"
+      title: "International Transfer Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transfer of money or property from Australia to another country or vice versa"
+
+    - id: "REQ-IFTI-002"
+      title: "Electronic Funds Transfer"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Instructions transmitted electronically by designated remittance services"
+
+    - id: "REQ-IFTI-003"
+      title: "Reporting Entity Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Banks, remitters, and other designated services must report"
+
+    - id: "REQ-IFTI-004"
+      title: "Outgoing Transfer"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Money sent from Australia to another country"
+
+    - id: "REQ-IFTI-005"
+      title: "Incoming Transfer"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Money received in Australia from another country"
+
+    - id: "REQ-IFTI-006"
+      title: "Pass-Through Transfer"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transfer passing through Australia"
+
+  # ===== FIELD REQUIREMENTS - Transfer Details =====
+  fields_transfer:
+    - id: "REQ-IFTI-010"
+      title: "Transfer Direction"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "INCOMING, OUTGOING, or PASS_THROUGH"
+
+    - id: "REQ-IFTI-011"
+      title: "Instruction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-012"
+      title: "Value Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-013"
+      title: "Transfer Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-014"
+      title: "Transfer Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-015"
+      title: "AUD Equivalent Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Amount converted to AUD using exchange rate"
+
+    - id: "REQ-IFTI-016"
+      title: "Exchange Rate"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-IFTI-017"
+      title: "Transmission Method"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  # ===== FIELD REQUIREMENTS - Ordering Customer =====
+  fields_ordering:
+    - id: "REQ-IFTI-020"
+      title: "Ordering Customer Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-021"
+      title: "Ordering Customer Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Person, Company, or Trust"
+
+    - id: "REQ-IFTI-022"
+      title: "Ordering Customer Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-023"
+      title: "Ordering Customer Country"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-024"
+      title: "Ordering Customer ID Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-025"
+      title: "Ordering Customer ID Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-026"
+      title: "Ordering Customer Date of Birth"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-IFTI-027"
+      title: "Ordering Customer Account"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+  # ===== FIELD REQUIREMENTS - Beneficiary =====
+  fields_beneficiary:
+    - id: "REQ-IFTI-030"
+      title: "Beneficiary Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-031"
+      title: "Beneficiary Address"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-IFTI-032"
+      title: "Beneficiary Country"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-033"
+      title: "Beneficiary Account"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+  # ===== FIELD REQUIREMENTS - Institutions =====
+  fields_institutions:
+    - id: "REQ-IFTI-040"
+      title: "Ordering Institution Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-041"
+      title: "Ordering Institution Country"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-042"
+      title: "Beneficiary Institution Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-043"
+      title: "Beneficiary Institution Country"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-IFTI-044"
+      title: "Correspondent Institution"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+  # ===== TIMING REQUIREMENTS =====
+  timing:
+    - id: "REQ-IFTI-080"
+      title: "10 Business Day Filing"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Report within 10 business days of instruction"
+
+    - id: "REQ-IFTI-081"
+      title: "Real-Time Preference"
+      category: "TIMING"
+      criticality: "RECOMMENDED"
+      description: "Report as close to real-time as possible"

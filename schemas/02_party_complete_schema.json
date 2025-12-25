@@ -1,0 +1,399 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bofa.com/schemas/cdm/party-complete.schema.json",
+  "title": "PartyComplete",
+  "description": "Complete Party entity (debtor, creditor, beneficial owner) with global tax reporting (FATCA, CRS) and APAC national ID extensions",
+  "type": "object",
+  "required": ["partyId", "partyType", "name", "effectiveFrom", "isCurrent"],
+  "properties": {
+    "partyId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "partyType": {
+      "type": "string",
+      "enum": ["individual", "organization", "government", "financial_institution"]
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 140
+    },
+    "givenName": {
+      "type": "string",
+      "maxLength": 35,
+      "description": "AUSTRAC IFTI Field 2.2 - First/given name(s) for individuals"
+    },
+    "familyName": {
+      "type": "string",
+      "maxLength": 35,
+      "description": "AUSTRAC IFTI Field 2.3 - Family/last name for individuals"
+    },
+    "suffix": {
+      "type": "string",
+      "maxLength": 10,
+      "description": "FinCEN CTR Item 9 - Name suffix (Jr., Sr., III)"
+    },
+    "dbaName": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "FinCEN CTR Item 11 - Doing Business As / Trade Name"
+    },
+    "dateOfBirth": {
+      "type": "string",
+      "format": "date"
+    },
+    "placeOfBirth": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "nationality": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z]{2}$"
+      },
+      "description": "ISO 3166-1 alpha-2 country codes"
+    },
+    "taxId": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "taxIdType": {
+      "type": "string",
+      "enum": ["SSN", "EIN", "ITIN", "VAT", "TIN", "OTHER"]
+    },
+    "occupation": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "FinCEN CTR Item 12, SAR Item 45 - Occupation or type of business"
+    },
+    "naicsCode": {
+      "type": "string",
+      "pattern": "^[0-9]{6}$",
+      "description": "FinCEN CTR Item 13 - NAICS industry classification (6-digit)"
+    },
+    "formOfIdentification": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "FinCEN CTR Item 15 - Type of ID document"
+    },
+    "identificationNumber": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "FinCEN CTR Item 16 - ID document number"
+    },
+    "identificationIssuingCountry": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "FinCEN CTR Item 17 - ID issuing country (ISO 3166-1)"
+    },
+    "identificationIssuingState": {
+      "type": "string",
+      "maxLength": 3,
+      "description": "FinCEN CTR Item 18 - ID issuing state/province"
+    },
+    "alternateNames": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "FinCEN SAR Item 39 - Known aliases or alternate names"
+    },
+    "entityFormation": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "FinCEN SAR Item 44 - Type of entity formation"
+    },
+    "numberOfEmployees": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "FinCEN SAR Item 46 - Number of employees"
+    },
+    "usTaxStatus": {
+      "type": "string",
+      "enum": ["US_CITIZEN", "US_RESIDENT_ALIEN", "NON_RESIDENT_ALIEN", "US_CORPORATION", "US_PARTNERSHIP", "US_TRUST", "FOREIGN_ENTITY"],
+      "description": "FATCA: US tax classification - Non-ISO Extension"
+    },
+    "fatcaClassification": {
+      "type": "string",
+      "enum": ["ACTIVE_NFFE", "PASSIVE_NFFE", "FFI", "PARTICIPATING_FFI", "REGISTERED_DEEMED_COMPLIANT_FFI", "CERTIFIED_DEEMED_COMPLIANT_FFI", "EXCEPTED_FFI", "EXEMPT_BENEFICIAL_OWNER", "DIRECT_REPORTING_NFFE", "SPONSORED_DIRECT_REPORTING_NFFE"],
+      "description": "FATCA: Entity classification - Non-ISO Extension"
+    },
+    "crsReportable": {
+      "type": "boolean",
+      "description": "CRS: Reportable flag (OECD Common Reporting Standard) - ISO 20022 Extended"
+    },
+    "crsEntityType": {
+      "type": "string",
+      "enum": ["FINANCIAL_INSTITUTION", "ACTIVE_NFE", "PASSIVE_NFE", "INVESTMENT_ENTITY", "GOVERNMENT_ENTITY", "INTERNATIONAL_ORGANISATION", "CENTRAL_BANK"],
+      "description": "CRS: Entity type classification - Non-ISO Extension"
+    },
+    "taxResidencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$",
+            "description": "ISO 3166-1 alpha-2 country code"
+          },
+          "tinType": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "TIN type: SSN, EIN, VAT, NIF, etc."
+          },
+          "tin": {
+            "type": "string",
+            "maxLength": 50,
+            "description": "Tax Identification Number"
+          },
+          "taxResidencyBasis": {
+            "type": "string",
+            "enum": ["CITIZENSHIP", "RESIDENCE", "DOMICILE", "INCORPORATION"],
+            "description": "Basis of tax residency"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "effectiveTo": {
+            "type": ["string", "null"],
+            "format": "date"
+          }
+        },
+        "required": ["country", "tinType", "tin", "taxResidencyBasis"]
+      },
+      "description": "Array of tax residency countries with TINs - ISO 20022 Compliant"
+    },
+    "w8benStatus": {
+      "type": "string",
+      "enum": ["ACTIVE", "EXPIRED", "NOT_PROVIDED"],
+      "description": "W-8BEN form status - Non-ISO Extension"
+    },
+    "w9Status": {
+      "type": "string",
+      "enum": ["ACTIVE", "EXPIRED", "NOT_PROVIDED"],
+      "description": "W-9 form status - Non-ISO Extension"
+    },
+    "tinIssuingCountry": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "TIN issuing country (ISO 3166-1 alpha-2) - beyond primary - ISO 20022 Compliant"
+    },
+    "secondaryTINs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "tin": {
+            "type": "string",
+            "maxLength": 50
+          },
+          "tinType": {
+            "type": "string",
+            "maxLength": 50
+          }
+        },
+        "required": ["country", "tin", "tinType"]
+      },
+      "description": "Secondary tax IDs for multiple jurisdictions - ISO 20022 Compliant"
+    },
+    "substantialUSOwner": {
+      "type": "boolean",
+      "description": "Substantial US owner flag (FATCA - owns >10% of entity) - Non-ISO Extension"
+    },
+    "nationalIDType": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "Country-specific national ID type (Resident ID, NRIC, My Number, Hukou, Aadhaar, etc.) - Non-ISO Extension"
+    },
+    "nationalIDNumber": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "National ID number - Non-ISO Extension"
+    },
+    "chinaHukou": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Hukou (household registration) - China - Non-ISO Extension"
+    },
+    "indiaAadharNumber": {
+      "type": "string",
+      "pattern": "^[0-9]{12}$",
+      "description": "Aadhaar UID (12 digits) - India - Non-ISO Extension"
+    },
+    "indiaPANNumber": {
+      "type": "string",
+      "maxLength": 20,
+      "description": "PAN (Permanent Account Number) alternate - India - Non-ISO Extension"
+    },
+    "koreaAlienRegistrationNumber": {
+      "type": "string",
+      "pattern": "^[0-9]{13}$",
+      "description": "Alien registration number (13 digits) - South Korea - Non-ISO Extension"
+    },
+    "japanMyNumber": {
+      "type": "string",
+      "pattern": "^[0-9]{12}$",
+      "description": "My Number / Individual Number (12 digits) - Japan - Non-ISO Extension"
+    },
+    "singaporeNRIC_FIN": {
+      "type": "string",
+      "pattern": "^[STFGMstfgm][0-9]{7}[A-Za-z]$",
+      "description": "NRIC (citizen - Sxxxxxxx) or FIN (foreigner - Fxxxxxxx) - Singapore - Non-ISO Extension"
+    },
+    "address": {
+      "type": "object",
+      "properties": {
+        "streetName": {
+          "type": "string",
+          "maxLength": 70
+        },
+        "buildingNumber": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "buildingName": {
+          "type": "string",
+          "maxLength": 35
+        },
+        "floor": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "room": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "postBox": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "postCode": {
+          "type": "string",
+          "maxLength": 16
+        },
+        "townName": {
+          "type": "string",
+          "maxLength": 35
+        },
+        "districtName": {
+          "type": "string",
+          "maxLength": 35
+        },
+        "countrySubDivision": {
+          "type": "string",
+          "maxLength": 35,
+          "description": "State/Province"
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "ISO 3166-1 alpha-2"
+        },
+        "addressLine1": {
+          "type": "string",
+          "maxLength": 70
+        },
+        "addressLine2": {
+          "type": "string",
+          "maxLength": 70
+        }
+      },
+      "required": ["country"]
+    },
+    "contactDetails": {
+      "type": "object",
+      "properties": {
+        "emailAddress": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 256
+        },
+        "phoneNumber": {
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{1,14}$",
+          "description": "E.164 format"
+        },
+        "mobileNumber": {
+          "type": "string",
+          "pattern": "^\\+[1-9][0-9]{1,14}$"
+        }
+      }
+    },
+    "pepFlag": {
+      "type": "boolean",
+      "default": false,
+      "description": "Politically Exposed Person flag"
+    },
+    "pepCategory": {
+      "type": "string",
+      "enum": ["HEAD_OF_STATE", "SENIOR_POLITICIAN", "SENIOR_GOVERNMENT_OFFICIAL", "JUDICIAL_OFFICIAL", "MILITARY_OFFICIAL", "SENIOR_PARTY_OFFICIAL", "STATE_OWNED_ENTERPRISE", "FAMILY_MEMBER", "CLOSE_ASSOCIATE"]
+    },
+    "riskRating": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "very_high"]
+    },
+    "sanctionsScreeningStatus": {
+      "type": "string",
+      "enum": ["not_screened", "clear", "hit", "pending", "false_positive"],
+      "default": "not_screened"
+    },
+    "sanctionsListMatch": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "listName": {"type": "string"},
+          "matchType": {"type": "string"},
+          "matchScore": {"type": "number", "minimum": 0, "maximum": 100}
+        }
+      }
+    },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date"
+    },
+    "effectiveTo": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "isCurrent": {
+      "type": "boolean"
+    },
+    "sourceSystem": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "sourceSystemRecordId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "createdTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedBy": {
+      "type": "string"
+    },
+    "recordVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,578 @@
+# Party Domain Entities
+# Version: 1.0.0
+# Entities: Party, PartyIdentification, Person, Organisation, FinancialInstitution
+
+domain:
+  name: party
+  description: Counterparties, identifications, and financial institutions
+  entity_count: 5
+
+entities:
+  - name: Party
+    description: Core party entity (counterparty in payment)
+    table_name: party
+    primary_key: party_id
+    attributes:
+      - name: party_id
+        type: uuid
+        required: true
+
+      - name: party_type
+        type: enum
+        required: true
+        values: [INDIVIDUAL, ORGANIZATION, GOVERNMENT, FINANCIAL_INSTITUTION]
+
+      - name: name
+        type: string
+        max_length: 140
+        required: true
+        description: Full legal name
+
+      - name: given_name
+        type: string
+        max_length: 35
+        required: false
+        description: First name (individuals) - AUSTRAC IFTI Field 2.2
+
+      - name: family_name
+        type: string
+        max_length: 35
+        required: false
+        description: Last name (individuals) - AUSTRAC IFTI Field 2.3
+
+      - name: suffix
+        type: string
+        max_length: 10
+        required: false
+        description: Name suffix - FinCEN CTR Item 9
+
+      - name: dba_name
+        type: string
+        max_length: 140
+        required: false
+        description: Doing Business As - FinCEN CTR Item 11
+
+      - name: date_of_birth
+        type: date
+        required: false
+
+      - name: place_of_birth
+        type: string
+        max_length: 100
+        required: false
+
+      - name: nationality
+        type: array
+        item_type: string
+        max_length: 2
+        required: false
+        description: ISO 3166-1 alpha-2 country codes
+
+      - name: tax_id
+        type: string
+        max_length: 50
+        required: false
+
+      - name: tax_id_type
+        type: enum
+        values: [SSN, EIN, ITIN, VAT, TIN, OTHER]
+        required: false
+
+      - name: occupation
+        type: string
+        max_length: 100
+        required: false
+        description: FinCEN CTR Item 12, SAR Item 45
+
+      - name: naics_code
+        type: string
+        max_length: 6
+        pattern: "^[0-9]{6}$"
+        required: false
+        description: FinCEN CTR Item 13
+
+      - name: form_of_identification
+        type: string
+        max_length: 100
+        required: false
+        description: FinCEN CTR Item 15
+
+      - name: identification_number
+        type: string
+        max_length: 50
+        required: false
+        description: FinCEN CTR Item 16
+
+      - name: identification_issuing_country
+        type: string
+        max_length: 2
+        required: false
+
+      - name: identification_issuing_state
+        type: string
+        max_length: 3
+        required: false
+
+      - name: alternate_names
+        type: array
+        item_type: string
+        required: false
+        description: FinCEN SAR Item 39 - Known aliases
+
+      # FATCA Extensions
+      - name: us_tax_status
+        type: enum
+        values: [US_CITIZEN, US_RESIDENT_ALIEN, NON_RESIDENT_ALIEN, US_CORPORATION, US_PARTNERSHIP, US_TRUST, FOREIGN_ENTITY]
+        required: false
+        description: FATCA US tax classification
+
+      - name: fatca_classification
+        type: enum
+        values: [ACTIVE_NFFE, PASSIVE_NFFE, FFI, PARTICIPATING_FFI, REGISTERED_DEEMED_COMPLIANT_FFI, CERTIFIED_DEEMED_COMPLIANT_FFI, EXCEPTED_FFI, EXEMPT_BENEFICIAL_OWNER, DIRECT_REPORTING_NFFE, SPONSORED_DIRECT_REPORTING_NFFE]
+        required: false
+
+      - name: w8ben_status
+        type: enum
+        values: [ACTIVE, EXPIRED, NOT_PROVIDED]
+        required: false
+
+      - name: w9_status
+        type: enum
+        values: [ACTIVE, EXPIRED, NOT_PROVIDED]
+        required: false
+
+      - name: substantial_us_owner
+        type: boolean
+        required: false
+        description: FATCA - owns >10% of entity
+
+      # CRS Extensions
+      - name: crs_reportable
+        type: boolean
+        required: false
+        description: CRS reportable flag
+
+      - name: crs_entity_type
+        type: enum
+        values: [FINANCIAL_INSTITUTION, ACTIVE_NFE, PASSIVE_NFE, INVESTMENT_ENTITY, GOVERNMENT_ENTITY, INTERNATIONAL_ORGANISATION, CENTRAL_BANK]
+        required: false
+
+      - name: tax_residencies
+        type: array
+        item_type: object
+        required: false
+        description: Array of tax residency countries with TINs
+
+      # APAC National ID Extensions
+      - name: national_id_type
+        type: string
+        max_length: 50
+        required: false
+
+      - name: national_id_number
+        type: string
+        max_length: 50
+        required: false
+
+      - name: china_hukou
+        type: string
+        max_length: 100
+        required: false
+
+      - name: india_aadhar_number
+        type: string
+        max_length: 12
+        pattern: "^[0-9]{12}$"
+        required: false
+
+      - name: india_pan_number
+        type: string
+        max_length: 20
+        required: false
+
+      - name: japan_my_number
+        type: string
+        max_length: 12
+        pattern: "^[0-9]{12}$"
+        required: false
+
+      - name: singapore_nric_fin
+        type: string
+        max_length: 9
+        pattern: "^[STFGMstfgm][0-9]{7}[A-Za-z]$"
+        required: false
+
+      # Address
+      - name: address
+        type: object
+        required: false
+        description: Structured address
+
+      - name: contact_details
+        type: object
+        required: false
+        description: Contact information
+
+      # Risk/Compliance
+      - name: pep_flag
+        type: boolean
+        required: false
+        default: false
+
+      - name: pep_category
+        type: enum
+        values: [HEAD_OF_STATE, SENIOR_POLITICIAN, SENIOR_GOVERNMENT_OFFICIAL, JUDICIAL_OFFICIAL, MILITARY_OFFICIAL, SENIOR_PARTY_OFFICIAL, STATE_OWNED_ENTERPRISE, FAMILY_MEMBER, CLOSE_ASSOCIATE]
+        required: false
+
+      - name: risk_rating
+        type: enum
+        values: [low, medium, high, very_high]
+        required: false
+
+      - name: sanctions_screening_status
+        type: enum
+        values: [not_screened, clear, hit, pending, false_positive]
+        required: false
+        default: not_screened
+
+      # Bi-temporal
+      - name: effective_from
+        type: date
+        required: true
+
+      - name: effective_to
+        type: date
+        required: false
+
+      - name: is_current
+        type: boolean
+        required: true
+
+  - name: PartyIdentification
+    description: Additional party identification documents
+    table_name: party_identification
+    primary_key: identification_id
+    foreign_keys:
+      - name: party_id
+        target: Party
+        required: true
+    attributes:
+      - name: identification_id
+        type: uuid
+        required: true
+
+      - name: party_id
+        type: uuid
+        required: true
+
+      - name: identification_type
+        type: enum
+        required: true
+        values: [PASSPORT, NATIONAL_ID, DRIVERS_LICENSE, MILITARY_ID, STATE_ID, SOCIAL_SECURITY_CARD, UTILITY_BILL, BANK_STATEMENT, TAX_DOCUMENT, VOTER_ID, BIRTH_CERTIFICATE, OTHER]
+
+      - name: identification_number
+        type: string
+        max_length: 50
+        required: true
+
+      - name: issuing_country
+        type: string
+        max_length: 2
+        required: true
+        description: ISO 3166-1 alpha-2
+
+      - name: issuing_authority
+        type: string
+        max_length: 100
+        required: false
+
+      - name: issue_date
+        type: date
+        required: false
+
+      - name: expiry_date
+        type: date
+        required: false
+
+      - name: is_primary
+        type: boolean
+        required: false
+        default: false
+
+      - name: verification_status
+        type: enum
+        values: [VERIFIED, UNVERIFIED, EXPIRED, INVALID]
+        required: false
+        default: UNVERIFIED
+
+      - name: verification_date
+        type: date
+        required: false
+
+  - name: Person
+    description: Individual-specific attributes (extends Party)
+    table_name: person
+    primary_key: person_id
+    foreign_keys:
+      - name: party_id
+        target: Party
+        required: true
+    attributes:
+      - name: person_id
+        type: uuid
+        required: true
+
+      - name: party_id
+        type: uuid
+        required: true
+
+      - name: title
+        type: string
+        max_length: 10
+        required: false
+        description: Mr, Ms, Dr, etc.
+
+      - name: suffix
+        type: string
+        max_length: 10
+        required: false
+        description: Jr, Sr, III
+
+      - name: place_of_birth
+        type: string
+        max_length: 100
+        required: false
+
+      - name: country_of_birth
+        type: string
+        max_length: 2
+        required: false
+
+      - name: gender
+        type: enum
+        values: [M, F, O]
+        required: false
+
+      - name: marital_status
+        type: enum
+        values: [SINGLE, MARRIED, DIVORCED, WIDOWED, SEPARATED, DOMESTIC_PARTNER]
+        required: false
+
+      - name: employer_name
+        type: string
+        max_length: 140
+        required: false
+
+      - name: employment_status
+        type: enum
+        values: [EMPLOYED, SELF_EMPLOYED, UNEMPLOYED, RETIRED, STUDENT, HOMEMAKER]
+        required: false
+
+      - name: job_title
+        type: string
+        max_length: 100
+        required: false
+
+      - name: years_employed
+        type: integer
+        required: false
+
+  - name: Organisation
+    description: Organisation-specific attributes (extends Party)
+    table_name: organisation
+    primary_key: organisation_id
+    foreign_keys:
+      - name: party_id
+        target: Party
+        required: true
+    attributes:
+      - name: organisation_id
+        type: uuid
+        required: true
+
+      - name: party_id
+        type: uuid
+        required: true
+
+      - name: registration_number
+        type: string
+        max_length: 50
+        required: false
+
+      - name: registration_country
+        type: string
+        max_length: 2
+        required: false
+
+      - name: legal_form
+        type: string
+        max_length: 50
+        required: false
+        description: LLC, Corp, Ltd, etc.
+
+      - name: industry_code
+        type: string
+        max_length: 10
+        required: false
+        description: NAICS/SIC code
+
+      - name: industry_description
+        type: string
+        max_length: 200
+        required: false
+
+      - name: incorporation_date
+        type: date
+        required: false
+
+      - name: number_of_employees
+        type: integer
+        required: false
+
+      - name: annual_revenue
+        type: decimal
+        precision: 18
+        scale: 2
+        required: false
+
+      - name: public_company
+        type: boolean
+        required: false
+        default: false
+
+      - name: stock_exchange
+        type: string
+        max_length: 20
+        required: false
+
+      - name: ticker_symbol
+        type: string
+        max_length: 10
+        required: false
+
+      - name: parent_organisation_id
+        type: uuid
+        required: false
+        description: FK to parent Organisation
+
+  - name: FinancialInstitution
+    description: Financial institution entity
+    table_name: financial_institution
+    primary_key: fi_id
+    attributes:
+      - name: fi_id
+        type: uuid
+        required: true
+
+      - name: institution_name
+        type: string
+        max_length: 140
+        required: true
+
+      - name: bic
+        type: string
+        max_length: 11
+        pattern: "^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$"
+        required: false
+        description: SWIFT BIC (8 or 11 characters)
+
+      - name: lei
+        type: string
+        max_length: 20
+        pattern: "^[A-Z0-9]{20}$"
+        required: false
+        description: Legal Entity Identifier
+
+      - name: national_clearing_code
+        type: string
+        max_length: 35
+        required: false
+        description: Routing number, Sort code, BSB
+
+      - name: national_clearing_system
+        type: enum
+        values: [USABA, AUBSB, GBSORTCODE, CACPA, DEBLZ, FRBANKCODE, CHBC, INFED, BRCOMPE]
+        required: false
+
+      - name: country
+        type: string
+        max_length: 2
+        required: true
+        description: ISO 3166-1 alpha-2
+
+      - name: fi_type
+        type: enum
+        values: [DEPOSITORY_INSTITUTION, BROKER_DEALER, MSB, CASINO, INSURANCE_COMPANY, CREDIT_UNION, SAVINGS_BANK, OTHER]
+        required: false
+
+      - name: primary_regulator
+        type: enum
+        values: [OCC, FDIC, FRB, NCUA, SEC, CFTC, OTHER]
+        required: false
+
+      - name: rssd_number
+        type: string
+        max_length: 10
+        pattern: "^[0-9]{10}$"
+        required: false
+        description: Federal Reserve RSSD
+
+      - name: tin_type
+        type: enum
+        values: [EIN, SSN, ITIN, FOREIGN]
+        required: false
+
+      - name: tin_value
+        type: string
+        max_length: 50
+        required: false
+
+      - name: msb_registration_number
+        type: string
+        max_length: 50
+        required: false
+        description: Money Services Business registration
+
+      - name: fatca_giin
+        type: string
+        max_length: 19
+        pattern: "^[A-Z0-9]{6}\\.[A-Z0-9]{5}\\.[A-Z]{2}\\.[A-Z0-9]{3}$"
+        required: false
+        description: FATCA Global Intermediary ID
+
+      - name: sharia_compliant
+        type: boolean
+        required: false
+        default: false
+
+      - name: islamic_finance_type
+        type: enum
+        values: [FULLY_SHARIA_COMPLIANT, SHARIA_COMPLIANT_WINDOW, TAKAFUL_PROVIDER, SUKUK_ISSUER, CONVENTIONAL]
+        required: false
+
+      - name: address
+        type: object
+        required: false
+
+      - name: branch_identification
+        type: string
+        max_length: 35
+        required: false
+
+      - name: branch_name
+        type: string
+        max_length: 140
+        required: false
+
+      # Bi-temporal
+      - name: effective_from
+        type: date
+        required: true
+
+      - name: effective_to
+        type: date
+        required: false
+
+      - name: is_current
+        type: boolean
+        required: true

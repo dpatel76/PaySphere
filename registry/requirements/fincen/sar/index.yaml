@@ -1,0 +1,254 @@
+# FinCEN Suspicious Activity Report (SAR) - Requirement Index
+# Report Type: SAR
+# Regulator: FinCEN
+# Jurisdiction: US
+# Total Requirements: 184
+
+report_metadata:
+  report_type: "SAR"
+  report_name: "Suspicious Activity Report"
+  regulator: "FinCEN"
+  jurisdiction: "US"
+  form_number: "FinCEN Form 111"
+  regulation: "31 CFR 1020.320, 1021.320, 1022.320, 1023.320, 1024.320, 1025.320, 1026.320"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "30 days after detection (60 days if no suspect identified)"
+  output_format: "XML"
+  submission_method: "BSA E-Filing"
+  submission_url: "https://bsaefiling.fincen.treas.gov/"
+
+requirement_summary:
+  total: 184
+  by_category:
+    ELIGIBILITY: 12
+    FIELD: 142
+    VALIDATION: 18
+    FORMAT: 6
+    TIMING: 4
+    SUBMISSION: 2
+  by_criticality:
+    MANDATORY: 156
+    RECOMMENDED: 22
+    OPTIONAL: 6
+
+requirements:
+  # ===== ELIGIBILITY REQUIREMENTS =====
+  eligibility:
+    - id: "REQ-SAR-001"
+      title: "Suspicious Activity Threshold - $5,000"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transactions of $5,000 or more involving known or suspected violations"
+
+    - id: "REQ-SAR-002"
+      title: "Suspicious Activity Threshold - $25,000 (No Suspect)"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transactions of $25,000+ where no suspect can be identified"
+
+    - id: "REQ-SAR-003"
+      title: "Insider Abuse/Misconduct"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Any known/suspected insider abuse regardless of amount"
+
+    - id: "REQ-SAR-004"
+      title: "BSA Violation Indicators"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transactions designed to evade BSA requirements"
+
+    - id: "REQ-SAR-005"
+      title: "Money Laundering Indicators"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transactions involving potential money laundering"
+
+    - id: "REQ-SAR-006"
+      title: "Terrorist Financing Indicators"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transactions potentially related to terrorist financing"
+
+    - id: "REQ-SAR-007"
+      title: "Structuring Detection"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Patterns indicating structuring to avoid CTR"
+
+    - id: "REQ-SAR-008"
+      title: "Unusual Activity Patterns"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Activity inconsistent with customer profile"
+
+  # ===== FIELD REQUIREMENTS - Subject Information (Part I) =====
+  fields_subject:
+    - id: "REQ-SAR-020"
+      title: "Subject Full Legal Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-021"
+      title: "Subject TIN"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-022"
+      title: "Subject Date of Birth"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-023"
+      title: "Subject Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-024"
+      title: "Subject Phone Numbers"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-SAR-025"
+      title: "Subject Email Addresses"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-SAR-026"
+      title: "Subject Occupation"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-SAR-027"
+      title: "Subject ID Documents"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-028"
+      title: "Subject Account Numbers"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-029"
+      title: "Subject Relationship to FI"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-030"
+      title: "Subject Role in Activity"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  # ===== FIELD REQUIREMENTS - Suspicious Activity (Part II) =====
+  fields_activity:
+    - id: "REQ-SAR-040"
+      title: "Activity Date Range"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-041"
+      title: "Total Amount Involved"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-042"
+      title: "Suspicious Activity Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-043"
+      title: "Product/Instrument Involved"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-044"
+      title: "Payment Mechanism"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SAR-045"
+      title: "Law Enforcement Contact"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-SAR-046"
+      title: "Cyber Event Indicators"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-SAR-047"
+      title: "IP Addresses"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+  # ===== FIELD REQUIREMENTS - Narrative (Part III) =====
+  fields_narrative:
+    - id: "REQ-SAR-060"
+      title: "Narrative Description"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Clear, complete, and concise description of the suspicious activity"
+
+    - id: "REQ-SAR-061"
+      title: "Narrative - Who"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Who is conducting the suspicious activity"
+
+    - id: "REQ-SAR-062"
+      title: "Narrative - What"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "What instruments/mechanisms were used"
+
+    - id: "REQ-SAR-063"
+      title: "Narrative - When"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "When did the activity occur"
+
+    - id: "REQ-SAR-064"
+      title: "Narrative - Where"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Where did the activity take place"
+
+    - id: "REQ-SAR-065"
+      title: "Narrative - Why"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Why is the activity suspicious"
+
+    - id: "REQ-SAR-066"
+      title: "Narrative - How"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "How was the activity conducted"
+
+  # ===== TIMING REQUIREMENTS =====
+  timing:
+    - id: "REQ-SAR-100"
+      title: "30-Day Filing Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "File within 30 days of detecting suspicious activity"
+
+    - id: "REQ-SAR-101"
+      title: "60-Day Extension (No Suspect)"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "60 days allowed if no suspect can be identified"
+
+    - id: "REQ-SAR-102"
+      title: "Continuing Activity Reports"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "File every 90 days for continuing activity"
+
+    - id: "REQ-SAR-103"
+      title: "Immediate Notification"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Notify law enforcement immediately for imminent threats"

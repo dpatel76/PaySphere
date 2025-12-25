@@ -1,0 +1,134 @@
+# GPS CDM - NiFi + Celery Integration Stack
+#
+# Usage:
+#   docker-compose -f docker-compose.nifi.yaml up -d
+#
+# This starts:
+#   - NiFi (port 8080) - Flow orchestration
+#   - Redis (port 6379) - Celery broker
+#   - Flower (port 5555) - Celery monitoring & API
+#   - PostgreSQL (port 5432) - Data persistence
+#
+# After startup:
+#   1. Import NiFi templates from nifi/templates/
+#   2. Start Celery workers: celery -A gps_cdm.orchestration.celery_tasks worker -Q bronze,silver,gold,dq,cdc -l info
+#   3. Run integration test: python tests/integration/test_nifi_celery_integration.py
+
+services:
+  # Apache NiFi - Flow Orchestration
+  nifi:
+    image: apache/nifi:1.25.0
+    container_name: gps-cdm-nifi
+    ports:
+      - "8080:8080"   # NiFi UI
+      - "8443:8443"   # NiFi HTTPS (if enabled)
+    environment:
+      - NIFI_WEB_HTTP_PORT=8080
+      - SINGLE_USER_CREDENTIALS_USERNAME=admin
+      - SINGLE_USER_CREDENTIALS_PASSWORD=adminpassword123
+    volumes:
+      - nifi_data:/opt/nifi/nifi-current/data
+      - nifi_logs:/opt/nifi/nifi-current/logs
+      - ./nifi/templates:/opt/nifi/nifi-current/conf/templates:ro
+    networks:
+      - gps-cdm-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/nifi-api/system-diagnostics"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Redis - Celery Broker
+  redis:
+    image: redis:7-alpine
+    container_name: gps-cdm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - gps-cdm-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Flower - Celery Monitoring & HTTP API
+  flower:
+    image: mher/flower:2.0
+    container_name: gps-cdm-flower
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FLOWER_PORT=5555
+      - FLOWER_BASIC_AUTH=admin:flowerpassword
+    depends_on:
+      - redis
+    networks:
+      - gps-cdm-network
+    command: celery --broker=redis://redis:6379/0 flower
+
+  # PostgreSQL - Data Persistence
+  postgres:
+    image: postgres:16-alpine
+    container_name: gps-cdm-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=gps_cdm
+      - POSTGRES_USER=gps_cdm_svc
+      - POSTGRES_PASSWORD=gps_cdm_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./ddl/postgresql:/docker-entrypoint-initdb.d:ro
+    networks:
+      - gps-cdm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gps_cdm_svc -d gps_cdm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Neo4j - Knowledge Graph Database
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: gps-cdm-neo4j
+    ports:
+      - "7474:7474"   # HTTP
+      - "7687:7687"   # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/neo4jpassword123
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use__neo4j__config=true
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=1G
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - ./cdm/physical-model/neo4j:/import:ro
+    networks:
+      - gps-cdm-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  gps-cdm-network:
+    driver: bridge
+
+volumes:
+  nifi_data:
+  nifi_logs:
+  redis_data:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:

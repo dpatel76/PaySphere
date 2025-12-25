@@ -1,0 +1,955 @@
+# GPS CDM - pain.001 Full Mapping
+# ISO 20022 Customer Credit Transfer Initiation
+#
+# This file defines the complete transformation:
+#   Bronze (raw XML) → Silver (stg_pain001) → Gold (cdm_payment_instruction)
+#
+# Reference: /documents/mappings/standards/ISO20022_pain001_CustomerCreditTransferInitiation_Mapping.md
+
+version: "2.0"
+
+mapping:
+  id: PAIN001_FULL
+  name: "ISO 20022 pain.001 Customer Credit Transfer Initiation"
+  message_type: "pain.001"
+  message_version: "001.001.09"
+  description: |
+    Complete Bronze→Silver→Gold transformation for ISO 20022 pain.001 messages.
+    Supports batch processing with multiple payment instructions per message.
+
+  # ============================================================================
+  # STAGE 1: BRONZE → SILVER (Parse raw XML to structured staging)
+  # ============================================================================
+  bronze_to_silver:
+    source:
+      layer: bronze
+      table: raw_payment_messages
+      content_column: raw_content
+      format: XML
+      parser: iso20022
+      namespace: "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"
+      root_element: Document/CstmrCdtTrfInitn
+      filter:
+        message_type: "pain.001"
+
+    target:
+      layer: silver
+      table: stg_pain001
+
+    # Entity extraction for repeating elements
+    entity_extraction:
+      - path: //PmtInf
+        entity: payment_info
+        key_field: PmtInfId
+        children:
+          - path: CdtTrfTxInf
+            entity: transaction
+            key_field: PmtId/EndToEndId
+
+    fields:
+      # --- Group Header ---
+      - source: GrpHdr/MsgId
+        target: message_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: GrpHdr/CreDtTm
+        target: creation_datetime
+        type: timestamp
+        required: true
+
+      - source: GrpHdr/NbOfTxs
+        target: number_of_transactions
+        type: integer
+        required: true
+
+      - source: GrpHdr/CtrlSum
+        target: control_sum
+        type: decimal
+        precision: 18
+        scale: 4
+
+      - source: GrpHdr/InitgPty/Nm
+        target: initiating_party_name
+        type: string
+        max_length: 140
+
+      - source: GrpHdr/InitgPty/Id/OrgId/AnyBIC
+        target: initiating_party_bic
+        type: string
+        max_length: 11
+
+      # --- Payment Information (Batch) ---
+      - source: PmtInf/PmtInfId
+        target: payment_information_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: PmtInf/PmtMtd
+        target: payment_method
+        type: string
+        max_length: 3
+
+      - source: PmtInf/BtchBookg
+        target: batch_booking
+        type: boolean
+        default: false
+
+      - source: PmtInf/NbOfTxs
+        target: batch_number_of_transactions
+        type: integer
+
+      - source: PmtInf/CtrlSum
+        target: batch_control_sum
+        type: decimal
+        precision: 18
+        scale: 4
+
+      - source: PmtInf/ReqdExctnDt/Dt
+        target: requested_execution_date
+        type: date
+
+      - source: PmtInf/ReqdExctnDt/DtTm
+        target: requested_execution_datetime
+        type: timestamp
+
+      # --- Debtor (Originator) ---
+      - source: PmtInf/Dbtr/Nm
+        target: debtor_name
+        type: string
+        required: true
+        max_length: 140
+
+      - source: PmtInf/Dbtr/PstlAdr/StrtNm
+        target: debtor_street_name
+        type: string
+        max_length: 70
+
+      - source: PmtInf/Dbtr/PstlAdr/BldgNb
+        target: debtor_building_number
+        type: string
+        max_length: 16
+
+      - source: PmtInf/Dbtr/PstlAdr/PstCd
+        target: debtor_postal_code
+        type: string
+        max_length: 16
+
+      - source: PmtInf/Dbtr/PstlAdr/TwnNm
+        target: debtor_town_name
+        type: string
+        max_length: 35
+
+      - source: PmtInf/Dbtr/PstlAdr/CtrySubDvsn
+        target: debtor_country_subdivision
+        type: string
+        max_length: 35
+
+      - source: PmtInf/Dbtr/PstlAdr/Ctry
+        target: debtor_country
+        type: string
+        max_length: 2
+
+      - source: PmtInf/Dbtr/Id/OrgId/LEI
+        target: debtor_lei
+        type: string
+        max_length: 20
+
+      - source: PmtInf/Dbtr/Id/OrgId/AnyBIC
+        target: debtor_bic
+        type: string
+        max_length: 11
+
+      - source: PmtInf/Dbtr/Id/OrgId/Othr/Id
+        target: debtor_org_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/Dbtr/Id/PrvtId/DtAndPlcOfBirth/BirthDt
+        target: debtor_birth_date
+        type: date
+
+      - source: PmtInf/Dbtr/Id/PrvtId/DtAndPlcOfBirth/CityOfBirth
+        target: debtor_birth_city
+        type: string
+        max_length: 35
+
+      - source: PmtInf/Dbtr/Id/PrvtId/DtAndPlcOfBirth/CtryOfBirth
+        target: debtor_birth_country
+        type: string
+        max_length: 2
+
+      - source: PmtInf/Dbtr/Id/PrvtId/Othr/Id
+        target: debtor_private_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/Dbtr/Id/PrvtId/Othr/SchmeNm/Cd
+        target: debtor_private_id_type
+        type: string
+        max_length: 4
+
+      # --- Debtor Account ---
+      - source: PmtInf/DbtrAcct/Id/IBAN
+        target: debtor_account_iban
+        type: string
+        max_length: 34
+
+      - source: PmtInf/DbtrAcct/Id/Othr/Id
+        target: debtor_account_other
+        type: string
+        max_length: 34
+
+      - source: PmtInf/DbtrAcct/Tp/Cd
+        target: debtor_account_type
+        type: string
+        max_length: 4
+
+      - source: PmtInf/DbtrAcct/Ccy
+        target: debtor_account_currency
+        type: string
+        max_length: 3
+
+      # --- Debtor Agent ---
+      - source: PmtInf/DbtrAgt/FinInstnId/BICFI
+        target: debtor_agent_bic
+        type: string
+        required: true
+        max_length: 11
+
+      - source: PmtInf/DbtrAgt/FinInstnId/ClrSysMmbId/ClrSysId/Cd
+        target: debtor_agent_clearing_system
+        type: string
+        max_length: 5
+
+      - source: PmtInf/DbtrAgt/FinInstnId/ClrSysMmbId/MmbId
+        target: debtor_agent_member_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/DbtrAgt/FinInstnId/Nm
+        target: debtor_agent_name
+        type: string
+        max_length: 140
+
+      # --- Transaction (Credit Transfer) ---
+      - source: PmtInf/CdtTrfTxInf/PmtId/InstrId
+        target: instruction_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/PmtId/EndToEndId
+        target: end_to_end_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/PmtId/UETR
+        target: uetr
+        type: string
+        max_length: 36
+
+      - source: PmtInf/CdtTrfTxInf/PmtId/TxId
+        target: transaction_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/PmtTpInf/InstrPrty
+        target: instruction_priority
+        type: string
+        max_length: 4
+
+      - source: PmtInf/CdtTrfTxInf/PmtTpInf/SvcLvl/Cd
+        target: service_level_code
+        type: string
+        max_length: 4
+
+      - source: PmtInf/CdtTrfTxInf/PmtTpInf/LclInstrm/Cd
+        target: local_instrument_code
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/PmtTpInf/CtgyPurp/Cd
+        target: category_purpose_code
+        type: string
+        max_length: 4
+
+      # --- Amounts ---
+      - source: PmtInf/CdtTrfTxInf/Amt/InstdAmt
+        target: instructed_amount
+        type: decimal
+        precision: 18
+        scale: 4
+        required: true
+        extract: text_content
+
+      - source: PmtInf/CdtTrfTxInf/Amt/InstdAmt/@Ccy
+        target: instructed_currency
+        type: string
+        required: true
+        max_length: 3
+        extract: attribute
+
+      - source: PmtInf/CdtTrfTxInf/Amt/EqvtAmt/Amt
+        target: equivalent_amount
+        type: decimal
+        precision: 18
+        scale: 4
+        extract: text_content
+
+      - source: PmtInf/CdtTrfTxInf/Amt/EqvtAmt/Amt/@Ccy
+        target: equivalent_currency
+        type: string
+        max_length: 3
+        extract: attribute
+
+      - source: PmtInf/CdtTrfTxInf/XchgRateInf/XchgRt
+        target: exchange_rate
+        type: decimal
+        precision: 18
+        scale: 10
+
+      - source: PmtInf/CdtTrfTxInf/XchgRateInf/RateTp
+        target: exchange_rate_type
+        type: string
+        max_length: 4
+
+      - source: PmtInf/CdtTrfTxInf/ChrgBr
+        target: charge_bearer
+        type: string
+        max_length: 4
+
+      # --- Creditor Agent ---
+      - source: PmtInf/CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI
+        target: creditor_agent_bic
+        type: string
+        max_length: 11
+
+      - source: PmtInf/CdtTrfTxInf/CdtrAgt/FinInstnId/ClrSysMmbId/MmbId
+        target: creditor_agent_member_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm
+        target: creditor_agent_name
+        type: string
+        max_length: 140
+
+      # --- Creditor (Beneficiary) ---
+      - source: PmtInf/CdtTrfTxInf/Cdtr/Nm
+        target: creditor_name
+        type: string
+        required: true
+        max_length: 140
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/StrtNm
+        target: creditor_street_name
+        type: string
+        max_length: 70
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/BldgNb
+        target: creditor_building_number
+        type: string
+        max_length: 16
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/PstCd
+        target: creditor_postal_code
+        type: string
+        max_length: 16
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/TwnNm
+        target: creditor_town_name
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/CtrySubDvsn
+        target: creditor_country_subdivision
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/Ctry
+        target: creditor_country
+        type: string
+        max_length: 2
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/Id/OrgId/LEI
+        target: creditor_lei
+        type: string
+        max_length: 20
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/Id/OrgId/AnyBIC
+        target: creditor_bic
+        type: string
+        max_length: 11
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/Id/OrgId/Othr/Id
+        target: creditor_org_id
+        type: string
+        max_length: 35
+
+      # --- Creditor Account ---
+      - source: PmtInf/CdtTrfTxInf/CdtrAcct/Id/IBAN
+        target: creditor_account_iban
+        type: string
+        max_length: 34
+
+      - source: PmtInf/CdtTrfTxInf/CdtrAcct/Id/Othr/Id
+        target: creditor_account_other
+        type: string
+        max_length: 34
+
+      - source: PmtInf/CdtTrfTxInf/CdtrAcct/Tp/Cd
+        target: creditor_account_type
+        type: string
+        max_length: 4
+
+      # --- Ultimate Parties ---
+      - source: PmtInf/UltmtDbtr/Nm
+        target: ultimate_debtor_name
+        type: string
+        max_length: 140
+
+      - source: PmtInf/CdtTrfTxInf/UltmtCdtr/Nm
+        target: ultimate_creditor_name
+        type: string
+        max_length: 140
+
+      # --- Intermediary Agents ---
+      - source: PmtInf/CdtTrfTxInf/IntrmyAgt1/FinInstnId/BICFI
+        target: intermediary_agent1_bic
+        type: string
+        max_length: 11
+
+      - source: PmtInf/CdtTrfTxInf/IntrmyAgt2/FinInstnId/BICFI
+        target: intermediary_agent2_bic
+        type: string
+        max_length: 11
+
+      # --- Purpose & Remittance ---
+      - source: PmtInf/CdtTrfTxInf/Purp/Cd
+        target: purpose_code
+        type: string
+        max_length: 4
+
+      - source: PmtInf/CdtTrfTxInf/Purp/Prtry
+        target: purpose_proprietary
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/RmtInf/Ustrd
+        target: remittance_unstructured
+        type: string
+        max_length: 140
+
+      - source: PmtInf/CdtTrfTxInf/RmtInf/Strd/RfrdDocInf/Nb
+        target: remittance_reference
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/RmtInf/Strd
+        target: remittance_structured
+        type: json
+        transform:
+          type: xml_to_json
+
+      # --- Regulatory Reporting ---
+      - source: PmtInf/CdtTrfTxInf/RgltryRptg/Dtls/Cd
+        target: regulatory_reporting_code
+        type: string
+        max_length: 10
+
+      - source: PmtInf/CdtTrfTxInf/RgltryRptg/Dtls/Inf
+        target: regulatory_reporting_info
+        type: string
+        max_length: 35
+
+      # --- Tax ---
+      - source: PmtInf/CdtTrfTxInf/Tax/Cdtr/TaxId
+        target: tax_creditor_id
+        type: string
+        max_length: 35
+
+      - source: PmtInf/CdtTrfTxInf/Tax/Dbtr/TaxId
+        target: tax_debtor_id
+        type: string
+        max_length: 35
+
+  # ============================================================================
+  # STAGE 2: SILVER → GOLD (Structured staging to unified CDM)
+  # ============================================================================
+  silver_to_gold:
+    source:
+      layer: silver
+      table: stg_pain001
+      filter:
+        processing_status: "PENDING"
+
+    target:
+      layer: gold
+      table: cdm_payment_instruction
+      # These fields are auto-populated for lineage
+      source_message_type: "pain.001"
+      source_stg_table: "stg_pain001"
+
+    fields:
+      # --- Primary Identifiers ---
+      - source: stg_id
+        target: source_stg_id
+        type: string
+        required: true
+
+      - source: end_to_end_id
+        target: end_to_end_id
+        type: string
+        required: true
+
+      - source: uetr
+        target: uetr
+        type: string
+
+      - source: transaction_id
+        target: transaction_id
+        type: string
+
+      - source: instruction_id
+        target: instruction_id_ext
+        type: string
+
+      - source: message_id
+        target: message_id
+        type: string
+
+      # --- Classification ---
+      - target: payment_type
+        type: string
+        transform:
+          type: constant
+          value: "CREDIT_TRANSFER"
+
+      - source: service_level_code
+        target: scheme_code
+        type: string
+        transform:
+          type: lookup
+          mapping:
+            SEPA: "SEPA_CT"
+            URGP: "TARGET2"
+            SDVA: "SAME_DAY"
+            NURG: "STANDARD"
+          default: "STANDARD"
+
+      - target: direction
+        type: string
+        transform:
+          type: constant
+          value: "OUTBOUND"
+
+      - source: debtor_country
+        target: cross_border_flag
+        type: boolean
+        transform:
+          type: expression
+          expr: "debtor_country != creditor_country"
+
+      - source: instruction_priority
+        target: priority
+        type: string
+        transform:
+          type: lookup
+          mapping:
+            HIGH: "HIGH"
+            NORM: "NORM"
+          default: "NORM"
+
+      - source: service_level_code
+        target: service_level
+        type: string
+
+      - source: local_instrument_code
+        target: local_instrument
+        type: string
+
+      - source: category_purpose_code
+        target: category_purpose
+        type: string
+
+      # --- Amounts ---
+      - source: instructed_amount
+        target: instructed_amount
+        type: decimal
+        required: true
+
+      - source: instructed_currency
+        target: instructed_currency
+        type: string
+        required: true
+
+      - source: equivalent_amount
+        target: interbank_settlement_amount
+        type: decimal
+
+      - source: equivalent_currency
+        target: interbank_settlement_currency
+        type: string
+
+      - source: exchange_rate
+        target: exchange_rate
+        type: decimal
+
+      - source: exchange_rate_type
+        target: exchange_rate_type
+        type: string
+
+      # --- Dates ---
+      - source: creation_datetime
+        target: creation_datetime
+        type: timestamp
+
+      - source: requested_execution_date
+        target: requested_execution_date
+        type: date
+
+      # --- Purpose & Remittance ---
+      - source: purpose_code
+        target: purpose
+        type: string
+
+      - source: purpose_proprietary
+        target: purpose_description
+        type: string
+
+      - source: charge_bearer
+        target: charge_bearer
+        type: string
+        transform:
+          type: lookup
+          mapping:
+            DEBT: "OUR"
+            CRED: "BEN"
+            SHAR: "SHA"
+            SLEV: "SLEV"
+          default: "SHA"
+
+      - source: remittance_unstructured
+        target: remittance_unstructured
+        type: array
+        transform:
+          type: split
+          delimiter: "\n"
+
+      - source: remittance_reference
+        target: remittance_reference
+        type: string
+
+      - source: remittance_structured
+        target: remittance_structured
+        type: json
+
+      # --- Status ---
+      - target: current_status
+        type: string
+        transform:
+          type: constant
+          value: "RECEIVED"
+
+      # --- Source Tracking ---
+      - source: source_system
+        target: source_system
+        type: string
+
+      - source: raw_message_id
+        target: source_raw_id
+        type: string
+
+      # --- Partitioning ---
+      - source: requested_execution_date
+        target: partition_year
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(YEAR FROM requested_execution_date)"
+
+      - source: requested_execution_date
+        target: partition_month
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(MONTH FROM requested_execution_date)"
+
+      - source: debtor_country
+        target: region
+        type: string
+        transform:
+          type: lookup
+          table: country_to_region
+          default: "GLOBAL"
+
+    # --- Party Entities (separate CDM tables) ---
+    party_mappings:
+      - role: debtor
+        target_table: cdm_party
+        fields:
+          - source: debtor_name
+            target: name
+          - source: debtor_id
+            target: lei
+          - source: debtor_id_type
+            target: identification_type
+          - source: debtor_birth_date
+            target: date_of_birth
+          - source: debtor_birth_city
+            target: place_of_birth
+          - source: debtor_birth_country
+            target: nationality
+          - source: debtor_street_name
+            target: street_name
+          - source: debtor_building_number
+            target: building_number
+          - source: debtor_postal_code
+            target: post_code
+          - source: debtor_town_name
+            target: town_name
+          - source: debtor_country_subdivision
+            target: country_sub_division
+          - source: debtor_country
+            target: country
+
+      - role: creditor
+        target_table: cdm_party
+        fields:
+          - source: creditor_name
+            target: name
+          - source: creditor_id
+            target: lei
+          - source: creditor_id_type
+            target: identification_type
+          - source: creditor_street_name
+            target: street_name
+          - source: creditor_building_number
+            target: building_number
+          - source: creditor_postal_code
+            target: post_code
+          - source: creditor_town_name
+            target: town_name
+          - source: creditor_country
+            target: country
+
+    # --- Account Entities ---
+    account_mappings:
+      - role: debtor_account
+        target_table: cdm_account
+        fields:
+          - source: debtor_account_iban
+            target: iban
+          - source: debtor_account_other
+            target: account_number
+          - source: debtor_account_type
+            target: account_type
+          - source: debtor_account_currency
+            target: currency
+
+      - role: creditor_account
+        target_table: cdm_account
+        fields:
+          - source: creditor_account_iban
+            target: iban
+          - source: creditor_account_other
+            target: account_number
+          - source: creditor_account_type
+            target: account_type
+
+    # --- Financial Institution Entities ---
+    fi_mappings:
+      - role: debtor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: debtor_agent_bic
+            target: bic
+          - source: debtor_agent_name
+            target: institution_name
+          - source: debtor_agent_clearing_system
+            target: national_clearing_system
+          - source: debtor_agent_member_id
+            target: national_clearing_code
+
+      - role: creditor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: creditor_agent_bic
+            target: bic
+          - source: creditor_agent_name
+            target: institution_name
+          - source: creditor_agent_member_id
+            target: national_clearing_code
+
+      - role: intermediary_agent1
+        target_table: cdm_financial_institution
+        fields:
+          - source: intermediary_agent1_bic
+            target: bic
+
+      - role: intermediary_agent2
+        target_table: cdm_financial_institution
+        fields:
+          - source: intermediary_agent2_bic
+            target: bic
+
+  # ============================================================================
+  # VALIDATION RULES (Applied at Silver layer)
+  # ============================================================================
+  validations:
+    - id: PAIN001_VAL001
+      stage: silver
+      rule: "instructed_amount > 0"
+      severity: ERROR
+      message: "Instructed amount must be greater than zero"
+      error_code: AM01
+      dimension: validity
+
+    - id: PAIN001_VAL002
+      stage: silver
+      rule: "instructed_currency IS NOT NULL AND LENGTH(instructed_currency) = 3"
+      severity: ERROR
+      message: "Currency is required and must be 3 characters"
+      error_code: AM02
+      dimension: validity
+
+    - id: PAIN001_VAL003
+      stage: silver
+      rule: "end_to_end_id IS NOT NULL AND LENGTH(end_to_end_id) <= 35"
+      severity: ERROR
+      message: "End-to-end ID is required and cannot exceed 35 characters"
+      error_code: FF01
+      dimension: completeness
+
+    - id: PAIN001_VAL004
+      stage: silver
+      rule: "debtor_name IS NOT NULL"
+      severity: ERROR
+      message: "Debtor name is required"
+      error_code: BE01
+      dimension: completeness
+
+    - id: PAIN001_VAL005
+      stage: silver
+      rule: "creditor_name IS NOT NULL"
+      severity: ERROR
+      message: "Creditor name is required"
+      error_code: BE02
+      dimension: completeness
+
+    - id: PAIN001_VAL006
+      stage: silver
+      rule: "debtor_agent_bic IS NULL OR debtor_agent_bic ~ '^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$'"
+      severity: ERROR
+      message: "Invalid Debtor Agent BIC format"
+      error_code: RC01
+      dimension: accuracy
+
+    - id: PAIN001_VAL007
+      stage: silver
+      rule: "creditor_agent_bic IS NULL OR creditor_agent_bic ~ '^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$'"
+      severity: ERROR
+      message: "Invalid Creditor Agent BIC format"
+      error_code: RC02
+      dimension: accuracy
+
+    - id: PAIN001_VAL008
+      stage: silver
+      rule: "debtor_account_iban IS NULL OR debtor_account_iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$'"
+      severity: WARNING
+      message: "Invalid Debtor IBAN format"
+      error_code: AC01
+      dimension: accuracy
+
+    - id: PAIN001_VAL009
+      stage: silver
+      rule: "requested_execution_date >= CURRENT_DATE - INTERVAL '1 year'"
+      severity: WARNING
+      message: "Requested execution date is more than 1 year in the past"
+      error_code: DT01
+      dimension: timeliness
+
+    - id: PAIN001_VAL010
+      stage: silver
+      rule: "charge_bearer IS NULL OR charge_bearer IN ('DEBT', 'CRED', 'SHAR', 'SLEV')"
+      severity: ERROR
+      message: "Invalid charge bearer code"
+      error_code: CH01
+      dimension: validity
+
+  # ============================================================================
+  # DATA QUALITY CONFIGURATION
+  # ============================================================================
+  quality:
+    # Completeness weights by field
+    completeness:
+      - field: end_to_end_id
+        weight: 1.0
+        required: true
+      - field: instructed_amount
+        weight: 1.0
+        required: true
+      - field: instructed_currency
+        weight: 1.0
+        required: true
+      - field: debtor_name
+        weight: 1.0
+        required: true
+      - field: creditor_name
+        weight: 1.0
+        required: true
+      - field: debtor_agent_bic
+        weight: 0.9
+      - field: creditor_agent_bic
+        weight: 0.8
+      - field: debtor_account_iban
+        weight: 0.7
+      - field: creditor_account_iban
+        weight: 0.7
+      - field: purpose_code
+        weight: 0.5
+
+    # Accuracy validations
+    accuracy:
+      - field: debtor_account_iban
+        validation: validate_iban
+      - field: creditor_account_iban
+        validation: validate_iban
+      - field: debtor_agent_bic
+        validation: validate_bic
+      - field: creditor_agent_bic
+        validation: validate_bic
+      - field: debtor_lei
+        validation: validate_lei
+
+    # Timeliness
+    timeliness:
+      timestamp_field: creation_datetime
+      max_age_hours: 24
+
+    # Thresholds
+    thresholds:
+      overall_pass: 0.80
+      completeness_pass: 0.85
+      accuracy_pass: 0.90
+      validity_pass: 0.95
+
+  # ============================================================================
+  # OPTIMIZATION HINTS
+  # ============================================================================
+  optimization:
+    bronze_to_silver:
+      batch_size: 1000
+      parallel_parse: true
+      cache_namespaces: true
+
+    silver_to_gold:
+      batch_size: 5000
+      partition_filter: "requested_execution_date >= CURRENT_DATE - 30"
+      cluster_by:
+        - debtor_agent_bic
+        - creditor_agent_bic
+      broadcast_lookups: true

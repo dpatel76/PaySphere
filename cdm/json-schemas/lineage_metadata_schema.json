@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gps-cdm/schemas/lineage_metadata.schema.json",
+  "title": "LineageMetadata",
+  "description": "Field-level lineage metadata tracking data transformations",
+  "type": "object",
+  "required": [
+    "lineage_id",
+    "entity_type",
+    "entity_id",
+    "field_name",
+    "source_system",
+    "source_field",
+    "transformation_type",
+    "effective_from",
+    "created_timestamp"
+  ],
+  "properties": {
+    "lineage_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Primary key"
+    },
+    "entity_type": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "CDM entity type (Payment, Party, Account, etc.)"
+    },
+    "entity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "CDM entity ID"
+    },
+    "field_name": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Target CDM field name"
+    },
+    "field_path": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Full JSON path to field"
+    },
+    "source_system": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Source system name"
+    },
+    "source_database": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "source_schema": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "source_table": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Source table/collection name"
+    },
+    "source_field": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Source field name"
+    },
+    "source_field_path": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Source JSON path"
+    },
+    "transformation_type": {
+      "type": "string",
+      "enum": [
+        "DIRECT",
+        "DERIVED",
+        "LOOKUP",
+        "AGGREGATED",
+        "CONSTANT",
+        "DEFAULT",
+        "CONCATENATION",
+        "SPLIT",
+        "CONDITIONAL",
+        "FORMAT",
+        "PARSE",
+        "ENRICHMENT"
+      ],
+      "description": "Type of transformation applied"
+    },
+    "transformation_logic": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Transformation expression or rule"
+    },
+    "transformation_version": {
+      "type": "string",
+      "maxLength": 20,
+      "description": "Transformation rule version"
+    },
+    "lookup_table": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Reference table for LOOKUP type"
+    },
+    "lookup_key": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Lookup key column"
+    },
+    "confidence_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Mapping confidence (0-1)"
+    },
+    "data_quality_impact": {
+      "type": "string",
+      "enum": ["NONE", "LOW", "MEDIUM", "HIGH"],
+      "description": "DQ impact of transformation"
+    },
+    "effective_from": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Lineage validity start"
+    },
+    "effective_to": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Lineage validity end"
+    },
+    "created_by": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "created_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "batch_id": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Ingestion batch identifier"
+    },
+    "pipeline_id": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Data pipeline identifier"
+    },
+    "pipeline_run_id": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Pipeline run/execution ID"
+    }
+  },
+  "additionalProperties": false
+}

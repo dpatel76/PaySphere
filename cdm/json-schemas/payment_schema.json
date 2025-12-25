@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gps-cdm/schemas/payment.schema.json",
+  "title": "Payment",
+  "description": "Root entity representing a payment transaction in the GPS CDM",
+  "type": "object",
+  "required": [
+    "payment_id",
+    "payment_type",
+    "scheme_code",
+    "status",
+    "direction",
+    "created_at",
+    "valid_from"
+  ],
+  "properties": {
+    "payment_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Primary key - UUID v4"
+    },
+    "payment_type": {
+      "type": "string",
+      "enum": [
+        "CREDIT_TRANSFER",
+        "DIRECT_DEBIT",
+        "RETURN",
+        "REVERSAL",
+        "STATUS_REPORT"
+      ],
+      "description": "Type of payment"
+    },
+    "scheme_code": {
+      "type": "string",
+      "enum": [
+        "ACH",
+        "FEDWIRE",
+        "CHIPS",
+        "SWIFT",
+        "SEPA",
+        "RTP",
+        "FEDNOW",
+        "BACS",
+        "FPS",
+        "CHAPS",
+        "PIX",
+        "UPI",
+        "PROMPTPAY",
+        "PAYNOW",
+        "CIPS",
+        "CHECK",
+        "MOBILE"
+      ],
+      "description": "Payment scheme/network"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "initiated",
+        "received",
+        "accepted",
+        "validation_pending",
+        "validated",
+        "validation_failed",
+        "fraud_screening",
+        "fraud_clear",
+        "fraud_hold",
+        "fraud_reject",
+        "sanctions_screening",
+        "sanctions_clear",
+        "sanctions_hit",
+        "sanctions_rejected",
+        "compliance_review",
+        "compliance_approved",
+        "compliance_rejected",
+        "enrichment_pending",
+        "enriched",
+        "processing",
+        "queued",
+        "routed",
+        "transmitted",
+        "in_clearing",
+        "clearing_failed",
+        "settled",
+        "settlement_pending",
+        "settlement_failed",
+        "completed",
+        "returned",
+        "reversed",
+        "cancelled",
+        "rejected",
+        "failed",
+        "suspended",
+        "on_hold",
+        "awaiting_approval",
+        "approved",
+        "partially_settled"
+      ],
+      "description": "Current lifecycle status"
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["INBOUND", "OUTBOUND", "INTERNAL"],
+      "description": "Payment direction"
+    },
+    "cross_border_flag": {
+      "type": "boolean",
+      "default": false,
+      "description": "Cross-border payment indicator"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["HIGH", "NORM", "URGP"],
+      "default": "NORM",
+      "description": "Processing priority"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "valid_from": {
+      "type": "string",
+      "format": "date",
+      "description": "Business validity start"
+    },
+    "valid_to": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Business validity end"
+    },
+    "instruction_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to PaymentInstruction"
+    },
+    "settlement_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "FK to Settlement"
+    },
+    "lineage_metadata": {
+      "$ref": "#/$defs/lineage_metadata"
+    },
+    "source_system": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Originating source system"
+    },
+    "source_system_record_id": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Source record identifier"
+    },
+    "ingestion_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "partition_year": {
+      "type": "integer",
+      "minimum": 2020,
+      "maximum": 2100
+    },
+    "partition_month": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12
+    },
+    "region": {
+      "type": "string",
+      "enum": ["US", "EMEA", "APAC", "LATAM"]
+    },
+    "created_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_updated_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_updated_by": {
+      "type": "string",
+      "default": "SYSTEM"
+    },
+    "record_version": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "is_deleted": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "$defs": {
+    "lineage_metadata": {
+      "type": "object",
+      "description": "Embedded lineage tracking",
+      "properties": {
+        "source_system": {
+          "type": "string"
+        },
+        "source_table": {
+          "type": "string"
+        },
+        "source_record_id": {
+          "type": "string"
+        },
+        "transformation_id": {
+          "type": "string"
+        },
+        "batch_id": {
+          "type": "string"
+        },
+        "pipeline_run_id": {
+          "type": "string"
+        },
+        "ingestion_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "bronze_to_silver_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

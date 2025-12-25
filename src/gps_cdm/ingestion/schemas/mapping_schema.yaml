@@ -1,0 +1,353 @@
+# GPS Payments CDM - Mapping Schema Specification
+# Version: 1.0.0
+#
+# This schema defines the structure for configuration-driven mappings
+# from source formats (ISO20022, SWIFT MT, etc.) to CDM entities.
+#
+# Reference: /documents/mappings/ contains detailed field documentation
+
+$schema: "http://json-schema.org/draft-07/schema#"
+$id: "https://gps-cdm.io/schemas/mapping/v1"
+title: "GPS CDM Mapping Configuration"
+description: "Configuration-driven mapping from source formats to CDM"
+
+definitions:
+  # Supported source formats
+  source_format:
+    type: string
+    enum:
+      - XML           # ISO 20022, regional XML
+      - SWIFT_MT      # SWIFT MT messages
+      - JSON          # API payloads
+      - CSV           # Batch files
+      - FIXED_WIDTH   # Fedwire, ACH
+      - EDIFACT       # Legacy EDI
+
+  # Data types
+  data_type:
+    type: string
+    enum:
+      - string
+      - integer
+      - decimal
+      - boolean
+      - date
+      - datetime
+      - time
+      - uuid
+      - enum
+      - array
+      - object
+
+  # Transform types
+  transform_type:
+    type: string
+    enum:
+      - direct         # 1:1 copy
+      - lookup         # Code lookup
+      - expression     # Calculated
+      - conditional    # If/then logic
+      - split          # One to many
+      - merge          # Many to one
+      - regex          # Pattern extract
+      - template       # String template
+      - custom         # Custom function
+
+  # Validation severity
+  severity:
+    type: string
+    enum:
+      - ERROR          # Fails record
+      - WARNING        # Logs warning
+      - INFO           # Informational
+
+# Main schema
+type: object
+required:
+  - version
+  - mapping
+properties:
+  version:
+    type: string
+    pattern: "^\\d+\\.\\d+(\\.\\d+)?$"
+    description: "Schema version"
+
+  mapping:
+    type: object
+    required:
+      - id
+      - name
+      - source
+      - fields
+    properties:
+      # Mapping identification
+      id:
+        type: string
+        pattern: "^[A-Z0-9_]+$"
+        description: "Unique mapping identifier"
+
+      name:
+        type: string
+        description: "Human-readable name"
+
+      description:
+        type: string
+        description: "Detailed description"
+
+      doc_reference:
+        type: string
+        description: "Path to detailed mapping document"
+
+      # Source configuration
+      source:
+        type: object
+        required:
+          - format
+          - parser
+        properties:
+          format:
+            $ref: "#/definitions/source_format"
+
+          parser:
+            type: string
+            description: "Parser implementation to use"
+
+          # XML-specific
+          namespace:
+            type: string
+            description: "XML namespace URI"
+
+          root_element:
+            type: string
+            description: "XML root element name"
+
+          # MT-specific
+          message_type:
+            type: string
+            pattern: "^MT[0-9]{3}$"
+
+          # CSV-specific
+          delimiter:
+            type: string
+            default: ","
+
+          header:
+            type: boolean
+            default: true
+
+          # Fixed-width specific
+          record_length:
+            type: integer
+
+      # Entity extraction (for 1:N relationships)
+      entity_extraction:
+        type: array
+        items:
+          type: object
+          required:
+            - path
+            - entity
+          properties:
+            path:
+              type: string
+              description: "Path to repeating element"
+            entity:
+              type: string
+              description: "Target CDM entity"
+            key_field:
+              type: string
+              description: "Field to use as entity key"
+            children:
+              type: array
+              description: "Nested entity extractions"
+
+      # Field mappings
+      fields:
+        type: array
+        items:
+          type: object
+          required:
+            - target
+          properties:
+            # Source specification
+            source:
+              type: string
+              description: "Source path (XPath, field tag, JSONPath)"
+
+            sources:
+              type: array
+              items:
+                type: string
+              description: "Multiple sources for merge operations"
+
+            # Target specification
+            target:
+              type: object
+              required:
+                - entity
+                - attribute
+              properties:
+                entity:
+                  type: string
+                  description: "Target CDM entity name"
+                attribute:
+                  type: string
+                  description: "Target CDM attribute name"
+
+            # Data type
+            type:
+              $ref: "#/definitions/data_type"
+              default: string
+
+            # Type-specific options
+            precision:
+              type: integer
+              description: "Decimal precision"
+            scale:
+              type: integer
+              description: "Decimal scale"
+            date_format:
+              type: string
+              description: "Date/time format pattern"
+            max_length:
+              type: integer
+              description: "Maximum string length"
+            array_type:
+              $ref: "#/definitions/data_type"
+              description: "Type of array elements"
+
+            # Required/optional
+            required:
+              type: boolean
+              default: false
+
+            nullable:
+              type: boolean
+              default: true
+
+            # Transformation
+            transform:
+              oneOf:
+                - type: string
+                  description: "Simple transform name"
+                - type: object
+                  properties:
+                    type:
+                      $ref: "#/definitions/transform_type"
+                    # Lookup options
+                    table:
+                      type: string
+                    mapping:
+                      type: object
+                    default:
+                      description: "Default value if lookup fails"
+                    # Expression options
+                    expr:
+                      type: string
+                    depends_on:
+                      type: array
+                      items:
+                        type: string
+                    # Regex options
+                    pattern:
+                      type: string
+                    group:
+                      type: integer
+                    # Template options
+                    template:
+                      type: string
+                    # Custom options
+                    function:
+                      type: string
+                    params:
+                      type: object
+
+            # Extraction hint
+            extract:
+              type: string
+              enum:
+                - text_content    # Inner text of XML element
+                - attribute       # XML attribute value
+                - full_element    # Entire element as string
+                - child_elements  # Array of child elements
+
+            # Conditional mapping
+            condition:
+              type: string
+              description: "Condition expression for when to apply"
+
+            # Documentation
+            notes:
+              type: string
+
+      # Validation rules
+      validations:
+        type: array
+        items:
+          type: object
+          required:
+            - rule
+            - severity
+            - message
+          properties:
+            id:
+              type: string
+            rule:
+              type: string
+              description: "Validation expression"
+            severity:
+              $ref: "#/definitions/severity"
+            message:
+              type: string
+            error_code:
+              type: string
+
+      # Data quality rules
+      quality:
+        type: object
+        properties:
+          completeness:
+            type: array
+            items:
+              type: object
+              properties:
+                field:
+                  type: string
+                weight:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+          accuracy:
+            type: array
+            items:
+              type: object
+              properties:
+                field:
+                  type: string
+                validation:
+                  type: string
+          timeliness:
+            type: object
+            properties:
+              timestamp_field:
+                type: string
+              max_age_hours:
+                type: integer
+
+      # Performance optimization hints
+      optimization:
+        type: object
+        properties:
+          partition_filter:
+            type: string
+            description: "Predicate for partition pruning"
+          cluster_by:
+            type: array
+            items:
+              type: string
+          broadcast_lookups:
+            type: boolean
+            default: true
+          cache_parsed:
+            type: boolean
+            default: false

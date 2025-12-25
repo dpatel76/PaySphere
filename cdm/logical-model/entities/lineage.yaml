@@ -1,0 +1,333 @@
+# Lineage Domain Entities
+# Version: 1.0.0
+# Entities: LineageMetadata, AuditTrail
+
+domain:
+  name: lineage
+  description: Data lineage and audit trail tracking
+  entity_count: 2
+
+entities:
+  - name: LineageMetadata
+    description: Field-level lineage metadata tracking transformations
+    table_name: lineage_metadata
+    primary_key: lineage_id
+    attributes:
+      - name: lineage_id
+        type: uuid
+        required: true
+
+      - name: entity_type
+        type: string
+        max_length: 50
+        required: true
+        description: CDM entity type (Payment, Party, Account, etc.)
+
+      - name: entity_id
+        type: uuid
+        required: true
+        description: CDM entity ID
+
+      - name: field_name
+        type: string
+        max_length: 100
+        required: true
+        description: Target CDM field name
+
+      - name: field_path
+        type: string
+        max_length: 500
+        required: false
+        description: Full JSON path to field
+
+      - name: source_system
+        type: string
+        max_length: 100
+        required: true
+        description: Source system name
+
+      - name: source_database
+        type: string
+        max_length: 100
+        required: false
+
+      - name: source_schema
+        type: string
+        max_length: 100
+        required: false
+
+      - name: source_table
+        type: string
+        max_length: 200
+        required: false
+        description: Source table/collection name
+
+      - name: source_field
+        type: string
+        max_length: 200
+        required: true
+        description: Source field name
+
+      - name: source_field_path
+        type: string
+        max_length: 500
+        required: false
+        description: Source JSON path
+
+      - name: transformation_type
+        type: enum
+        required: true
+        values:
+          - DIRECT          # 1:1 field mapping
+          - DERIVED         # Calculated from source fields
+          - LOOKUP          # Reference data lookup
+          - AGGREGATED      # Aggregation/summary
+          - CONSTANT        # Constant value assignment
+          - DEFAULT         # Default value when source null
+          - CONCATENATION   # Multiple fields concatenated
+          - SPLIT           # Single field split
+          - CONDITIONAL     # Conditional transformation
+          - FORMAT          # Format conversion
+          - PARSE           # Parse from structured text
+          - ENRICHMENT      # External data enrichment
+
+      - name: transformation_logic
+        type: string
+        max_length: 2000
+        required: false
+        description: Transformation expression or rule
+
+      - name: transformation_version
+        type: string
+        max_length: 20
+        required: false
+        description: Transformation rule version
+
+      - name: lookup_table
+        type: string
+        max_length: 200
+        required: false
+        description: Reference table for LOOKUP type
+
+      - name: lookup_key
+        type: string
+        max_length: 100
+        required: false
+        description: Lookup key column
+
+      - name: confidence_score
+        type: decimal
+        precision: 5
+        scale: 4
+        required: false
+        description: Mapping confidence (0-1)
+
+      - name: data_quality_impact
+        type: enum
+        values: [NONE, LOW, MEDIUM, HIGH]
+        required: false
+        description: DQ impact of transformation
+
+      - name: effective_from
+        type: timestamp
+        required: true
+        description: Lineage validity start
+
+      - name: effective_to
+        type: timestamp
+        required: false
+        description: Lineage validity end
+
+      - name: created_by
+        type: string
+        max_length: 100
+        required: false
+
+      - name: created_timestamp
+        type: timestamp
+        required: true
+
+      - name: batch_id
+        type: string
+        max_length: 100
+        required: false
+        description: Ingestion batch identifier
+
+      - name: pipeline_id
+        type: string
+        max_length: 100
+        required: false
+        description: Data pipeline identifier
+
+      - name: pipeline_run_id
+        type: string
+        max_length: 100
+        required: false
+        description: Pipeline run/execution ID
+
+    indexes:
+      - name: idx_lineage_entity
+        columns: [entity_type, entity_id]
+      - name: idx_lineage_source
+        columns: [source_system, source_table]
+      - name: idx_lineage_field
+        columns: [entity_type, field_name]
+      - name: idx_lineage_batch
+        columns: [batch_id]
+
+  - name: AuditTrail
+    description: Audit trail for all entity changes
+    table_name: audit_trail
+    primary_key: audit_id
+    attributes:
+      - name: audit_id
+        type: uuid
+        required: true
+
+      - name: entity_type
+        type: string
+        max_length: 50
+        required: true
+        description: Entity type
+
+      - name: entity_id
+        type: uuid
+        required: true
+        description: Entity ID
+
+      - name: action
+        type: enum
+        required: true
+        values:
+          - CREATE
+          - UPDATE
+          - DELETE
+          - SOFT_DELETE
+          - RESTORE
+          - READ
+          - EXPORT
+          - ARCHIVE
+          - MERGE
+          - SPLIT
+
+      - name: action_timestamp
+        type: timestamp
+        required: true
+
+      - name: actor
+        type: string
+        max_length: 100
+        required: true
+        description: Actor identifier
+
+      - name: actor_type
+        type: enum
+        required: true
+        values: [USER, SYSTEM, API, BATCH, SCHEDULER, EXTERNAL]
+
+      - name: actor_ip
+        type: string
+        max_length: 45
+        required: false
+        description: Actor IP address (IPv4/IPv6)
+
+      - name: actor_location
+        type: string
+        max_length: 100
+        required: false
+
+      - name: session_id
+        type: string
+        max_length: 100
+        required: false
+
+      - name: request_id
+        type: uuid
+        required: false
+        description: API request ID
+
+      - name: correlation_id
+        type: uuid
+        required: false
+        description: Request correlation ID
+
+      - name: old_values
+        type: json
+        required: false
+        description: Previous field values (for UPDATE/DELETE)
+
+      - name: new_values
+        type: json
+        required: false
+        description: New field values (for CREATE/UPDATE)
+
+      - name: changed_fields
+        type: array
+        item_type: string
+        required: false
+        description: List of changed field names
+
+      - name: change_reason
+        type: string
+        max_length: 500
+        required: false
+        description: Reason for change
+
+      - name: change_ticket
+        type: string
+        max_length: 50
+        required: false
+        description: Change ticket/JIRA reference
+
+      - name: approval_id
+        type: uuid
+        required: false
+        description: Approval workflow ID if applicable
+
+      - name: approved_by
+        type: string
+        max_length: 100
+        required: false
+
+      - name: approval_timestamp
+        type: timestamp
+        required: false
+
+      - name: data_classification
+        type: enum
+        values: [PUBLIC, INTERNAL, CONFIDENTIAL, RESTRICTED, PII, PHI]
+        required: false
+        description: Data classification level
+
+      - name: retention_period_days
+        type: integer
+        required: false
+        description: Audit record retention period
+
+      - name: is_sensitive
+        type: boolean
+        required: false
+        default: false
+        description: Contains sensitive data flag
+
+      - name: metadata
+        type: json
+        required: false
+        description: Additional audit metadata
+
+    indexes:
+      - name: idx_audit_entity
+        columns: [entity_type, entity_id]
+      - name: idx_audit_timestamp
+        columns: [action_timestamp]
+      - name: idx_audit_actor
+        columns: [actor, actor_type]
+      - name: idx_audit_action
+        columns: [action]
+      - name: idx_audit_correlation
+        columns: [correlation_id]
+
+    partitioning:
+      type: range
+      column: action_timestamp
+      interval: monthly

@@ -1,0 +1,78 @@
+# REQ-CTR-002: Multiple Transaction Aggregation
+# Requirement for aggregating multiple currency transactions
+
+requirement:
+  id: "REQ-CTR-002"
+
+  # Classification
+  regulator: "FinCEN"
+  regulation: "31 CFR 1010.313"
+  report_type: "CTR"
+  category: "ELIGIBILITY"
+  subcategory: "AGGREGATION"
+
+  # Requirement Details
+  title: "Multiple Transaction Aggregation"
+  description: |
+    Multiple currency transactions shall be treated as a single transaction
+    if the financial institution has knowledge that they are by or on behalf
+    of any person and result in either cash in or cash out totaling more than $10,000
+    during any one business day.
+
+    Financial institutions must aggregate transactions when they have knowledge
+    that multiple transactions are conducted by or on behalf of the same person.
+
+  # Source References
+  source:
+    document: "Bank Secrecy Act - 31 CFR 1010.313"
+    section: "1010.313(a)"
+    url: "https://www.ecfr.gov/current/title-31/subtitle-B/chapter-X/part-1010/subpart-C/section-1010.313"
+    effective_date: "1972-01-01"
+    last_amended: "2023-06-15"
+
+  # Requirement Attributes
+  attributes:
+    aggregation_window: "BUSINESS_DAY"
+    aggregation_threshold: 10000
+    aggregation_currency: "USD"
+    aggregation_scope:
+      - "SAME_PERSON"
+      - "ON_BEHALF_OF"
+    aggregation_types:
+      - "CASH_IN"
+      - "CASH_OUT"
+    knowledge_standard: "ACTUAL_OR_CONSTRUCTIVE"
+
+  # Criticality
+  criticality: "MANDATORY"
+  penalty_risk: "HIGH"
+  penalty_description: |
+    Failure to aggregate transactions is a common examination finding
+    and can result in significant civil money penalties.
+
+  # Related Requirements
+  related_requirements:
+    - "REQ-CTR-001"  # Primary threshold
+    - "REQ-CTR-008"  # Structuring detection
+
+  # Lifecycle
+  status: "ACTIVE"
+  superseded_by: null
+
+  # Implementation Tracking
+  implementation:
+    expected_dsl_rules:
+      - "aggregate_threshold"
+    expected_dsl_fields: []
+    expected_validations: []
+    implementation_notes: |
+      Aggregate by party_id and processing_date. Sum cash_in and cash_out
+      separately. If either total exceeds $10,000, file CTR.
+
+    test_scenarios:
+      - "Three $4,000 deposits same person same day - REPORTABLE"
+      - "Three $4,000 deposits different persons same day - NOT REPORTABLE"
+      - "$6,000 cash in + $5,000 cash out same person - BOTH REPORTABLE"
+
+  created_by: "GPS CDM Compliance Team"
+  created_date: "2024-12-20"

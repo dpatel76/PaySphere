@@ -1,0 +1,358 @@
+# Reference Domain Entities
+# Version: 1.0.0
+# Entities: PaymentTypeInformation, RegulatoryReporting, RemittanceInformation, Document
+
+domain:
+  name: reference
+  description: Reference data and metadata for payments
+  entity_count: 4
+
+entities:
+  - name: PaymentTypeInformation
+    description: Payment type classification and routing information
+    table_name: payment_type_information
+    primary_key: type_info_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: type_info_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: service_level
+        type: string
+        max_length: 4
+        required: false
+        description: "Service level code: SEPA, URGP, SDVA, NURG"
+
+      - name: service_level_proprietary
+        type: string
+        max_length: 35
+        required: false
+        description: Proprietary service level
+
+      - name: local_instrument
+        type: string
+        max_length: 35
+        required: false
+        description: Local instrument code
+
+      - name: local_instrument_proprietary
+        type: string
+        max_length: 35
+        required: false
+
+      - name: category_purpose
+        type: string
+        max_length: 4
+        required: false
+        description: ISO 20022 category purpose code
+
+      - name: category_purpose_proprietary
+        type: string
+        max_length: 35
+        required: false
+
+      - name: clearing_channel
+        type: enum
+        values:
+          - RTGS    # Real-time gross settlement
+          - RTNS    # Real-time net settlement
+          - ACH     # Automated Clearing House
+          - BOOK    # Book transfer
+          - MPNS    # Mass payment net settlement
+        required: false
+
+      - name: instruction_priority
+        type: enum
+        values: [HIGH, NORM]
+        required: false
+        default: NORM
+
+      - name: sequence_type
+        type: enum
+        values:
+          - FRST    # First
+          - RCUR    # Recurring
+          - FNAL    # Final
+          - OOFF    # One-off
+        required: false
+        description: Direct debit sequence type
+
+      - name: payment_context
+        type: enum
+        values:
+          - BILL    # Bill payment
+          - IPAY    # Instant payment
+          - PPAY    # Preauthorized payment
+          - BNKP    # Bank payment
+          - FLTP    # Float payment
+        required: false
+
+  - name: RegulatoryReporting
+    description: Regulatory reporting information attached to payment
+    table_name: regulatory_reporting
+    primary_key: reporting_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: reporting_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: jurisdiction
+        type: string
+        max_length: 2
+        required: true
+        description: ISO 3166-1 alpha-2 country code
+
+      - name: reporting_type
+        type: string
+        max_length: 35
+        required: true
+        description: "Report type: CTR, SAR, IFTI, FATCA, etc."
+
+      - name: reporting_code
+        type: string
+        max_length: 10
+        required: false
+        description: Regulatory reporting code
+
+      - name: reporting_amount_id
+        type: uuid
+        required: false
+        description: FK to Amount (reportable amount)
+
+      - name: reporting_details
+        type: string
+        max_length: 500
+        required: false
+        description: Additional reporting details
+
+      - name: threshold_indicator
+        type: boolean
+        required: false
+        default: false
+        description: Above reporting threshold flag
+
+      - name: threshold_amount
+        type: decimal
+        precision: 18
+        scale: 2
+        required: false
+        description: Applicable threshold amount
+
+      - name: debtor_reference
+        type: string
+        max_length: 35
+        required: false
+        description: Debtor regulatory reference
+
+      - name: creditor_reference
+        type: string
+        max_length: 35
+        required: false
+        description: Creditor regulatory reference
+
+      - name: reporting_authority
+        type: string
+        max_length: 100
+        required: false
+        description: Regulatory authority name
+
+      - name: report_due_date
+        type: date
+        required: false
+
+      - name: report_submitted_date
+        type: date
+        required: false
+
+      - name: report_reference
+        type: string
+        max_length: 35
+        required: false
+        description: Filed report reference number
+
+  - name: RemittanceInformation
+    description: Payment remittance details
+    table_name: remittance_information
+    primary_key: remittance_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: remittance_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: unstructured
+        type: array
+        item_type: string
+        max_length: 140
+        required: false
+        description: Unstructured remittance information (up to 4 lines)
+
+      - name: structured_type
+        type: enum
+        values:
+          - RADM    # Remittance Advice Message Reference
+          - RPIN    # Related Payment Information
+          - FXDR    # Foreign Exchange Dealing Reference
+          - DISP    # Dispute Reference
+          - PUOR    # Purchase Order Number
+          - SCOR    # Structured Communication Reference
+          - CINV    # Commercial Invoice Number
+        required: false
+
+      - name: creditor_reference
+        type: string
+        max_length: 35
+        required: false
+        description: ISO 11649 creditor reference
+
+      - name: creditor_reference_type
+        type: string
+        max_length: 4
+        required: false
+        description: Reference type code
+
+      - name: invoiced_amount_id
+        type: uuid
+        required: false
+        description: FK to Amount (invoice amount)
+
+      - name: due_date
+        type: date
+        required: false
+        description: Payment due date
+
+      - name: document_id
+        type: uuid
+        required: false
+        description: FK to Document
+
+      - name: additional_remittance_info
+        type: array
+        item_type: string
+        required: false
+
+      - name: remittance_location_method
+        type: enum
+        values: [EMAL, FAXI, EDIC, URID, SMSM, POST]
+        required: false
+        description: Delivery method for remittance advice
+
+      - name: remittance_location_address
+        type: string
+        max_length: 256
+        required: false
+        description: Delivery address for remittance advice
+
+  - name: Document
+    description: Related document reference
+    table_name: document
+    primary_key: document_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: document_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: document_type
+        type: enum
+        required: true
+        values:
+          - INVOICE
+          - CREDIT_NOTE
+          - DEBIT_NOTE
+          - PURCHASE_ORDER
+          - SALES_ORDER
+          - DELIVERY_NOTE
+          - CONTRACT
+          - STATEMENT
+          - RECEIPT
+          - REMITTANCE_ADVICE
+          - CUSTOMS_DECLARATION
+          - OTHER
+
+      - name: document_reference
+        type: string
+        max_length: 35
+        required: true
+        description: Document reference number
+
+      - name: document_date
+        type: date
+        required: false
+
+      - name: document_description
+        type: string
+        max_length: 500
+        required: false
+
+      - name: line_items
+        type: array
+        item_type: object
+        required: false
+        description: Line item details for invoice/order
+
+      - name: related_dates
+        type: array
+        item_type: object
+        required: false
+        description: Related date references (due date, delivery date)
+
+      - name: amounts
+        type: array
+        item_type: uuid
+        required: false
+        description: Related Amount references
+
+      - name: issuer
+        type: string
+        max_length: 140
+        required: false
+        description: Document issuer name
+
+      - name: file_reference
+        type: string
+        max_length: 256
+        required: false
+        description: File storage reference
+
+      - name: mime_type
+        type: string
+        max_length: 100
+        required: false
+        description: Document MIME type
+
+      - name: checksum
+        type: string
+        max_length: 64
+        required: false
+        description: Document content checksum (SHA-256)

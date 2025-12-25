@@ -1,0 +1,285 @@
+# Settlement Domain Entities
+# Version: 1.0.0
+# Entities: Settlement, SettlementInstruction, ClearingSystem
+
+domain:
+  name: settlement
+  description: Settlement processing and clearing systems
+  entity_count: 3
+
+entities:
+  - name: Settlement
+    description: Settlement record for payment completion
+    table_name: settlement
+    primary_key: settlement_id
+    foreign_keys:
+      - name: payment_id
+        target: Payment
+        required: true
+    attributes:
+      - name: settlement_id
+        type: uuid
+        required: true
+
+      - name: payment_id
+        type: uuid
+        required: true
+
+      - name: settlement_date
+        type: date
+        required: true
+        description: Actual settlement date
+
+      - name: settlement_amount_id
+        type: uuid
+        required: true
+        description: FK to Amount
+
+      - name: settlement_method
+        type: enum
+        required: true
+        values:
+          - INDA    # Instructed Agent (direct)
+          - INGA    # Instructing Agent (via intermediary)
+          - COVE    # Cover Method
+          - CLRG    # Clearing System
+        description: Settlement method code
+
+      - name: clearing_system_id
+        type: uuid
+        required: false
+        description: FK to ClearingSystem
+
+      - name: settlement_status
+        type: enum
+        required: true
+        values:
+          - PENDING
+          - PROCESSING
+          - SETTLED
+          - PARTIALLY_SETTLED
+          - FAILED
+          - CANCELLED
+          - REVERSED
+
+      - name: settlement_cycle
+        type: string
+        max_length: 10
+        required: false
+        description: "Settlement cycle: T+0, T+1, T+2"
+
+      - name: interbank_settlement_date
+        type: date
+        required: false
+        description: Interbank settlement date
+
+      - name: interbank_settlement_amount_id
+        type: uuid
+        required: false
+        description: FK to Amount (interbank amount)
+
+      - name: settlement_account_id
+        type: uuid
+        required: false
+        description: FK to Account
+
+      - name: settlement_time
+        type: time
+        required: false
+
+      - name: settlement_reference
+        type: string
+        max_length: 35
+        required: false
+
+      - name: batch_id
+        type: string
+        max_length: 35
+        required: false
+        description: Settlement batch identifier
+
+      - name: netting_indicator
+        type: boolean
+        required: false
+        default: false
+        description: Part of netted settlement
+
+      - name: created_timestamp
+        type: timestamp
+        required: true
+
+      - name: settled_timestamp
+        type: timestamp
+        required: false
+
+  - name: SettlementInstruction
+    description: Settlement instruction details
+    table_name: settlement_instruction
+    primary_key: instruction_id
+    foreign_keys:
+      - name: settlement_id
+        target: Settlement
+        required: true
+    attributes:
+      - name: instruction_id
+        type: uuid
+        required: true
+
+      - name: settlement_id
+        type: uuid
+        required: true
+
+      - name: account_id
+        type: uuid
+        required: true
+        description: FK to Account (settlement account)
+
+      - name: instruction_type
+        type: enum
+        required: true
+        values: [CREDIT, DEBIT]
+
+      - name: instruction_priority
+        type: enum
+        values: [HIGH, NORM, URGP]
+        required: false
+        default: NORM
+
+      - name: instruction_for_creditor_agent
+        type: string
+        max_length: 140
+        required: false
+
+      - name: instruction_for_debtor_agent
+        type: string
+        max_length: 140
+        required: false
+
+      - name: instruction_for_next_agent
+        type: string
+        max_length: 140
+        required: false
+
+      - name: purpose
+        type: string
+        max_length: 4
+        required: false
+        description: Purpose code
+
+      - name: regulatory_reporting
+        type: array
+        item_type: object
+        required: false
+        description: Regulatory reporting information
+
+      - name: execution_date
+        type: date
+        required: false
+
+      - name: sequence_number
+        type: integer
+        required: false
+        description: Instruction sequence in batch
+
+  - name: ClearingSystem
+    description: Clearing system reference data
+    table_name: clearing_system
+    primary_key: clearing_system_id
+    attributes:
+      - name: clearing_system_id
+        type: uuid
+        required: true
+
+      - name: system_code
+        type: string
+        max_length: 10
+        required: true
+        description: "System code: ACH, FEDWIRE, TARGET2, CHAPS, etc."
+
+      - name: system_name
+        type: string
+        max_length: 100
+        required: true
+        description: Full system name
+
+      - name: system_type
+        type: enum
+        required: true
+        values:
+          - RTGS        # Real-Time Gross Settlement
+          - ACH         # Automated Clearing House
+          - HYBRID      # Hybrid system
+          - NETTING     # Net settlement system
+          - INSTANT     # Instant payment system
+
+      - name: country
+        type: string
+        max_length: 2
+        required: true
+        description: Operating country (ISO 3166-1)
+
+      - name: currency
+        type: string
+        max_length: 3
+        required: true
+        description: Settlement currency (ISO 4217)
+
+      - name: operating_hours
+        type: string
+        max_length: 50
+        required: false
+        description: "Operating hours: 24x7, 06:00-18:00"
+
+      - name: cut_off_time
+        type: time
+        required: false
+        description: Daily cut-off time
+
+      - name: settlement_cycle
+        type: string
+        max_length: 10
+        required: false
+        description: "Default settlement cycle: T+0, T+1"
+
+      - name: member_id
+        type: string
+        max_length: 35
+        required: false
+        description: Institution's membership ID
+
+      - name: is_participant
+        type: boolean
+        required: false
+        default: false
+        description: Direct participant flag
+
+      - name: operator
+        type: string
+        max_length: 100
+        required: false
+        description: System operator (e.g., Federal Reserve, ECB)
+
+      - name: max_transaction_amount
+        type: decimal
+        precision: 18
+        scale: 2
+        required: false
+        description: Maximum single transaction amount
+
+      - name: min_transaction_amount
+        type: decimal
+        precision: 18
+        scale: 2
+        required: false
+
+      - name: effective_from
+        type: date
+        required: true
+
+      - name: effective_to
+        type: date
+        required: false
+
+      - name: is_current
+        type: boolean
+        required: true

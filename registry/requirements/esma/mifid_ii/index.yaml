@@ -1,0 +1,122 @@
+# ESMA MiFID II Transaction Report - Requirement Index
+# Report Type: MiFID II
+# Regulator: ESMA
+# Jurisdiction: EU
+# Total Requirements: 142
+
+report_metadata:
+  report_type: "MIFID_II"
+  report_name: "MiFID II Transaction Report"
+  regulator: "ESMA"
+  jurisdiction: "EU"
+  regulation: "MiFIR Article 26"
+  effective_date: "2018-01-03"
+  last_updated: "2024-12-21"
+  filing_frequency: "DAILY"
+  filing_deadline: "T+1"
+  output_format: "XML"
+  submission_method: "Approved Reporting Mechanism (ARM)"
+
+requirement_summary:
+  total: 142
+  by_category:
+    ELIGIBILITY: 8
+    FIELD: 110
+    VALIDATION: 16
+    FORMAT: 5
+    TIMING: 2
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 125
+    RECOMMENDED: 12
+    OPTIONAL: 5
+
+requirements:
+  eligibility:
+    - id: "REQ-MIFID-001"
+      title: "Reportable Financial Instrument"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Instruments traded on EU trading venues"
+
+    - id: "REQ-MIFID-002"
+      title: "Investment Firm Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+  fields_transaction:
+    - id: "REQ-MIFID-020"
+      title: "Transaction Reference Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "transaction_id"
+
+    - id: "REQ-MIFID-021"
+      title: "Trading Date Time"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+
+    - id: "REQ-MIFID-022"
+      title: "Instrument Identification Code"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "ISIN code"
+
+    - id: "REQ-MIFID-023"
+      title: "Price"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_amount"
+
+    - id: "REQ-MIFID-024"
+      title: "Quantity"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  fields_parties:
+    - id: "REQ-MIFID-030"
+      title: "Buyer Identification"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "lei"
+        role: "creditor"
+
+    - id: "REQ-MIFID-031"
+      title: "Seller Identification"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "lei"
+        role: "debtor"
+
+    - id: "REQ-MIFID-032"
+      title: "Executing Entity LEI"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "FinancialInstitution"
+        field: "lei"
+
+  timing:
+    - id: "REQ-MIFID-090"
+      title: "T+1 Reporting Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+cdm_coverage:
+  entities_used:
+    - Payment
+    - PaymentInstruction
+    - Party
+    - FinancialInstitution
+  coverage_percentage: 100

@@ -1,0 +1,173 @@
+# UK SAR (Suspicious Activity Report) - Requirement Index
+# Report Type: UK_SAR
+# Regulator: UK NCA (National Crime Agency)
+# Jurisdiction: UK
+# Total Requirements: 122
+
+report_metadata:
+  report_type: "UK_SAR"
+  report_name: "Suspicious Activity Report"
+  regulator: "UK_NCA"
+  jurisdiction: "UK"
+  regulation: "Proceeds of Crime Act 2002, Terrorism Act 2000"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "As soon as practicable"
+  output_format: "XML"
+  submission_method: "SAR Online"
+  submission_url: "https://www.ukciu.gov.uk/"
+
+requirement_summary:
+  total: 122
+  by_category:
+    ELIGIBILITY: 10
+    FIELD: 92
+    VALIDATION: 12
+    FORMAT: 5
+    TIMING: 3
+  by_criticality:
+    MANDATORY: 105
+    RECOMMENDED: 14
+    OPTIONAL: 3
+
+requirements:
+  eligibility:
+    - id: "REQ-UKSAR-001"
+      title: "Knowledge or Suspicion of Money Laundering"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Knowledge or suspicion that property is criminal property"
+
+    - id: "REQ-UKSAR-002"
+      title: "Knowledge or Suspicion of Terrorist Financing"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Knowledge or suspicion related to terrorist property or financing"
+
+    - id: "REQ-UKSAR-003"
+      title: "Regulated Sector Obligation"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Obligation for regulated sector entities"
+
+    - id: "REQ-UKSAR-004"
+      title: "Nominated Officer Role"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Internal disclosure to nominated officer first"
+
+    - id: "REQ-UKSAR-005"
+      title: "Principal Money Laundering Offences"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Concealing, arranging, acquiring criminal property"
+
+    - id: "REQ-UKSAR-006"
+      title: "Tax Evasion Suspicion"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Suspicion of tax evasion or tax fraud"
+
+    - id: "REQ-UKSAR-007"
+      title: "Failure to Disclose"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Obligation to report to avoid failure to disclose offence"
+
+    - id: "REQ-UKSAR-008"
+      title: "Tipping Off Prohibition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Must not alert subject of SAR"
+
+  fields_subject:
+    - id: "REQ-UKSAR-020"
+      title: "Subject Full Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-021"
+      title: "Subject Date of Birth"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-022"
+      title: "Subject Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-023"
+      title: "Subject Nationality"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-UKSAR-024"
+      title: "Subject Occupation"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-UKSAR-025"
+      title: "Subject Account Numbers"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-026"
+      title: "Subject Relationship to Reporter"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  fields_activity:
+    - id: "REQ-UKSAR-040"
+      title: "Reason for Suspicion"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-041"
+      title: "Nature of Suspicion"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-042"
+      title: "Activity Description"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-043"
+      title: "Activity Dates"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-044"
+      title: "Amount Involved"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-045"
+      title: "Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-UKSAR-046"
+      title: "Transaction Types"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-UKSAR-100"
+      title: "Prompt Submission"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Submit as soon as practicable after suspicion forms"
+
+    - id: "REQ-UKSAR-101"
+      title: "Consent Request Timing"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "7 working days for consent decision"
+
+    - id: "REQ-UKSAR-102"
+      title: "Moratorium Period"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "31-day moratorium period extension possible"

@@ -1,0 +1,465 @@
+# GPS CDM - ACH Full Mapping
+# NACHA Automated Clearing House
+#
+# This file defines the complete transformation:
+#   Bronze (raw ACH) → Silver (stg_ach) → Gold (cdm_payment_instruction)
+
+version: "2.0"
+
+mapping:
+  id: ACH_FULL
+  name: "NACHA ACH Payment"
+  message_type: "ACH"
+  message_version: "2023"
+  description: |
+    Complete Bronze→Silver→Gold transformation for NACHA ACH files.
+    Supports CCD, PPD, CTX, WEB, TEL entry types.
+
+  # ============================================================================
+  # STAGE 1: BRONZE → SILVER
+  # ============================================================================
+  bronze_to_silver:
+    source:
+      layer: bronze
+      table: raw_payment_messages
+      content_column: raw_content
+      format: NACHA
+      parser: ach
+      filter:
+        message_type: "ACH"
+
+    target:
+      layer: silver
+      table: stg_ach
+
+    # ACH file structure: File Header → Batch Header → Entry Detail → Batch Control → File Control
+    entity_extraction:
+      - path: batch
+        entity: batch
+        key_field: batch_number
+        children:
+          - path: entry
+            entity: entry_detail
+            key_field: trace_number
+
+    fields:
+      # --- File Header (Record Type 1) ---
+      - source: file_header.immediate_destination
+        target: immediate_destination
+        type: string
+        max_length: 10
+
+      - source: file_header.immediate_origin
+        target: immediate_origin
+        type: string
+        max_length: 10
+
+      - source: file_header.file_creation_date
+        target: file_creation_date
+        type: date
+        date_format: "YYMMDD"
+
+      - source: file_header.file_creation_time
+        target: file_creation_time
+        type: string
+        max_length: 4
+
+      - source: file_header.file_id_modifier
+        target: file_id_modifier
+        type: string
+        max_length: 1
+
+      - source: file_header.immediate_destination_name
+        target: immediate_destination_name
+        type: string
+        max_length: 23
+
+      - source: file_header.immediate_origin_name
+        target: immediate_origin_name
+        type: string
+        max_length: 23
+
+      # --- Batch Header (Record Type 5) ---
+      - source: batch.service_class_code
+        target: service_class_code
+        type: string
+        max_length: 3
+
+      - source: batch.company_name
+        target: company_name
+        type: string
+        required: true
+        max_length: 16
+
+      - source: batch.company_discretionary_data
+        target: company_discretionary_data
+        type: string
+        max_length: 20
+
+      - source: batch.company_identification
+        target: company_identification
+        type: string
+        required: true
+        max_length: 10
+
+      - source: batch.standard_entry_class_code
+        target: standard_entry_class_code
+        type: string
+        required: true
+        max_length: 3
+
+      - source: batch.company_entry_description
+        target: company_entry_description
+        type: string
+        max_length: 10
+
+      - source: batch.company_descriptive_date
+        target: company_descriptive_date
+        type: string
+        max_length: 6
+
+      - source: batch.effective_entry_date
+        target: effective_entry_date
+        type: date
+        date_format: "YYMMDD"
+
+      - source: batch.originating_dfi_identification
+        target: originating_dfi_identification
+        type: string
+        required: true
+        max_length: 8
+
+      - source: batch.batch_number
+        target: batch_number
+        type: integer
+
+      # --- Entry Detail (Record Type 6) ---
+      - source: entry.transaction_code
+        target: transaction_code
+        type: string
+        required: true
+        max_length: 2
+
+      - source: entry.receiving_dfi_identification
+        target: receiving_dfi_identification
+        type: string
+        required: true
+        max_length: 8
+
+      - source: entry.check_digit
+        target: check_digit
+        type: string
+        max_length: 1
+
+      - source: entry.dfi_account_number
+        target: dfi_account_number
+        type: string
+        required: true
+        max_length: 17
+
+      - source: entry.amount
+        target: amount
+        type: decimal
+        precision: 12
+        scale: 2
+        required: true
+
+      - source: entry.individual_identification_number
+        target: individual_identification_number
+        type: string
+        max_length: 15
+
+      - source: entry.individual_name
+        target: individual_name
+        type: string
+        required: true
+        max_length: 22
+
+      - source: entry.discretionary_data
+        target: discretionary_data
+        type: string
+        max_length: 2
+
+      - source: entry.addenda_record_indicator
+        target: addenda_record_indicator
+        type: string
+        max_length: 1
+
+      - source: entry.trace_number
+        target: trace_number
+        type: string
+        required: true
+        max_length: 15
+
+      # --- Addenda (Record Type 7) ---
+      - source: entry.addenda.type_code
+        target: addenda_type_code
+        type: string
+        max_length: 2
+
+      - source: entry.addenda.payment_related_info
+        target: payment_related_info
+        type: string
+        max_length: 80
+
+      - source: entry.addenda.sequence_number
+        target: addenda_sequence_number
+        type: integer
+
+      - source: entry.addenda.entry_detail_sequence
+        target: entry_detail_sequence
+        type: string
+        max_length: 7
+
+  # ============================================================================
+  # STAGE 2: SILVER → GOLD
+  # ============================================================================
+  silver_to_gold:
+    source:
+      layer: silver
+      table: stg_ach
+      filter:
+        processing_status: "PENDING"
+
+    target:
+      layer: gold
+      table: cdm_payment_instruction
+      source_message_type: "ACH"
+      source_stg_table: "stg_ach"
+
+    fields:
+      - source: stg_id
+        target: source_stg_id
+        type: string
+        required: true
+
+      - source: trace_number
+        target: end_to_end_id
+        type: string
+        required: true
+
+      - target: payment_type
+        type: string
+        transform:
+          type: expression
+          expr: |
+            CASE
+              WHEN transaction_code IN ('22', '23', '32', '33') THEN 'CREDIT_TRANSFER'
+              WHEN transaction_code IN ('27', '28', '37', '38') THEN 'DEBIT_TRANSFER'
+              ELSE 'CREDIT_TRANSFER'
+            END
+
+      - source: standard_entry_class_code
+        target: scheme_code
+        type: string
+        transform:
+          type: expression
+          expr: "'ACH_' || standard_entry_class_code"
+
+      - source: transaction_code
+        target: direction
+        type: string
+        transform:
+          type: lookup
+          mapping:
+            "22": "OUTBOUND"
+            "23": "OUTBOUND"
+            "27": "INBOUND"
+            "28": "INBOUND"
+            "32": "OUTBOUND"
+            "33": "OUTBOUND"
+            "37": "INBOUND"
+            "38": "INBOUND"
+          default: "OUTBOUND"
+
+      - target: cross_border_flag
+        type: boolean
+        transform:
+          type: constant
+          value: false
+
+      - target: priority
+        type: string
+        transform:
+          type: constant
+          value: "NORM"
+
+      - source: amount
+        target: instructed_amount
+        type: decimal
+        required: true
+
+      - target: instructed_currency
+        type: string
+        transform:
+          type: constant
+          value: "USD"
+
+      - source: effective_entry_date
+        target: requested_execution_date
+        type: date
+
+      - source: effective_entry_date
+        target: value_date
+        type: date
+
+      - source: payment_related_info
+        target: remittance_unstructured
+        type: array
+        transform:
+          type: wrap_array
+
+      - target: current_status
+        type: string
+        transform:
+          type: constant
+          value: "RECEIVED"
+
+      - source: source_system
+        target: source_system
+        type: string
+
+      - source: effective_entry_date
+        target: partition_year
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(YEAR FROM effective_entry_date)"
+
+      - source: effective_entry_date
+        target: partition_month
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(MONTH FROM effective_entry_date)"
+
+      - target: region
+        type: string
+        transform:
+          type: constant
+          value: "US"
+
+    party_mappings:
+      - role: debtor
+        target_table: cdm_party
+        fields:
+          - source: company_name
+            target: name
+          - source: company_identification
+            target: tax_id
+
+      - role: creditor
+        target_table: cdm_party
+        fields:
+          - source: individual_name
+            target: name
+          - source: individual_identification_number
+            target: identification_number
+
+    account_mappings:
+      - role: creditor_account
+        target_table: cdm_account
+        fields:
+          - source: dfi_account_number
+            target: account_number
+
+    fi_mappings:
+      - role: debtor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: originating_dfi_identification
+            target: national_clearing_code
+          - target: national_clearing_system
+            transform:
+              type: constant
+              value: "USABA"
+
+      - role: creditor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: receiving_dfi_identification
+            target: national_clearing_code
+          - target: national_clearing_system
+            transform:
+              type: constant
+              value: "USABA"
+
+  # ============================================================================
+  # VALIDATION RULES
+  # ============================================================================
+  validations:
+    - id: ACH_VAL001
+      stage: silver
+      rule: "trace_number IS NOT NULL AND LENGTH(trace_number) = 15"
+      severity: ERROR
+      message: "Trace Number is required and must be 15 digits"
+      error_code: ACH01
+      dimension: completeness
+
+    - id: ACH_VAL002
+      stage: silver
+      rule: "amount > 0"
+      severity: ERROR
+      message: "Amount must be greater than zero"
+      error_code: ACH02
+      dimension: validity
+
+    - id: ACH_VAL003
+      stage: silver
+      rule: "standard_entry_class_code IN ('CCD', 'CTX', 'PPD', 'WEB', 'TEL', 'POP', 'RCK', 'ARC', 'BOC', 'IAT')"
+      severity: ERROR
+      message: "Invalid Standard Entry Class Code"
+      error_code: ACH03
+      dimension: validity
+
+    - id: ACH_VAL004
+      stage: silver
+      rule: "transaction_code IN ('22', '23', '27', '28', '32', '33', '37', '38')"
+      severity: ERROR
+      message: "Invalid Transaction Code"
+      error_code: ACH04
+      dimension: validity
+
+    - id: ACH_VAL005
+      stage: silver
+      rule: "receiving_dfi_identification ~ '^[0-9]{8}$'"
+      severity: ERROR
+      message: "Receiving DFI must be 8 digits"
+      error_code: ACH05
+      dimension: accuracy
+
+  quality:
+    completeness:
+      - field: trace_number
+        weight: 1.0
+        required: true
+      - field: amount
+        weight: 1.0
+        required: true
+      - field: company_name
+        weight: 0.9
+      - field: individual_name
+        weight: 0.9
+      - field: dfi_account_number
+        weight: 0.8
+
+    accuracy:
+      - field: receiving_dfi_identification
+        validation: validate_aba_routing
+      - field: originating_dfi_identification
+        validation: validate_aba_routing
+
+    thresholds:
+      overall_pass: 0.85
+      completeness_pass: 0.90
+      accuracy_pass: 0.95
+      validity_pass: 0.98
+
+  optimization:
+    bronze_to_silver:
+      batch_size: 5000
+      parallel_parse: true
+
+    silver_to_gold:
+      batch_size: 10000
+      partition_filter: "effective_entry_date >= CURRENT_DATE - 30"

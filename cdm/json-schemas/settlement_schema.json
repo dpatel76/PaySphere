@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gps-cdm/schemas/settlement.schema.json",
+  "title": "Settlement",
+  "description": "Settlement record for payment completion",
+  "type": "object",
+  "required": [
+    "settlement_id",
+    "payment_id",
+    "settlement_date",
+    "settlement_amount",
+    "settlement_method",
+    "settlement_status"
+  ],
+  "properties": {
+    "settlement_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Primary key"
+    },
+    "payment_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to Payment"
+    },
+    "settlement_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Actual settlement date"
+    },
+    "settlement_amount": {
+      "type": "object",
+      "required": ["value", "currency"],
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      },
+      "description": "Settlement amount"
+    },
+    "settlement_method": {
+      "type": "string",
+      "enum": ["INDA", "INGA", "COVE", "CLRG"],
+      "description": "Settlement method code"
+    },
+    "clearing_system_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "FK to ClearingSystem"
+    },
+    "clearing_system_code": {
+      "type": "string",
+      "maxLength": 10,
+      "description": "Clearing system code"
+    },
+    "settlement_status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "PROCESSING",
+        "SETTLED",
+        "PARTIALLY_SETTLED",
+        "FAILED",
+        "CANCELLED",
+        "REVERSED"
+      ]
+    },
+    "settlement_cycle": {
+      "type": "string",
+      "maxLength": 10,
+      "description": "Settlement cycle: T+0, T+1, T+2"
+    },
+    "interbank_settlement_date": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "interbank_settlement_amount": {
+      "type": ["object", "null"],
+      "properties": {
+        "value": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        }
+      }
+    },
+    "settlement_account_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "settlement_time": {
+      "type": ["string", "null"],
+      "format": "time"
+    },
+    "settlement_reference": {
+      "type": "string",
+      "maxLength": 35
+    },
+    "batch_id": {
+      "type": "string",
+      "maxLength": 35,
+      "description": "Settlement batch identifier"
+    },
+    "netting_indicator": {
+      "type": "boolean",
+      "default": false,
+      "description": "Part of netted settlement"
+    },
+    "instructions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/settlement_instruction"
+      },
+      "description": "Settlement instructions"
+    },
+    "created_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "settled_timestamp": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "lineage_metadata": {
+      "type": "object",
+      "properties": {
+        "source_system": {"type": "string"},
+        "source_table": {"type": "string"},
+        "batch_id": {"type": "string"},
+        "pipeline_run_id": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "settlement_instruction": {
+      "type": "object",
+      "required": ["instruction_id", "account_id", "instruction_type"],
+      "properties": {
+        "instruction_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "instruction_type": {
+          "type": "string",
+          "enum": ["CREDIT", "DEBIT"]
+        },
+        "instruction_priority": {
+          "type": "string",
+          "enum": ["HIGH", "NORM", "URGP"],
+          "default": "NORM"
+        },
+        "instruction_for_creditor_agent": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "instruction_for_debtor_agent": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "execution_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "sequence_number": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

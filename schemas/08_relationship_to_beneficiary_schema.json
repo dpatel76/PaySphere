@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bofa.com/schemas/cdm/relationship-to-beneficiary.schema.json",
+  "title": "RelationshipToBeneficiary",
+  "description": "Relationship to beneficiary reference entity with 25 standardized codes (R01-R25) for remittances and cross-border payments",
+  "type": "object",
+  "required": ["relationshipCodeId", "codeValue", "description"],
+  "properties": {
+    "relationshipCodeId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID v4 primary key - Non-ISO Extension"
+    },
+    "codeValue": {
+      "type": "string",
+      "pattern": "^R(0[1-9]|1[0-9]|2[0-5])$",
+      "description": "Relationship code (R01-R25) - Non-ISO Extension",
+      "examples": ["R01", "R05", "R11", "R19", "R24"]
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Relationship description (e.g., Spouse, Parent, Customer, Student, etc.) - ISO 20022 Extended"
+    },
+    "applicableJurisdictions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z]{2}$",
+        "description": "ISO 3166-1 alpha-2 country code"
+      },
+      "description": "ISO country codes where this relationship is used (CN, IN, PH, HK, SG, TH, MY, ID, VN, AE, SA, BR, MX) - Non-ISO Extension"
+    },
+    "iso20022Equivalent": {
+      "type": ["string", "null"],
+      "maxLength": 4,
+      "description": "ISO 20022 External Purpose Code equivalent if exists (FAMI, SALA, BUSI, DIVI, LOAN, GDDS, RENT, EDUC, MDCS, TAXS, CHAR, etc.) - ISO 20022 Compliant",
+      "examples": ["FAMI", "SALA", "GDDS", "EDUC", "LOAN"]
+    },
+    "category": {
+      "type": ["string", "null"],
+      "enum": ["Family", "Employment", "Business", "Commercial", "Financial", "Property", "Educational", "Medical", "Institutional", "Other", null],
+      "description": "Relationship category grouping"
+    },
+    "createdTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "relationshipCodeId": "660e8400-e29b-41d4-a716-446655440001",
+      "codeValue": "R01",
+      "description": "Spouse",
+      "applicableJurisdictions": ["CN", "IN", "PH", "HK", "SG", "TH", "MY", "ID", "VN", "AE", "SA", "BR", "MX"],
+      "iso20022Equivalent": "FAMI",
+      "category": "Family"
+    },
+    {
+      "relationshipCodeId": "660e8400-e29b-41d4-a716-446655440011",
+      "codeValue": "R11",
+      "description": "Customer (payment for goods/services purchased)",
+      "applicableJurisdictions": ["CN", "IN", "PH", "HK", "SG", "TH", "MY", "ID", "VN", "AE", "SA", "BR", "MX"],
+      "iso20022Equivalent": "GDDS",
+      "category": "Commercial"
+    },
+    {
+      "relationshipCodeId": "660e8400-e29b-41d4-a716-446655440019",
+      "codeValue": "R19",
+      "description": "Student (tuition payment)",
+      "applicableJurisdictions": ["CN", "IN", "PH", "HK", "SG", "TH", "MY", "ID", "VN", "AE", "SA", "BR", "MX"],
+      "iso20022Equivalent": "EDUC",
+      "category": "Educational"
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+# IRS FATCA Pool Reporting - Requirement Index
+# Report Type: FATCA_POOL
+# Regulator: IRS
+# Jurisdiction: US
+# Total Requirements: 67
+
+report_metadata:
+  report_type: "FATCA_POOL"
+  report_name: "FATCA Pool Report"
+  regulator: "IRS"
+  jurisdiction: "US"
+  regulation: "Internal Revenue Code Sections 1471-1474"
+  effective_date: "2015-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "ANNUAL"
+  filing_deadline: "March 31 following calendar year"
+  output_format: "XML"
+  submission_method: "IDES"
+
+requirement_summary:
+  total: 67
+  by_category:
+    ELIGIBILITY: 5
+    FIELD: 48
+    VALIDATION: 8
+    FORMAT: 4
+    TIMING: 2
+  by_criticality:
+    MANDATORY: 58
+    RECOMMENDED: 7
+    OPTIONAL: 2
+
+requirements:
+  eligibility:
+    - id: "REQ-POOL-001"
+      title: "Pool Report Applicability"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Aggregate reporting for recalcitrant accounts and NPFFI payments"
+
+    - id: "REQ-POOL-002"
+      title: "Recalcitrant Account Holder Pool"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Accounts where holder failed to provide required information"
+
+    - id: "REQ-POOL-003"
+      title: "NPFFI Payment Pool"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Payments to non-participating FFIs"
+
+    - id: "REQ-POOL-004"
+      title: "Dormant Account Pool"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Dormant accounts of recalcitrant holders"
+
+    - id: "REQ-POOL-005"
+      title: "US Indicia Pool"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Accounts with unresolved US indicia"
+
+  fields_pool:
+    - id: "REQ-POOL-020"
+      title: "Pool Report Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-POOL-021"
+      title: "Number of Accounts in Pool"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-POOL-022"
+      title: "Aggregate Balance"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-POOL-023"
+      title: "Aggregate Payments"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-POOL-024"
+      title: "Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-POOL-025"
+      title: "Reporting Period"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-POOL-060"
+      title: "Annual Pool Reporting"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+    - id: "REQ-POOL-061"
+      title: "March 31 Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"

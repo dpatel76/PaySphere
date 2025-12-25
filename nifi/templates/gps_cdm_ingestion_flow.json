@@ -1,0 +1,364 @@
+{
+  "flowContents": {
+    "identifier": "gps-cdm-ingestion-flow",
+    "name": "GPS CDM Payment Ingestion Pipeline",
+    "description": "High-throughput payment message ingestion supporting 50M+ messages/day",
+    "processGroups": [
+      {
+        "identifier": "batch-file-ingestion",
+        "name": "Batch File Ingestion",
+        "comments": "Processes batch files from SFTP/S3/Local filesystem",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.ListSFTP",
+            "name": "List SFTP Payment Files",
+            "config": {
+              "hostname": "${sftp.hostname}",
+              "port": "${sftp.port}",
+              "username": "${sftp.username}",
+              "remote.path": "/incoming/payments",
+              "file.filter": ".*\\.(xml|txt|json)$",
+              "scheduling.strategy": "TIMER_DRIVEN",
+              "scheduling.period": "1 min"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.FetchSFTP",
+            "name": "Fetch Payment File",
+            "config": {
+              "hostname": "${sftp.hostname}",
+              "username": "${sftp.username}",
+              "completion.strategy": "MOVE",
+              "move.destination.directory": "/processed/payments"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.IdentifyMimeType",
+            "name": "Identify File Type"
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route by Message Type",
+            "config": {
+              "routes": {
+                "pain001": "${filename:contains('pain001') || filename:contains('pain.001')}",
+                "mt103": "${filename:contains('mt103') || filename:contains('MT103')}",
+                "ach": "${filename:contains('ach') || filename:contains('ACH')}",
+                "fedwire": "${filename:contains('fedwire') || filename:contains('FEDWIRE')}",
+                "sepa": "${filename:contains('sepa') || filename:contains('SEPA')}",
+                "rtp": "${filename:contains('rtp') || filename:contains('RTP')}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "kafka-streaming",
+        "name": "Kafka Streaming Ingestion",
+        "comments": "Consumes real-time payment messages from Kafka topics",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.kafka.pubsub.ConsumeKafka_2_6",
+            "name": "Consume Payment Messages",
+            "config": {
+              "bootstrap.servers": "${kafka.bootstrap.servers}",
+              "topic": "payments.incoming",
+              "group.id": "gps-cdm-consumer",
+              "auto.offset.reset": "earliest",
+              "max.poll.records": "1000",
+              "message.demarcator": "\n",
+              "scheduling.strategy": "TIMER_DRIVEN",
+              "scheduling.period": "100 ms",
+              "concurrent.tasks": "8"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
+            "name": "Extract Message Type",
+            "config": {
+              "destination": "flowfile-attribute",
+              "message.type": "$.messageType",
+              "message.id": "$.messageId",
+              "source.system": "$.sourceSystem"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route Streaming Messages",
+            "config": {
+              "routes": {
+                "pain001": "${message.type:equals('pain.001')}",
+                "mt103": "${message.type:equals('MT103')}",
+                "ach": "${message.type:equals('ACH')}",
+                "rtp": "${message.type:equals('RTP')}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "message-enrichment",
+        "name": "Message Enrichment",
+        "comments": "Adds metadata and validates messages before processing",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+            "name": "Add Ingestion Metadata",
+            "config": {
+              "batch.id": "${UUID()}",
+              "ingestion.timestamp": "${now():format('yyyy-MM-dd HH:mm:ss')}",
+              "processing.node": "${hostname()}",
+              "file.size.bytes": "${fileSize}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.ValidateXml",
+            "name": "Validate XML Structure",
+            "comments": "Validates pain.001 and other ISO 20022 messages",
+            "config": {
+              "schema.access.strategy": "validator-service",
+              "xml.validator": "iso20022-schema-registry"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.ExecuteScript",
+            "name": "Validate SWIFT MT Format",
+            "comments": "Validates MT103 and other SWIFT messages",
+            "config": {
+              "script.engine": "python",
+              "script.file": "/opt/nifi/scripts/validate_swift_mt.py"
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "celery-dispatch",
+        "name": "Celery Task Dispatch",
+        "comments": "Dispatches processing tasks to Celery workers",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit to Celery Bronze Task",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.api.url}/api/task/send/gps_cdm.orchestration.celery_tasks.process_bronze_partition",
+              "content.type": "application/json",
+              "send.body": "true",
+              "request.body": "{\"args\": [\"${batch.id}\", [\"${absolute.path}\"], \"${message.type}\", \"${batch.id}\", ${persistence.config}]}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.Wait",
+            "name": "Wait for Bronze Completion",
+            "config": {
+              "release.signal.identifier": "${batch.id}:bronze",
+              "target.signal.count": "1",
+              "wait.timeout": "5 min",
+              "wait.penalty.duration": "1 sec"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit to Celery Silver Task",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.api.url}/api/task/send/gps_cdm.orchestration.celery_tasks.process_silver_transform"
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "error-handling",
+        "name": "Error Handling",
+        "comments": "Handles failed messages and dead-letter queue",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route Failures",
+            "config": {
+              "routes": {
+                "validation.failed": "${validation.status:equals('FAILED')}",
+                "processing.failed": "${processing.status:equals('FAILED')}",
+                "timeout": "${processing.status:equals('TIMEOUT')}"
+              }
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.kafka.pubsub.PublishKafka_2_6",
+            "name": "Send to Dead Letter Queue",
+            "config": {
+              "bootstrap.servers": "${kafka.bootstrap.servers}",
+              "topic": "payments.dlq",
+              "message.key": "${message.id}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.PutDatabaseRecord",
+            "name": "Log Error to Database",
+            "config": {
+              "database.connection.pool": "gps-cdm-postgresql",
+              "statement.type": "INSERT",
+              "table.name": "observability.obs_processing_errors",
+              "catalog.name": "gps_cdm"
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "monitoring",
+        "name": "Monitoring & Metrics",
+        "comments": "Collects processing metrics and publishes to monitoring systems",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateCounter",
+            "name": "Count Processed Messages",
+            "config": {
+              "counter.name": "messages.processed.${message.type}",
+              "delta": "1"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.PublishKafkaRecord_2_6",
+            "name": "Publish Metrics to Kafka",
+            "config": {
+              "bootstrap.servers": "${kafka.bootstrap.servers}",
+              "topic": "gps-cdm.metrics",
+              "record.writer": "json-record-writer"
+            }
+          }
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "source": "List SFTP Payment Files",
+        "destination": "Fetch Payment File",
+        "relationship": "success"
+      },
+      {
+        "source": "Fetch Payment File",
+        "destination": "Identify File Type",
+        "relationship": "success"
+      },
+      {
+        "source": "Identify File Type",
+        "destination": "Route by Message Type",
+        "relationship": "success"
+      },
+      {
+        "source": "Route by Message Type",
+        "destination": "Add Ingestion Metadata",
+        "relationships": ["pain001", "mt103", "ach", "fedwire", "sepa", "rtp"]
+      },
+      {
+        "source": "Consume Payment Messages",
+        "destination": "Extract Message Type",
+        "relationship": "success"
+      },
+      {
+        "source": "Extract Message Type",
+        "destination": "Route Streaming Messages",
+        "relationship": "success"
+      },
+      {
+        "source": "Route Streaming Messages",
+        "destination": "Add Ingestion Metadata",
+        "relationships": ["pain001", "mt103", "ach", "rtp"]
+      },
+      {
+        "source": "Add Ingestion Metadata",
+        "destination": "Submit to Celery Bronze Task",
+        "relationship": "success"
+      },
+      {
+        "source": "Submit to Celery Bronze Task",
+        "destination": "Wait for Bronze Completion",
+        "relationship": "success"
+      },
+      {
+        "source": "Wait for Bronze Completion",
+        "destination": "Submit to Celery Silver Task",
+        "relationship": "success"
+      },
+      {
+        "source": "Validate XML Structure",
+        "destination": "Route Failures",
+        "relationship": "failure"
+      },
+      {
+        "source": "Route Failures",
+        "destination": "Send to Dead Letter Queue",
+        "relationships": ["validation.failed", "processing.failed"]
+      },
+      {
+        "source": "Route Failures",
+        "destination": "Log Error to Database",
+        "relationships": ["validation.failed", "processing.failed", "timeout"]
+      }
+    ],
+    "controllerServices": [
+      {
+        "identifier": "gps-cdm-postgresql",
+        "type": "org.apache.nifi.dbcp.DBCPConnectionPool",
+        "name": "GPS CDM PostgreSQL Connection Pool",
+        "config": {
+          "database.url": "jdbc:postgresql://${db.host}:${db.port}/${db.name}",
+          "database.driver.classname": "org.postgresql.Driver",
+          "database.user": "${db.user}",
+          "database.password": "${db.password}",
+          "max.wait.time": "500 millis",
+          "max.total.connections": "20"
+        }
+      },
+      {
+        "identifier": "iso20022-schema-registry",
+        "type": "org.apache.nifi.schemaregistry.services.AvroSchemaRegistry",
+        "name": "ISO 20022 Schema Registry",
+        "comments": "Stores XSD schemas for ISO 20022 message validation"
+      },
+      {
+        "identifier": "json-record-writer",
+        "type": "org.apache.nifi.json.JsonRecordSetWriter",
+        "name": "JSON Record Writer",
+        "config": {
+          "schema.access.strategy": "inherit-record-schema"
+        }
+      }
+    ],
+    "variables": {
+      "sftp.hostname": "sftp.payment-gateway.com",
+      "sftp.port": "22",
+      "sftp.username": "gps-cdm-svc",
+      "kafka.bootstrap.servers": "kafka1:9092,kafka2:9092,kafka3:9092",
+      "celery.api.url": "http://celery-flower:5555",
+      "db.host": "localhost",
+      "db.port": "5432",
+      "db.name": "gps_cdm",
+      "db.user": "gps_cdm_svc",
+      "persistence.config": "{\"backend\": \"postgresql\", \"catalog\": \"gps_cdm\"}"
+    }
+  },
+  "flowEncodingVersion": "1.0",
+  "parameterContexts": [
+    {
+      "name": "GPS CDM Production Parameters",
+      "description": "Production environment parameters",
+      "parameters": [
+        {"name": "sftp.hostname", "sensitive": false, "value": "sftp.production.com"},
+        {"name": "kafka.bootstrap.servers", "sensitive": false, "value": "kafka-prod1:9092,kafka-prod2:9092"},
+        {"name": "db.host", "sensitive": false, "value": "postgres-prod.internal"},
+        {"name": "db.password", "sensitive": true}
+      ]
+    },
+    {
+      "name": "GPS CDM Development Parameters",
+      "description": "Development environment parameters",
+      "parameters": [
+        {"name": "sftp.hostname", "sensitive": false, "value": "localhost"},
+        {"name": "kafka.bootstrap.servers", "sensitive": false, "value": "localhost:9092"},
+        {"name": "db.host", "sensitive": false, "value": "localhost"},
+        {"name": "db.password", "sensitive": true, "value": "devpassword"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,159 @@
+# EBA PSD2 Fraud Report - Requirement Index
+# Report Type: PSD2_FRAUD
+# Regulator: EBA (European Banking Authority)
+# Jurisdiction: EU
+# Total Requirements: 87
+
+report_metadata:
+  report_type: "PSD2_FRAUD"
+  report_name: "PSD2 Payment Fraud Statistical Report"
+  regulator: "EBA"
+  jurisdiction: "EU"
+  regulation: "PSD2 Directive 2015/2366, EBA Guidelines EBA/GL/2018/05"
+  effective_date: "2019-09-14"
+  last_updated: "2024-12-20"
+  filing_frequency: "SEMI_ANNUAL"
+  filing_deadline: "End of June (H1), End of December (H2)"
+  output_format: "XML"
+  submission_method: "National Competent Authority Portal"
+
+requirement_summary:
+  total: 87
+  by_category:
+    ELIGIBILITY: 6
+    FIELD: 65
+    VALIDATION: 10
+    FORMAT: 4
+    TIMING: 2
+  by_criticality:
+    MANDATORY: 75
+    RECOMMENDED: 10
+    OPTIONAL: 2
+
+requirements:
+  eligibility:
+    - id: "REQ-PSD2-001"
+      title: "Payment Service Provider Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "All authorized and registered PSPs in scope"
+
+    - id: "REQ-PSD2-002"
+      title: "Fraudulent Transaction Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transactions executed without payer's authorization"
+
+    - id: "REQ-PSD2-003"
+      title: "Payment Instrument Types"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Credit transfers, direct debits, card payments, e-money"
+
+    - id: "REQ-PSD2-004"
+      title: "Initiation Channel"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Remote vs non-remote initiated payments"
+
+    - id: "REQ-PSD2-005"
+      title: "SCA Application"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Strong Customer Authentication applied or exempted"
+
+    - id: "REQ-PSD2-006"
+      title: "Geographic Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "EEA and non-EEA transactions"
+
+  fields_statistics:
+    - id: "REQ-PSD2-020"
+      title: "Total Number of Transactions"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-021"
+      title: "Total Value of Transactions"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-022"
+      title: "Number of Fraudulent Transactions"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-023"
+      title: "Value of Fraudulent Transactions"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-024"
+      title: "Fraud Rate by Volume"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-025"
+      title: "Fraud Rate by Value"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-026"
+      title: "Breakdown by Payment Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-027"
+      title: "Breakdown by Initiation Channel"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-028"
+      title: "Breakdown by SCA Status"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-029"
+      title: "Breakdown by Fraud Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Lost/stolen, counterfeit, manipulation, etc."
+
+  fields_breakdown:
+    - id: "REQ-PSD2-040"
+      title: "Credit Transfer Statistics"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-041"
+      title: "Direct Debit Statistics"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-042"
+      title: "Card Payment Statistics"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-043"
+      title: "E-Money Statistics"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-044"
+      title: "Remote vs Non-Remote Breakdown"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-PSD2-080"
+      title: "Semi-Annual Reporting Period"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+    - id: "REQ-PSD2-081"
+      title: "Submission Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Within 2 months of period end"

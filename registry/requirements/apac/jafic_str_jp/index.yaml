@@ -1,0 +1,137 @@
+# JAFIC Suspicious Transaction Report (STR) - Japan
+# Report Type: JAFIC_STR
+# Filing Authority: JAFIC (Japan Financial Intelligence Center)
+# Supervisory Authority: FSA/NPA (Financial Services Agency / National Police Agency)
+# Jurisdiction: JP
+# Total Requirements: 98
+
+report_metadata:
+  report_type: "JAFIC_STR"
+  report_name: "Japan Suspicious Transaction Report"
+  fiu: "JAFIC"
+  fiu_full_name: "Japan Financial Intelligence Center"
+  supervisor: "FSA"
+  supervisor_full_name: "Financial Services Agency (JAFIC under NPA)"
+  jurisdiction: "JP"
+  regulation: "Act on Prevention of Transfer of Criminal Proceeds"
+  effective_date: "2008-03-01"
+  last_updated: "2024-12-21"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "Promptly"
+  output_format: "XML"
+  submission_method: "JAFIC Portal"
+  submission_url: "https://www.npa.go.jp/sosikihanzai/jafic/"
+
+requirement_summary:
+  total: 98
+  by_category:
+    ELIGIBILITY: 4
+    FIELD: 78
+    VALIDATION: 10
+    FORMAT: 3
+    TIMING: 2
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 85
+    RECOMMENDED: 10
+    OPTIONAL: 3
+
+requirements:
+  eligibility:
+    - id: "REQ-JAFIC-001"
+      title: "Suspicion of Criminal Proceeds"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Suspicion that property is derived from criminal activity"
+
+    - id: "REQ-JAFIC-002"
+      title: "Specified Business Operator Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Financial institutions and designated business operators"
+
+  fields_transaction:
+    - id: "REQ-JAFIC-020"
+      title: "Transaction Reference"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "payment_id"
+
+    - id: "REQ-JAFIC-021"
+      title: "Transaction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Payment"
+        field: "created_at"
+
+    - id: "REQ-JAFIC-022"
+      title: "Transaction Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "PaymentInstruction"
+        field: "instructed_amount"
+
+  fields_subject:
+    - id: "REQ-JAFIC-030"
+      title: "Subject Name (Kanji/Katakana)"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "name"
+
+    - id: "REQ-JAFIC-031"
+      title: "Subject My Number"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+      cdm_mapping:
+        entity: "PartyIdentification"
+        field: "id_number"
+        id_type: "MY_NUMBER"
+
+    - id: "REQ-JAFIC-032"
+      title: "Subject Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "Party"
+        field: "address"
+
+  fields_suspicion:
+    - id: "REQ-JAFIC-040"
+      title: "Reason for Suspicion"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "suspicion_indicators"
+
+    - id: "REQ-JAFIC-041"
+      title: "Suspicious Activity Description"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      cdm_mapping:
+        entity: "ComplianceCase"
+        field: "narrative"
+
+  timing:
+    - id: "REQ-JAFIC-090"
+      title: "Prompt Filing"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "File promptly upon determination of suspicion"
+
+cdm_coverage:
+  entities_used:
+    - Payment
+    - PaymentInstruction
+    - Party
+    - PartyIdentification
+    - Account
+    - FinancialInstitution
+    - ComplianceCase
+  coverage_percentage: 100

@@ -1,0 +1,216 @@
+# OECD Common Reporting Standard (CRS) - Requirement Index
+# Report Type: CRS
+# Regulator: OECD (implemented by participating jurisdictions)
+# Jurisdiction: International (100+ jurisdictions)
+# Total Requirements: 108
+
+report_metadata:
+  report_type: "CRS"
+  report_name: "Common Reporting Standard"
+  regulator: "OECD"
+  jurisdiction: "INTERNATIONAL"
+  regulation: "OECD CRS and Commentary"
+  effective_date: "2016-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "ANNUAL"
+  filing_deadline: "Varies by jurisdiction (typically 6-9 months after year-end)"
+  output_format: "XML"
+  submission_method: "Varies by jurisdiction"
+  participating_jurisdictions: 100
+
+requirement_summary:
+  total: 108
+  by_category:
+    ELIGIBILITY: 10
+    FIELD: 78
+    VALIDATION: 12
+    FORMAT: 5
+    TIMING: 3
+  by_criticality:
+    MANDATORY: 95
+    RECOMMENDED: 10
+    OPTIONAL: 3
+
+requirements:
+  eligibility:
+    - id: "REQ-CRS-001"
+      title: "Reportable Account Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Financial account held by reportable person"
+
+    - id: "REQ-CRS-002"
+      title: "Reportable Person - Individual"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Individual resident in reportable jurisdiction"
+
+    - id: "REQ-CRS-003"
+      title: "Reportable Person - Entity"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Entity resident in reportable jurisdiction or passive NFE with controlling persons"
+
+    - id: "REQ-CRS-004"
+      title: "Controlling Person"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "25%+ beneficial ownership or control"
+
+    - id: "REQ-CRS-005"
+      title: "Passive NFE"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Non-financial entity with passive income >50%"
+
+    - id: "REQ-CRS-006"
+      title: "Financial Account Types"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Depository, Custodial, Equity/Debt Interest, Cash Value Insurance"
+
+    - id: "REQ-CRS-007"
+      title: "Excluded Accounts"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Retirement, escrow, dormant accounts below threshold"
+
+    - id: "REQ-CRS-008"
+      title: "Due Diligence Procedures"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Self-certification and reasonableness testing"
+
+    - id: "REQ-CRS-009"
+      title: "New vs Preexisting Account"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Different due diligence for accounts opened before/after CRS"
+
+    - id: "REQ-CRS-010"
+      title: "High Value Account Threshold"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "$1 million threshold for enhanced review"
+
+  fields_account_holder:
+    - id: "REQ-CRS-020"
+      title: "Account Holder Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-021"
+      title: "Account Holder TIN"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Taxpayer Identification Number in each reportable jurisdiction"
+
+    - id: "REQ-CRS-022"
+      title: "Account Holder Residence Country"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-023"
+      title: "Account Holder Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-024"
+      title: "Account Holder Date of Birth"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-025"
+      title: "Account Holder Place of Birth"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CRS-026"
+      title: "Account Holder Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Individual or Entity"
+
+  fields_account:
+    - id: "REQ-CRS-030"
+      title: "Account Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-031"
+      title: "Account Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-032"
+      title: "Account Balance/Value"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-033"
+      title: "Account Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-034"
+      title: "Interest Paid/Credited"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CRS-035"
+      title: "Dividends Paid"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CRS-036"
+      title: "Gross Proceeds from Sales"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CRS-037"
+      title: "Other Income"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CRS-038"
+      title: "Account Closed Indicator"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  fields_reporting_fi:
+    - id: "REQ-CRS-040"
+      title: "Reporting FI Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-041"
+      title: "Reporting FI Country"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-042"
+      title: "Reporting FI Identification Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-043"
+      title: "Reporting Period"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-CRS-100"
+      title: "Annual Reporting Period"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-101"
+      title: "Jurisdiction-Specific Deadline"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CRS-102"
+      title: "Exchange Timing"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Exchange within 9 months of year-end"

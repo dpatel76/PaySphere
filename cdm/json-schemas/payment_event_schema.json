@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gps-cdm/schemas/payment_event.schema.json",
+  "title": "PaymentEvent",
+  "description": "Payment lifecycle event record for tracking state transitions",
+  "type": "object",
+  "required": [
+    "event_id",
+    "payment_id",
+    "event_type",
+    "event_timestamp",
+    "new_state"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Primary key"
+    },
+    "payment_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to Payment"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "CREATED",
+        "RECEIVED",
+        "ACCEPTED",
+        "REJECTED",
+        "CANCELLED",
+        "COMPLETED",
+        "STATUS_CHANGE",
+        "VALIDATION_STARTED",
+        "VALIDATION_PASSED",
+        "VALIDATION_FAILED",
+        "VALIDATION_WARNING",
+        "SANCTIONS_SCREENING_STARTED",
+        "SANCTIONS_SCREENING_PASSED",
+        "SANCTIONS_SCREENING_HIT",
+        "SANCTIONS_SCREENING_CLEARED",
+        "FRAUD_SCREENING_STARTED",
+        "FRAUD_SCREENING_PASSED",
+        "FRAUD_SCREENING_ALERT",
+        "FRAUD_SCREENING_CLEARED",
+        "COMPLIANCE_REVIEW_STARTED",
+        "COMPLIANCE_REVIEW_APPROVED",
+        "COMPLIANCE_REVIEW_REJECTED",
+        "AML_ALERT_RAISED",
+        "AML_ALERT_CLOSED",
+        "ENRICHMENT_STARTED",
+        "ENRICHMENT_COMPLETED",
+        "TRANSFORMATION_STARTED",
+        "TRANSFORMATION_COMPLETED",
+        "ROUTING_STARTED",
+        "ROUTING_COMPLETED",
+        "TRANSMISSION_STARTED",
+        "TRANSMISSION_SUCCEEDED",
+        "TRANSMISSION_FAILED",
+        "ACKNOWLEDGEMENT_RECEIVED",
+        "ACKNOWLEDGEMENT_POSITIVE",
+        "ACKNOWLEDGEMENT_NEGATIVE",
+        "SETTLEMENT_INITIATED",
+        "SETTLEMENT_PENDING",
+        "SETTLEMENT_COMPLETED",
+        "SETTLEMENT_FAILED",
+        "SETTLEMENT_REVERSED",
+        "EXCEPTION_RAISED",
+        "EXCEPTION_RESOLVED",
+        "ERROR_OCCURRED",
+        "TIMEOUT_OCCURRED",
+        "RETRY_ATTEMPTED",
+        "MANUAL_REVIEW_REQUIRED",
+        "MANUAL_REVIEW_COMPLETED",
+        "APPROVAL_REQUESTED",
+        "APPROVAL_GRANTED",
+        "APPROVAL_DENIED"
+      ],
+      "description": "Type of lifecycle event"
+    },
+    "event_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event occurrence time"
+    },
+    "previous_state": {
+      "type": ["string", "null"],
+      "maxLength": 50,
+      "description": "Previous status/state"
+    },
+    "new_state": {
+      "type": "string",
+      "maxLength": 50,
+      "description": "New status/state"
+    },
+    "actor": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "System/user causing event"
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": ["SYSTEM", "USER", "EXTERNAL", "BATCH", "API", "SCHEDULER"]
+    },
+    "actor_id": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Actor identifier (user ID, system ID)"
+    },
+    "details": {
+      "type": "object",
+      "description": "Event-specific details",
+      "additionalProperties": true
+    },
+    "correlation_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Request correlation identifier"
+    },
+    "parent_event_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Parent event for hierarchical tracking"
+    },
+    "duration_ms": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Event duration in milliseconds"
+    },
+    "error_code": {
+      "type": ["string", "null"],
+      "maxLength": 20,
+      "description": "Error code if applicable"
+    },
+    "error_message": {
+      "type": ["string", "null"],
+      "maxLength": 1000,
+      "description": "Error message if applicable"
+    },
+    "source_system": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "System that generated the event"
+    },
+    "external_reference": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "External system reference"
+    },
+    "partition_year": {
+      "type": "integer",
+      "minimum": 2020,
+      "maximum": 2100
+    },
+    "partition_month": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12
+    }
+  },
+  "additionalProperties": false
+}

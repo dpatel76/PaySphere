@@ -1,0 +1,479 @@
+# GPS CDM - Fedwire Full Mapping
+# Federal Reserve Wire Network
+#
+# This file defines the complete transformation:
+#   Bronze (raw Fedwire) → Silver (stg_fedwire) → Gold (cdm_payment_instruction)
+
+version: "2.0"
+
+mapping:
+  id: FEDWIRE_FULL
+  name: "Fedwire Funds Transfer"
+  message_type: "FEDWIRE"
+  message_version: "2023"
+  description: |
+    Complete Bronze→Silver→Gold transformation for Fedwire messages.
+    ISO 20022 format as per Federal Reserve specifications.
+
+  # ============================================================================
+  # STAGE 1: BRONZE → SILVER
+  # ============================================================================
+  bronze_to_silver:
+    source:
+      layer: bronze
+      table: raw_payment_messages
+      content_column: raw_content
+      format: FEDWIRE
+      parser: fedwire
+      filter:
+        message_type: "FEDWIRE"
+
+    target:
+      layer: silver
+      table: stg_fedwire
+
+    fields:
+      # --- Mandatory Wire Data ---
+      - source: "{1510}"
+        target: type_subtype_code
+        type: string
+        required: true
+        max_length: 4
+
+      - source: "{1520}"
+        target: imad
+        type: string
+        required: true
+        max_length: 22
+        notes: "Input Message Accountability Data"
+
+      - source: "{2000}"
+        target: amount
+        type: decimal
+        precision: 18
+        scale: 2
+        required: true
+
+      - source: "{3100}"
+        target: sender_aba
+        type: string
+        required: true
+        max_length: 9
+
+      - source: "{3100}.name"
+        target: sender_name
+        type: string
+        max_length: 35
+
+      - source: "{3400}"
+        target: receiver_aba
+        type: string
+        required: true
+        max_length: 9
+
+      - source: "{3400}.name"
+        target: receiver_name
+        type: string
+        max_length: 35
+
+      - source: "{3320}"
+        target: sender_reference
+        type: string
+        max_length: 16
+
+      - source: "{3600}"
+        target: business_function_code
+        type: string
+        required: true
+        max_length: 3
+
+      # --- Beneficiary Information ---
+      - source: "{4200}"
+        target: beneficiary_fi_aba
+        type: string
+        max_length: 9
+
+      - source: "{4200}.name"
+        target: beneficiary_fi_name
+        type: string
+        max_length: 35
+
+      - source: "{4100}"
+        target: intermediary_fi_aba
+        type: string
+        max_length: 9
+
+      - source: "{4000}"
+        target: beneficiary_account
+        type: string
+        max_length: 34
+
+      - source: "{4000}.name"
+        target: beneficiary_name
+        type: string
+        max_length: 35
+
+      - source: "{4000}.address"
+        target: beneficiary_address
+        type: string
+        max_length: 140
+
+      # --- Originator Information ---
+      - source: "{5000}"
+        target: originator_account
+        type: string
+        max_length: 34
+
+      - source: "{5000}.name"
+        target: originator_name
+        type: string
+        max_length: 35
+
+      - source: "{5000}.address"
+        target: originator_address
+        type: string
+        max_length: 140
+
+      - source: "{5100}"
+        target: originator_fi_aba
+        type: string
+        max_length: 9
+
+      - source: "{5100}.name"
+        target: originator_fi_name
+        type: string
+        max_length: 35
+
+      - source: "{5200}"
+        target: instructing_fi_aba
+        type: string
+        max_length: 9
+
+      # --- Additional Wire Data ---
+      - source: "{6000}"
+        target: originator_to_beneficiary_info
+        type: string
+        max_length: 140
+
+      - source: "{6100}"
+        target: receiver_fi_info
+        type: string
+        max_length: 140
+
+      - source: "{6110}"
+        target: drawdown_debit_account
+        type: string
+        max_length: 34
+
+      - source: "{6200}"
+        target: fi_to_fi_info
+        type: string
+        max_length: 140
+
+      - source: "{6210}"
+        target: sender_to_receiver_info
+        type: string
+        max_length: 140
+
+      # --- Charges ---
+      - source: "{3700}"
+        target: charges_details
+        type: string
+        max_length: 3
+
+      - source: "{3710}"
+        target: sender_charges_amount
+        type: decimal
+        precision: 18
+        scale: 2
+
+      - source: "{3720}"
+        target: receiver_charges_amount
+        type: decimal
+        precision: 18
+        scale: 2
+
+      # --- Exchange Rate ---
+      - source: "{3800}"
+        target: exchange_rate
+        type: decimal
+        precision: 12
+        scale: 6
+
+      # --- Related References ---
+      - source: "{3500}"
+        target: previous_message_id
+        type: string
+        max_length: 22
+
+      - source: "{9000}"
+        target: unstructured_addenda
+        type: string
+
+  # ============================================================================
+  # STAGE 2: SILVER → GOLD
+  # ============================================================================
+  silver_to_gold:
+    source:
+      layer: silver
+      table: stg_fedwire
+      filter:
+        processing_status: "PENDING"
+
+    target:
+      layer: gold
+      table: cdm_payment_instruction
+      source_message_type: "FEDWIRE"
+      source_stg_table: "stg_fedwire"
+
+    fields:
+      - source: stg_id
+        target: source_stg_id
+        type: string
+        required: true
+
+      - source: imad
+        target: end_to_end_id
+        type: string
+        required: true
+
+      - source: sender_reference
+        target: transaction_id
+        type: string
+
+      - target: payment_type
+        type: string
+        transform:
+          type: constant
+          value: "WIRE_TRANSFER"
+
+      - source: business_function_code
+        target: scheme_code
+        type: string
+        transform:
+          type: expression
+          expr: "'FEDWIRE_' || business_function_code"
+
+      - target: direction
+        type: string
+        transform:
+          type: constant
+          value: "OUTBOUND"
+
+      - target: cross_border_flag
+        type: boolean
+        transform:
+          type: constant
+          value: false
+
+      - target: priority
+        type: string
+        transform:
+          type: constant
+          value: "HIGH"
+
+      - source: amount
+        target: instructed_amount
+        type: decimal
+        required: true
+
+      - target: instructed_currency
+        type: string
+        transform:
+          type: constant
+          value: "USD"
+
+      - source: exchange_rate
+        target: exchange_rate
+        type: decimal
+
+      - source: charges_details
+        target: charge_bearer
+        type: string
+        transform:
+          type: lookup
+          mapping:
+            OUR: "OUR"
+            BEN: "BEN"
+            SHA: "SHA"
+          default: "SHA"
+
+      - source: originator_to_beneficiary_info
+        target: remittance_unstructured
+        type: array
+        transform:
+          type: wrap_array
+
+      - target: current_status
+        type: string
+        transform:
+          type: constant
+          value: "RECEIVED"
+
+      - source: source_system
+        target: source_system
+        type: string
+
+      - source: created_at
+        target: partition_year
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(YEAR FROM created_at)"
+
+      - source: created_at
+        target: partition_month
+        type: integer
+        transform:
+          type: expression
+          expr: "EXTRACT(MONTH FROM created_at)"
+
+      - target: region
+        type: string
+        transform:
+          type: constant
+          value: "US"
+
+    party_mappings:
+      - role: debtor
+        target_table: cdm_party
+        fields:
+          - source: originator_name
+            target: name
+          - source: originator_address
+            target: address_line1
+
+      - role: creditor
+        target_table: cdm_party
+        fields:
+          - source: beneficiary_name
+            target: name
+          - source: beneficiary_address
+            target: address_line1
+
+    account_mappings:
+      - role: debtor_account
+        target_table: cdm_account
+        fields:
+          - source: originator_account
+            target: account_number
+
+      - role: creditor_account
+        target_table: cdm_account
+        fields:
+          - source: beneficiary_account
+            target: account_number
+
+    fi_mappings:
+      - role: debtor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: sender_aba
+            target: national_clearing_code
+          - source: sender_name
+            target: institution_name
+          - target: national_clearing_system
+            transform:
+              type: constant
+              value: "USABA"
+
+      - role: creditor_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: beneficiary_fi_aba
+            target: national_clearing_code
+          - source: beneficiary_fi_name
+            target: institution_name
+          - target: national_clearing_system
+            transform:
+              type: constant
+              value: "USABA"
+
+      - role: intermediary_agent
+        target_table: cdm_financial_institution
+        fields:
+          - source: intermediary_fi_aba
+            target: national_clearing_code
+
+  # ============================================================================
+  # VALIDATION RULES
+  # ============================================================================
+  validations:
+    - id: FED_VAL001
+      stage: silver
+      rule: "imad IS NOT NULL AND LENGTH(imad) = 22"
+      severity: ERROR
+      message: "IMAD is required and must be 22 characters"
+      error_code: FED01
+      dimension: completeness
+
+    - id: FED_VAL002
+      stage: silver
+      rule: "amount > 0"
+      severity: ERROR
+      message: "Amount must be greater than zero"
+      error_code: FED02
+      dimension: validity
+
+    - id: FED_VAL003
+      stage: silver
+      rule: "sender_aba ~ '^[0-9]{9}$'"
+      severity: ERROR
+      message: "Sender ABA must be 9 digits"
+      error_code: FED03
+      dimension: accuracy
+
+    - id: FED_VAL004
+      stage: silver
+      rule: "receiver_aba ~ '^[0-9]{9}$'"
+      severity: ERROR
+      message: "Receiver ABA must be 9 digits"
+      error_code: FED04
+      dimension: accuracy
+
+    - id: FED_VAL005
+      stage: silver
+      rule: "business_function_code IN ('BTR', 'CTR', 'CTP', 'DRB', 'DRC', 'FFR', 'FFS', 'SVC')"
+      severity: ERROR
+      message: "Invalid Business Function Code"
+      error_code: FED05
+      dimension: validity
+
+  quality:
+    completeness:
+      - field: imad
+        weight: 1.0
+        required: true
+      - field: amount
+        weight: 1.0
+        required: true
+      - field: sender_aba
+        weight: 1.0
+        required: true
+      - field: receiver_aba
+        weight: 1.0
+        required: true
+      - field: originator_name
+        weight: 0.9
+      - field: beneficiary_name
+        weight: 0.9
+
+    accuracy:
+      - field: sender_aba
+        validation: validate_aba_routing
+      - field: receiver_aba
+        validation: validate_aba_routing
+
+    thresholds:
+      overall_pass: 0.90
+      completeness_pass: 0.95
+      accuracy_pass: 0.98
+      validity_pass: 0.99
+
+  optimization:
+    bronze_to_silver:
+      batch_size: 1000
+      parallel_parse: true
+
+    silver_to_gold:
+      batch_size: 5000

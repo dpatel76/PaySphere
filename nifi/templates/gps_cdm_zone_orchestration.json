@@ -1,0 +1,503 @@
+{
+  "flowContents": {
+    "identifier": "gps-cdm-zone-orchestration",
+    "name": "GPS CDM Zone-Based Pipeline Orchestration",
+    "description": "NiFi orchestrates data movement across all medallion zones. Each zone has dedicated Celery workers.",
+    "comments": "This flow manages the complete data lifecycle: Ingestion -> Bronze -> Silver -> Gold -> Analytical",
+
+    "processGroups": [
+      {
+        "identifier": "zone-0-ingestion",
+        "name": "Zone 0: Ingestion Layer",
+        "comments": "Entry point for all payment messages. Routes to appropriate Bronze processing.",
+        "position": {"x": 0, "y": 0},
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.ListSFTP",
+            "name": "List Batch Files (SFTP)",
+            "config": {
+              "hostname": "${sftp.hostname}",
+              "remote.path": "/incoming/payments",
+              "scheduling.period": "1 min"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.FetchSFTP",
+            "name": "Fetch Batch File"
+          },
+          {
+            "type": "org.apache.nifi.processors.kafka.pubsub.ConsumeKafka_2_6",
+            "name": "Consume Streaming Messages (Kafka)",
+            "config": {
+              "bootstrap.servers": "${kafka.bootstrap.servers}",
+              "topic": "payments.incoming",
+              "group.id": "gps-cdm-nifi-consumer",
+              "concurrent.tasks": "8"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+            "name": "Add Ingestion Metadata",
+            "config": {
+              "batch.id": "${UUID()}",
+              "ingestion.timestamp": "${now():format('yyyy-MM-dd HH:mm:ss.SSS')}",
+              "source.zone": "ingestion",
+              "target.zone": "bronze"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route by Message Type",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "pain001": "${filename:contains('pain001') || message.type:equals('pain.001')}",
+              "mt103": "${filename:contains('mt103') || message.type:equals('MT103')}",
+              "ach": "${filename:contains('ach') || message.type:equals('ACH')}",
+              "fedwire": "${filename:contains('fedwire') || message.type:equals('FEDWIRE')}",
+              "sepa": "${filename:contains('sepa') || message.type:equals('SEPA')}",
+              "rtp": "${filename:contains('rtp') || message.type:equals('RTP')}"
+            }
+          }
+        ],
+        "outputPorts": [
+          {"name": "To Bronze Zone", "comments": "Messages ready for Bronze processing"}
+        ]
+      },
+
+      {
+        "identifier": "zone-1-bronze",
+        "name": "Zone 1: Bronze Layer",
+        "comments": "Raw data storage. Each message type has dedicated Celery task on 'bronze' queue.",
+        "position": {"x": 400, "y": 0},
+        "inputPorts": [
+          {"name": "From Ingestion", "comments": "Raw messages with metadata"}
+        ],
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit Bronze Task (pain001)",
+            "comments": "Celery task: process_bronze_partition on 'bronze' queue",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.flower.url}/api/task/send-task/gps_cdm.orchestration.celery_tasks.process_bronze_partition",
+              "content.type": "application/json",
+              "request.body": "{\"args\": [\"${batch.id}:bronze:pain001\", [], \"pain001\", \"${batch.id}\", ${persistence.config}], \"kwargs\": {\"raw_content\": \"${content:base64Encode()}\"}}",
+              "attributes.to.send": "batch.id,message.type"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit Bronze Task (mt103)",
+            "comments": "Celery task: process_bronze_partition on 'bronze' queue",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.flower.url}/api/task/send-task/gps_cdm.orchestration.celery_tasks.process_bronze_partition",
+              "content.type": "application/json"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.Wait",
+            "name": "Wait for Bronze Completion",
+            "config": {
+              "release.signal.identifier": "${batch.id}:bronze:complete",
+              "target.signal.count": "1",
+              "wait.timeout": "10 min",
+              "distributed.cache.service": "gps-cdm-distributed-cache"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.Notify",
+            "name": "Signal Bronze Complete",
+            "config": {
+              "release.signal.identifier": "${batch.id}:bronze:complete",
+              "distributed.cache.service": "gps-cdm-distributed-cache"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+            "name": "Update Zone Metadata (Bronze Complete)",
+            "config": {
+              "source.zone": "bronze",
+              "target.zone": "silver",
+              "bronze.completed.at": "${now():format('yyyy-MM-dd HH:mm:ss.SSS')}"
+            }
+          }
+        ],
+        "outputPorts": [
+          {"name": "To Silver Zone", "comments": "Bronze records ready for Silver transformation"}
+        ]
+      },
+
+      {
+        "identifier": "zone-2-silver",
+        "name": "Zone 2: Silver Layer",
+        "comments": "Structured data per message type. Celery tasks on 'silver' queue.",
+        "position": {"x": 800, "y": 0},
+        "inputPorts": [
+          {"name": "From Bronze", "comments": "Raw records with bronze metadata"}
+        ],
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit Silver Transform Task",
+            "comments": "Celery task: process_silver_transform on 'silver' queue. Writes to stg_* tables.",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.flower.url}/api/task/send-task/gps_cdm.orchestration.celery_tasks.process_silver_transform",
+              "content.type": "application/json",
+              "request.body": "{\"args\": [\"${batch.id}:silver:${message.type}\", [], \"${message.type}\", \"${mapping.path}\", \"${batch.id}\", ${persistence.config}]}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.Wait",
+            "name": "Wait for Silver Completion",
+            "config": {
+              "release.signal.identifier": "${batch.id}:silver:complete",
+              "target.signal.count": "1",
+              "wait.timeout": "10 min"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.ExecuteSQL",
+            "name": "Verify Silver Records Written",
+            "comments": "Verify data actually persisted to stg_* table",
+            "config": {
+              "database.connection.pool": "gps-cdm-postgresql",
+              "sql.select.query": "SELECT COUNT(*) as record_count FROM silver.stg_${message.type:toLower()} WHERE batch_id = '${batch.id}'"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+            "name": "Update Zone Metadata (Silver Complete)",
+            "config": {
+              "source.zone": "silver",
+              "target.zone": "gold",
+              "silver.completed.at": "${now():format('yyyy-MM-dd HH:mm:ss.SSS')}",
+              "silver.record.count": "${sql.row.count}"
+            }
+          }
+        ],
+        "outputPorts": [
+          {"name": "To Gold Zone", "comments": "Silver records ready for Gold CDM normalization"}
+        ]
+      },
+
+      {
+        "identifier": "zone-3-gold",
+        "name": "Zone 3: Gold Layer (CDM)",
+        "comments": "Unified CDM tables. All message types merge into cdm_payment_instruction. Celery 'gold' queue.",
+        "position": {"x": 1200, "y": 0},
+        "inputPorts": [
+          {"name": "From Silver", "comments": "Structured records from stg_* tables"}
+        ],
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit Gold Aggregate Task",
+            "comments": "Celery task: process_gold_aggregate on 'gold' queue. Writes to cdm_* tables.",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.flower.url}/api/task/send-task/gps_cdm.orchestration.celery_tasks.process_gold_aggregate",
+              "content.type": "application/json",
+              "request.body": "{\"args\": [\"${batch.id}:gold:0\", [\"stg_${message.type:toLower()}\"], {\"${message.type}\": \"${mapping.path}\"}, \"${batch.id}\", ${persistence.config}]}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.Wait",
+            "name": "Wait for Gold Completion",
+            "config": {
+              "release.signal.identifier": "${batch.id}:gold:complete",
+              "target.signal.count": "1",
+              "wait.timeout": "15 min"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.ExecuteSQL",
+            "name": "Verify Gold Records Written",
+            "comments": "Verify data persisted to unified cdm_payment_instruction",
+            "config": {
+              "database.connection.pool": "gps-cdm-postgresql",
+              "sql.select.query": "SELECT COUNT(*) as record_count, source_message_type FROM gold.cdm_payment_instruction WHERE batch_id = '${batch.id}' GROUP BY source_message_type"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+            "name": "Update Zone Metadata (Gold Complete)",
+            "config": {
+              "source.zone": "gold",
+              "target.zone": "analytical",
+              "gold.completed.at": "${now():format('yyyy-MM-dd HH:mm:ss.SSS')}",
+              "gold.record.count": "${sql.row.count}"
+            }
+          }
+        ],
+        "outputPorts": [
+          {"name": "To Analytical Zone", "comments": "CDM records ready for analytical products"},
+          {"name": "To DQ Zone", "comments": "Records for data quality evaluation"}
+        ]
+      },
+
+      {
+        "identifier": "zone-4-analytical",
+        "name": "Zone 4: Analytical Layer",
+        "comments": "Data products: payment_360, regulatory_ready, daily_summary. Celery 'analytical' queue.",
+        "position": {"x": 1600, "y": 0},
+        "inputPorts": [
+          {"name": "From Gold", "comments": "Normalized CDM records"}
+        ],
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit Analytical Refresh Task",
+            "comments": "Celery task: process_analytical_refresh on 'analytical' queue",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.flower.url}/api/task/send-task/gps_cdm.orchestration.celery_tasks.process_analytical_refresh",
+              "content.type": "application/json",
+              "request.body": "{\"args\": [\"${batch.id}\", \"payment_360\", ${persistence.config}]}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.Wait",
+            "name": "Wait for Analytical Completion",
+            "config": {
+              "release.signal.identifier": "${batch.id}:analytical:complete",
+              "target.signal.count": "1",
+              "wait.timeout": "20 min"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.ExecuteSQL",
+            "name": "Verify Analytical Products Updated",
+            "config": {
+              "database.connection.pool": "gps-cdm-postgresql",
+              "sql.select.query": "SELECT 'anl_payment_360' as table_name, COUNT(*) FROM analytical.anl_payment_360 WHERE batch_id = '${batch.id}' UNION ALL SELECT 'anl_regulatory_ready', COUNT(*) FROM analytical.anl_regulatory_ready WHERE batch_id = '${batch.id}'"
+            }
+          }
+        ],
+        "outputPorts": [
+          {"name": "To Observability", "comments": "Batch complete, log metrics"}
+        ]
+      },
+
+      {
+        "identifier": "zone-5-dq",
+        "name": "Zone 5: Data Quality",
+        "comments": "DQ evaluation runs in parallel with Analytical. Celery 'dq' queue.",
+        "position": {"x": 1600, "y": 200},
+        "inputPorts": [
+          {"name": "From Gold", "comments": "Records for DQ evaluation"}
+        ],
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit DQ Evaluation Task",
+            "comments": "Celery task: run_dq_evaluation on 'dq' queue. Per-record scores to obs_dq_results.",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.flower.url}/api/task/send-task/gps_cdm.orchestration.celery_tasks.run_dq_evaluation",
+              "content.type": "application/json",
+              "request.body": "{\"args\": [\"${batch.id}\", \"gold\", \"cdm_payment_instruction\", ${persistence.config}]}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.Wait",
+            "name": "Wait for DQ Completion"
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.ExecuteSQL",
+            "name": "Get DQ Summary",
+            "config": {
+              "database.connection.pool": "gps-cdm-postgresql",
+              "sql.select.query": "SELECT AVG(overall_score) as avg_score, COUNT(*) as records_evaluated FROM observability.obs_dq_results WHERE batch_id = '${batch.id}'"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route by DQ Score",
+            "config": {
+              "high_quality": "${avg_score:gt(90)}",
+              "needs_review": "${avg_score:ge(70):and(${avg_score:le(90)})}",
+              "low_quality": "${avg_score:lt(70)}"
+            }
+          }
+        ],
+        "outputPorts": [
+          {"name": "DQ Complete", "comments": "DQ results stored in observability schema"}
+        ]
+      },
+
+      {
+        "identifier": "zone-6-cdc",
+        "name": "Zone 6: CDC Sync",
+        "comments": "Change Data Capture for downstream systems (Neo4j, etc.). Celery 'cdc' queue.",
+        "position": {"x": 1600, "y": 400},
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.ExecuteSQL",
+            "name": "Get Pending CDC Events",
+            "config": {
+              "database.connection.pool": "gps-cdm-postgresql",
+              "sql.select.query": "SELECT * FROM observability.obs_cdc_tracking WHERE synced_at IS NULL ORDER BY event_timestamp LIMIT 1000"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.SplitRecord",
+            "name": "Split CDC Events"
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Sync to Neo4j",
+            "comments": "Celery task: sync_cdc_to_neo4j on 'cdc' queue",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "${celery.flower.url}/api/task/send-task/gps_cdm.orchestration.celery_tasks.sync_cdc_to_neo4j"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.PutDatabaseRecord",
+            "name": "Mark CDC Events Synced",
+            "config": {
+              "database.connection.pool": "gps-cdm-postgresql",
+              "statement.type": "UPDATE",
+              "table.name": "observability.obs_cdc_tracking",
+              "update.keys": "cdc_id"
+            }
+          }
+        ]
+      },
+
+      {
+        "identifier": "zone-7-observability",
+        "name": "Zone 7: Observability",
+        "comments": "Batch tracking, lineage, metrics collection",
+        "position": {"x": 2000, "y": 0},
+        "inputPorts": [
+          {"name": "Batch Complete", "comments": "Final batch status"}
+        ],
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.PutDatabaseRecord",
+            "name": "Update Batch Tracking",
+            "config": {
+              "database.connection.pool": "gps-cdm-postgresql",
+              "statement.type": "UPDATE",
+              "table.name": "observability.obs_batch_tracking",
+              "update.keys": "batch_id"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.PublishKafka_2_6",
+            "name": "Publish Batch Metrics to Kafka",
+            "config": {
+              "bootstrap.servers": "${kafka.bootstrap.servers}",
+              "topic": "gps-cdm.batch-metrics"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateCounter",
+            "name": "Increment Batch Counter"
+          }
+        ]
+      }
+    ],
+
+    "connections": [
+      {"source": "Zone 0: Ingestion Layer", "sourcePort": "To Bronze Zone", "destination": "Zone 1: Bronze Layer", "destinationPort": "From Ingestion"},
+      {"source": "Zone 1: Bronze Layer", "sourcePort": "To Silver Zone", "destination": "Zone 2: Silver Layer", "destinationPort": "From Bronze"},
+      {"source": "Zone 2: Silver Layer", "sourcePort": "To Gold Zone", "destination": "Zone 3: Gold Layer (CDM)", "destinationPort": "From Silver"},
+      {"source": "Zone 3: Gold Layer (CDM)", "sourcePort": "To Analytical Zone", "destination": "Zone 4: Analytical Layer", "destinationPort": "From Gold"},
+      {"source": "Zone 3: Gold Layer (CDM)", "sourcePort": "To DQ Zone", "destination": "Zone 5: Data Quality", "destinationPort": "From Gold"},
+      {"source": "Zone 4: Analytical Layer", "sourcePort": "To Observability", "destination": "Zone 7: Observability", "destinationPort": "Batch Complete"}
+    ],
+
+    "controllerServices": [
+      {
+        "identifier": "gps-cdm-postgresql",
+        "type": "org.apache.nifi.dbcp.DBCPConnectionPool",
+        "name": "GPS CDM PostgreSQL Pool",
+        "config": {
+          "database.url": "jdbc:postgresql://${db.host}:${db.port}/${db.name}",
+          "database.driver.classname": "org.postgresql.Driver",
+          "max.total.connections": "50"
+        }
+      },
+      {
+        "identifier": "gps-cdm-distributed-cache",
+        "type": "org.apache.nifi.distributed.cache.client.DistributedMapCacheClientService",
+        "name": "GPS CDM Distributed Cache",
+        "comments": "Used for Wait/Notify between zones"
+      }
+    ],
+
+    "variables": {
+      "celery.flower.url": "http://localhost:5555",
+      "kafka.bootstrap.servers": "localhost:9092",
+      "db.host": "localhost",
+      "db.port": "5432",
+      "db.name": "gps_cdm",
+      "persistence.config": "{\"backend\":\"postgresql\",\"catalog\":\"gps_cdm\",\"host\":\"localhost\",\"port\":5432}"
+    }
+  },
+
+  "zoneArchitecture": {
+    "description": "Each zone has dedicated Celery queue and workers for isolation and scalability",
+    "zones": [
+      {
+        "zone": 0,
+        "name": "Ingestion",
+        "celery_queue": null,
+        "description": "NiFi handles ingestion directly (SFTP, Kafka)"
+      },
+      {
+        "zone": 1,
+        "name": "Bronze",
+        "celery_queue": "bronze",
+        "workers": "4-8 per node",
+        "tables": ["bronze.raw_payment_messages"],
+        "description": "Store raw content as-is"
+      },
+      {
+        "zone": 2,
+        "name": "Silver",
+        "celery_queue": "silver",
+        "workers": "4-8 per node",
+        "tables": ["silver.stg_pain001", "silver.stg_mt103", "silver.stg_ach", "silver.stg_fedwire", "silver.stg_sepa", "silver.stg_rtp"],
+        "description": "Parse and structure per message type"
+      },
+      {
+        "zone": 3,
+        "name": "Gold",
+        "celery_queue": "gold",
+        "workers": "2-4 per node",
+        "tables": ["gold.cdm_payment_instruction", "gold.cdm_party", "gold.cdm_account", "gold.cdm_financial_institution"],
+        "description": "Normalize to unified CDM schema"
+      },
+      {
+        "zone": 4,
+        "name": "Analytical",
+        "celery_queue": "analytical",
+        "workers": "2-4 per node",
+        "tables": ["analytical.anl_payment_360", "analytical.anl_party_360", "analytical.anl_regulatory_ready", "analytical.anl_daily_summary"],
+        "description": "Build data products for consumption"
+      },
+      {
+        "zone": 5,
+        "name": "DQ",
+        "celery_queue": "dq",
+        "workers": "2-4 per node",
+        "tables": ["observability.obs_dq_results", "observability.obs_dq_metrics"],
+        "description": "Evaluate data quality per record"
+      },
+      {
+        "zone": 6,
+        "name": "CDC",
+        "celery_queue": "cdc",
+        "workers": "1-2 per node",
+        "tables": ["observability.obs_cdc_tracking"],
+        "description": "Sync changes to downstream systems"
+      }
+    ],
+    "celery_startup_command": "celery -A gps_cdm.orchestration.celery_tasks worker -Q bronze,silver,gold,analytical,dq,cdc --concurrency=8 -l info"
+  }
+}

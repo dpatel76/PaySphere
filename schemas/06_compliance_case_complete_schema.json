@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bofa.com/schemas/cdm/compliance-case-complete.schema.json",
+  "title": "ComplianceCaseComplete",
+  "description": "Complete ComplianceCase entity with SAR narrative, law enforcement interaction, and global FIU referral extensions",
+  "type": "object",
+  "required": ["complianceCaseId", "caseNumber", "caseType", "caseStatus", "createdTimestamp"],
+  "properties": {
+    "complianceCaseId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "caseNumber": {
+      "type": "string",
+      "maxLength": 100,
+      "description": "Unique case identifier"
+    },
+    "caseType": {
+      "type": "string",
+      "enum": ["SAR", "CTR", "ALERT", "INVESTIGATION", "REVIEW", "AUDIT", "OTHER"]
+    },
+    "caseStatus": {
+      "type": "string",
+      "enum": ["open", "under_investigation", "pending_review", "escalated", "closed", "referred_to_law_enforcement", "prosecuted", "archived"]
+    },
+    "caseTitle": {
+      "type": ["string", "null"],
+      "maxLength": 200
+    },
+    "caseDescription": {
+      "type": ["string", "null"],
+      "description": "Summary of the case"
+    },
+    "sarNarrative": {
+      "type": ["string", "null"],
+      "maxLength": 71600,
+      "description": "FinCEN SAR Item 104 - Detailed SAR narrative (max 71,600 characters) - Non-ISO Extension"
+    },
+    "sarActivityTypeCheckboxes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "STRUCTURING",
+          "TERRORIST_FINANCING",
+          "FRAUD",
+          "IDENTITY_THEFT",
+          "CHECK_FRAUD",
+          "COUNTERFEIT_CHECK",
+          "WIRE_TRANSFER_FRAUD",
+          "ACH_FRAUD",
+          "CREDIT_CARD_FRAUD",
+          "MONEY_LAUNDERING",
+          "BRIBERY",
+          "EMBEZZLEMENT",
+          "MISUSE_OF_POSITION",
+          "CYBER_EVENT",
+          "UNAUTHORIZED_WIRE_TRANSFER",
+          "OTHER"
+        ]
+      },
+      "description": "FinCEN SAR Items 52-68 - Activity type checkboxes - Non-ISO Extension"
+    },
+    "lawEnforcementContactDate": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "FinCEN SAR Item 92 - Date law enforcement was contacted - ISO 20022 Compliant"
+    },
+    "lawEnforcementContactName": {
+      "type": ["string", "null"],
+      "maxLength": 140,
+      "description": "FinCEN SAR Item 92 - Law enforcement contact person name - ISO 20022 Compliant"
+    },
+    "lawEnforcementAgency": {
+      "type": ["string", "null"],
+      "maxLength": 200,
+      "description": "FinCEN SAR Item 92 - Law enforcement agency name - Non-ISO Extension"
+    },
+    "recoveredAmount": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Amount recovered from fraud/loss - Non-ISO Extension"
+    },
+    "suspectFledIndicator": {
+      "type": "boolean",
+      "default": false,
+      "description": "FinCEN SAR Item 51 - Suspect has fled jurisdiction flag - Non-ISO Extension"
+    },
+    "suspectArrestDate": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date suspect was arrested - Non-ISO Extension"
+    },
+    "suspectConvictionDate": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date of suspect conviction - Non-ISO Extension"
+    },
+    "investigationStatus": {
+      "type": "string",
+      "enum": ["open", "under_investigation", "closed", "referred_to_law_enforcement", "prosecuted"],
+      "description": "Investigation workflow status - ISO 20022 Extended"
+    },
+    "referralToFIU": {
+      "type": "boolean",
+      "default": false,
+      "description": "Referred to Financial Intelligence Unit (FIU) flag - Non-ISO Extension"
+    },
+    "fiuReferralDate": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date case was referred to FIU - Non-ISO Extension"
+    },
+    "fiuReferenceNumber": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "FIU reference number for tracking - Non-ISO Extension"
+    },
+    "totalTransactionAmount": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "Total transaction amount involved in case"
+    },
+    "transactionCount": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of transactions in case"
+    },
+    "suspiciousStartDate": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "suspiciousEndDate": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "assignedTo": {
+      "type": ["string", "null"],
+      "maxLength": 140,
+      "description": "Assigned investigator/analyst"
+    },
+    "assignedTeam": {
+      "type": ["string", "null"],
+      "maxLength": 100
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "default": "medium"
+    },
+    "riskScore": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "relatedPaymentInstructions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to PaymentInstruction"
+      }
+    },
+    "relatedParties": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to Party"
+      }
+    },
+    "relatedAccounts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to Account"
+      }
+    },
+    "relatedAMLAlerts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to AMLAlert"
+      }
+    },
+    "relatedRegulatoryReports": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "description": "FK to RegulatoryReport"
+      }
+    },
+    "createdTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedBy": {
+      "type": "string"
+    },
+    "recordVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}

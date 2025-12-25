@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bofa.com/schemas/cdm/regulatory-purpose-code.schema.json",
+  "title": "RegulatoryPurposeCode",
+  "description": "Regulatory purpose code reference entity supporting 350+ purpose codes across 69 jurisdictions",
+  "type": "object",
+  "required": ["purposeCodeId", "jurisdiction", "codeValue", "codeDescription", "effectiveFrom"],
+  "properties": {
+    "purposeCodeId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID v4 primary key - Non-ISO Extension"
+    },
+    "jurisdiction": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "ISO 3166-1 alpha-2 country code (CN, IN, BR, KR, etc.) - ISO 20022 Compliant"
+    },
+    "codeValue": {
+      "type": "string",
+      "maxLength": 10,
+      "description": "Jurisdiction-specific purpose code value (e.g., 121010 for China, S0001 for India, 10101 for Brazil) - Non-ISO Extension",
+      "examples": ["121010", "S0001", "10101", "T01", "R01"]
+    },
+    "codeDescription": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Purpose code description (e.g., General merchandise trade - export) - ISO 20022 Compliant"
+    },
+    "category": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "High-level category: Trade in Goods, Trade in Services, Income, Current Transfers, Capital Account, Financial Account, etc. - ISO 20022 Extended"
+    },
+    "subCategory": {
+      "type": ["string", "null"],
+      "maxLength": 100,
+      "description": "Sub-category: Export, Import, Processing Trade, General Merchandise, Software, Professional Services, etc. - ISO 20022 Extended"
+    },
+    "iso20022Mapping": {
+      "type": ["string", "null"],
+      "maxLength": 4,
+      "description": "ISO 20022 External Purpose Code equivalent (GDDS, SVCS, SALA, DIVI, LOAN, etc.) - ISO 20022 Compliant",
+      "examples": ["GDDS", "SVCS", "SALA", "DIVI", "LOAN", "RENT", "EDUC"]
+    },
+    "applicablePaymentTypes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["SWIFT", "Wire", "RTGS", "ACH", "Mobile", "UPI", "PIX", "PromptPay", "PayNow", "Other"]
+      },
+      "description": "Payment types where code applies - Non-ISO Extension"
+    },
+    "requiresSupportingDocuments": {
+      "type": "boolean",
+      "default": false,
+      "description": "Documentation requirements flag (true if trade documents, invoices, contracts required) - Non-ISO Extension"
+    },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date",
+      "description": "Effective start date - ISO 20022 Compliant"
+    },
+    "effectiveTo": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Effective end date (NULL = currently active) - Non-ISO Extension"
+    },
+    "createdTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastUpdatedTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "purposeCodeId": "550e8400-e29b-41d4-a716-446655440001",
+      "jurisdiction": "CN",
+      "codeValue": "121010",
+      "codeDescription": "General merchandise trade - export",
+      "category": "Trade in Goods",
+      "subCategory": "Export",
+      "iso20022Mapping": "GDDS",
+      "applicablePaymentTypes": ["SWIFT", "Wire", "RTGS"],
+      "requiresSupportingDocuments": true,
+      "effectiveFrom": "2015-01-01",
+      "effectiveTo": null
+    },
+    {
+      "purposeCodeId": "550e8400-e29b-41d4-a716-446655440110",
+      "jurisdiction": "IN",
+      "codeValue": "S0201",
+      "codeDescription": "Maintenance of close relatives",
+      "category": "Remittances",
+      "subCategory": "Family",
+      "iso20022Mapping": "FAMI",
+      "applicablePaymentTypes": ["Wire", "Mobile", "UPI"],
+      "requiresSupportingDocuments": false,
+      "effectiveFrom": "2016-01-01",
+      "effectiveTo": null
+    }
+  ]
+}

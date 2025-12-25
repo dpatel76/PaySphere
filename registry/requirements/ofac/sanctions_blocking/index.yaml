@@ -1,0 +1,157 @@
+# OFAC Sanctions Blocking Report - Requirement Index
+# Report Type: SANCTIONS_BLOCKING
+# Regulator: OFAC (Office of Foreign Assets Control)
+# Jurisdiction: US
+# Total Requirements: 72
+
+report_metadata:
+  report_type: "SANCTIONS_BLOCKING"
+  report_name: "Blocked Property and Rejected Transactions Report"
+  regulator: "OFAC"
+  jurisdiction: "US"
+  regulation: "31 CFR Part 501"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "EVENT_DRIVEN"
+  filing_deadline: "Within 10 business days of blocking"
+  output_format: "PDF/Online Form"
+  submission_method: "OFAC Reporting System"
+  submission_url: "https://ofac.treasury.gov/"
+
+requirement_summary:
+  total: 72
+  by_category:
+    ELIGIBILITY: 6
+    FIELD: 52
+    VALIDATION: 8
+    FORMAT: 4
+    TIMING: 2
+  by_criticality:
+    MANDATORY: 62
+    RECOMMENDED: 8
+    OPTIONAL: 2
+
+requirements:
+  eligibility:
+    - id: "REQ-SANC-001"
+      title: "Blocked Property Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Property in which SDN or blocked country has interest"
+
+    - id: "REQ-SANC-002"
+      title: "SDN List Match"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Match against Specially Designated Nationals list"
+
+    - id: "REQ-SANC-003"
+      title: "Country-Based Sanctions"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transactions involving comprehensively sanctioned countries"
+
+    - id: "REQ-SANC-004"
+      title: "Sectoral Sanctions"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "SSI List matches for sectoral programs"
+
+    - id: "REQ-SANC-005"
+      title: "50% Rule"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Entities 50%+ owned by SDN are blocked"
+
+    - id: "REQ-SANC-006"
+      title: "Rejected Transaction"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+      description: "Transaction that cannot be blocked but must be rejected"
+
+  fields_blocked_property:
+    - id: "REQ-SANC-020"
+      title: "Blocked Party Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-021"
+      title: "SDN Entry Reference"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-022"
+      title: "Sanctions Program"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "IRAN, SYRIA, RUSSIA, CUBA, etc."
+
+    - id: "REQ-SANC-023"
+      title: "Blocking Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-024"
+      title: "Property Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+      description: "Funds, securities, real property, etc."
+
+    - id: "REQ-SANC-025"
+      title: "Blocked Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-026"
+      title: "Currency"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-027"
+      title: "Account Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-028"
+      title: "Transaction Reference"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  fields_rejected:
+    - id: "REQ-SANC-040"
+      title: "Rejection Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-041"
+      title: "Rejected Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-042"
+      title: "Reason for Rejection"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-043"
+      title: "Originator Information"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-SANC-044"
+      title: "Beneficiary Information"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  timing:
+    - id: "REQ-SANC-070"
+      title: "10 Business Day Reporting"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Report within 10 business days of blocking"
+
+    - id: "REQ-SANC-071"
+      title: "Annual Certification"
+      category: "TIMING"
+      criticality: "MANDATORY"
+      description: "Annual certification of blocked property"

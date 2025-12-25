@@ -1,0 +1,387 @@
+# FinCEN Currency Transaction Report (CTR) - Requirement Index
+# Report Type: CTR
+# Regulator: FinCEN
+# Jurisdiction: US
+# Total Requirements: 117
+
+report_metadata:
+  report_type: "CTR"
+  report_name: "Currency Transaction Report"
+  regulator: "FinCEN"
+  jurisdiction: "US"
+  form_number: "FinCEN Form 112"
+  regulation: "31 CFR 1010.311-1010.314"
+  effective_date: "2024-01-01"
+  last_updated: "2024-12-20"
+  filing_frequency: "DAILY"
+  filing_deadline: "15 days after transaction"
+  output_format: "XML"
+  submission_method: "BSA E-Filing"
+  submission_url: "https://bsaefiling.fincen.treas.gov/"
+
+requirement_summary:
+  total: 117
+  by_category:
+    ELIGIBILITY: 8
+    FIELD: 89
+    VALIDATION: 12
+    FORMAT: 4
+    TIMING: 3
+    SUBMISSION: 1
+  by_criticality:
+    MANDATORY: 98
+    RECOMMENDED: 15
+    OPTIONAL: 4
+
+requirements:
+  # ===== ELIGIBILITY REQUIREMENTS =====
+  eligibility:
+    - id: "REQ-CTR-001"
+      file: "REQ-CTR-001.yaml"
+      title: "Currency Transaction Reporting Threshold"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-002"
+      file: "REQ-CTR-002.yaml"
+      title: "Multiple Transaction Aggregation"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-003"
+      file: "REQ-CTR-003.yaml"
+      title: "Currency Definition"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-004"
+      file: "REQ-CTR-004.yaml"
+      title: "Financial Institution Scope"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-005"
+      file: "REQ-CTR-005.yaml"
+      title: "Transaction Types Covered"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-006"
+      file: "REQ-CTR-006.yaml"
+      title: "Exempt Persons"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-007"
+      file: "REQ-CTR-007.yaml"
+      title: "Exempt Transactions"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-008"
+      file: "REQ-CTR-008.yaml"
+      title: "Structuring Detection"
+      category: "ELIGIBILITY"
+      criticality: "MANDATORY"
+
+  # ===== FIELD REQUIREMENTS - Part I: Filing Institution =====
+  fields_part1:
+    - id: "REQ-CTR-010"
+      file: "REQ-CTR-010.yaml"
+      title: "Filing Institution Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-011"
+      file: "REQ-CTR-011.yaml"
+      title: "Filing Institution EIN/TIN"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-012"
+      file: "REQ-CTR-012.yaml"
+      title: "Filing Institution Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-013"
+      file: "REQ-CTR-013.yaml"
+      title: "Filing Institution Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-014"
+      file: "REQ-CTR-014.yaml"
+      title: "Primary Federal Regulator"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-015"
+      file: "REQ-CTR-015.yaml"
+      title: "Filing Institution ID Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-016"
+      file: "REQ-CTR-016.yaml"
+      title: "Contact Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-017"
+      file: "REQ-CTR-017.yaml"
+      title: "Contact Phone"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  # ===== FIELD REQUIREMENTS - Part II: Person(s) Involved =====
+  fields_part2:
+    - id: "REQ-CTR-020"
+      file: "REQ-CTR-020.yaml"
+      title: "Person Full Legal Name"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-021"
+      file: "REQ-CTR-021.yaml"
+      title: "Person TIN Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-022"
+      file: "REQ-CTR-022.yaml"
+      title: "Person TIN"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-023"
+      file: "REQ-CTR-023.yaml"
+      title: "Person Date of Birth"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-024"
+      file: "REQ-CTR-024.yaml"
+      title: "Person Address"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-025"
+      file: "REQ-CTR-025.yaml"
+      title: "Person ID Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-026"
+      file: "REQ-CTR-026.yaml"
+      title: "Person ID Number"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-027"
+      file: "REQ-CTR-027.yaml"
+      title: "Person ID Issuing State/Country"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-028"
+      file: "REQ-CTR-028.yaml"
+      title: "Person Occupation"
+      category: "FIELD"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-CTR-029"
+      file: "REQ-CTR-029.yaml"
+      title: "Person Role (Conductor/Beneficiary)"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-030"
+      file: "REQ-CTR-030.yaml"
+      title: "Multiple Persons Indicator"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+  # ===== FIELD REQUIREMENTS - Part III: Transaction Information =====
+  fields_part3:
+    - id: "REQ-CTR-040"
+      file: "REQ-CTR-040.yaml"
+      title: "Transaction Date"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-041"
+      file: "REQ-CTR-041.yaml"
+      title: "Transaction Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-042"
+      file: "REQ-CTR-042.yaml"
+      title: "Cash In Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-043"
+      file: "REQ-CTR-043.yaml"
+      title: "Cash Out Amount"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-044"
+      file: "REQ-CTR-044.yaml"
+      title: "Foreign Currency Indicator"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-045"
+      file: "REQ-CTR-045.yaml"
+      title: "Foreign Currency Country"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CTR-046"
+      file: "REQ-CTR-046.yaml"
+      title: "Foreign Currency Amount"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CTR-047"
+      file: "REQ-CTR-047.yaml"
+      title: "Transaction Type"
+      category: "FIELD"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-048"
+      file: "REQ-CTR-048.yaml"
+      title: "Shared Branching Indicator"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CTR-049"
+      file: "REQ-CTR-049.yaml"
+      title: "Armored Car Service Indicator"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CTR-050"
+      file: "REQ-CTR-050.yaml"
+      title: "ATM Indicator"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CTR-051"
+      file: "REQ-CTR-051.yaml"
+      title: "Mail Deposit/Shipment Indicator"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+    - id: "REQ-CTR-052"
+      file: "REQ-CTR-052.yaml"
+      title: "Night Deposit Indicator"
+      category: "FIELD"
+      criticality: "CONDITIONAL"
+
+  # ===== VALIDATION REQUIREMENTS =====
+  validations:
+    - id: "REQ-CTR-080"
+      file: "REQ-CTR-080.yaml"
+      title: "Amount Must Be Positive"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-081"
+      file: "REQ-CTR-081.yaml"
+      title: "TIN Format Validation"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-082"
+      file: "REQ-CTR-082.yaml"
+      title: "Cash In/Out Balance"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-083"
+      file: "REQ-CTR-083.yaml"
+      title: "Transaction Date Not Future"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-084"
+      file: "REQ-CTR-084.yaml"
+      title: "Required Fields Present"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-085"
+      file: "REQ-CTR-085.yaml"
+      title: "State Code Validation"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-086"
+      file: "REQ-CTR-086.yaml"
+      title: "Country Code Validation"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-087"
+      file: "REQ-CTR-087.yaml"
+      title: "ID Type/Number Consistency"
+      category: "VALIDATION"
+      criticality: "MANDATORY"
+
+  # ===== FORMAT REQUIREMENTS =====
+  format:
+    - id: "REQ-CTR-100"
+      file: "REQ-CTR-100.yaml"
+      title: "XML Schema Compliance"
+      category: "FORMAT"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-101"
+      file: "REQ-CTR-101.yaml"
+      title: "Character Encoding UTF-8"
+      category: "FORMAT"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-102"
+      file: "REQ-CTR-102.yaml"
+      title: "Date Format YYYY-MM-DD"
+      category: "FORMAT"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-103"
+      file: "REQ-CTR-103.yaml"
+      title: "Amount Format 2 Decimals"
+      category: "FORMAT"
+      criticality: "MANDATORY"
+
+  # ===== TIMING REQUIREMENTS =====
+  timing:
+    - id: "REQ-CTR-110"
+      file: "REQ-CTR-110.yaml"
+      title: "Filing Deadline 15 Days"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+    - id: "REQ-CTR-111"
+      file: "REQ-CTR-111.yaml"
+      title: "Batch Filing Cutoff"
+      category: "TIMING"
+      criticality: "RECOMMENDED"
+
+    - id: "REQ-CTR-112"
+      file: "REQ-CTR-112.yaml"
+      title: "Amendment Window"
+      category: "TIMING"
+      criticality: "MANDATORY"
+
+  # ===== SUBMISSION REQUIREMENTS =====
+  submission:
+    - id: "REQ-CTR-115"
+      file: "REQ-CTR-115.yaml"
+      title: "BSA E-Filing Submission"
+      category: "SUBMISSION"
+      criticality: "MANDATORY"

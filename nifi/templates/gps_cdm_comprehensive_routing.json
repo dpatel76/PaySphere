@@ -1,0 +1,338 @@
+{
+  "flowContents": {
+    "identifier": "gps-cdm-comprehensive-routing",
+    "name": "GPS CDM Comprehensive Message Routing",
+    "version": "2.0",
+    "description": "Routes all 72+ payment message types to appropriate Bronze/Silver/Gold tables via Celery",
+    "processGroups": [
+      {
+        "identifier": "message-type-detection",
+        "name": "Message Type Detection",
+        "comments": "Detects message type from content or filename and sets routing attributes",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.EvaluateXPath",
+            "name": "Detect ISO 20022 Message Type",
+            "config": {
+              "destination": "flowfile-attribute",
+              "iso20022.namespace": "/*[1]/namespace::*[1]",
+              "iso20022.root": "name(/*[1]/*[1])",
+              "pain001": "count(//pain.001.001.*)>0",
+              "pain002": "count(//pain.002.001.*)>0",
+              "pain007": "count(//pain.007.001.*)>0",
+              "pain008": "count(//pain.008.001.*)>0",
+              "pacs002": "count(//pacs.002.001.*)>0",
+              "pacs003": "count(//pacs.003.001.*)>0",
+              "pacs004": "count(//pacs.004.001.*)>0",
+              "pacs007": "count(//pacs.007.001.*)>0",
+              "pacs008": "count(//pacs.008.001.*)>0",
+              "pacs009": "count(//pacs.009.001.*)>0",
+              "camt026": "count(//camt.026.001.*)>0",
+              "camt029": "count(//camt.029.001.*)>0",
+              "camt052": "count(//camt.052.001.*)>0",
+              "camt053": "count(//camt.053.001.*)>0",
+              "camt054": "count(//camt.054.001.*)>0",
+              "camt055": "count(//camt.055.001.*)>0",
+              "camt056": "count(//camt.056.001.*)>0"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+            "name": "Normalize Message Type",
+            "config": {
+              "message.type": "${filename:substringBefore('.'):toUpper():replaceAll('[^A-Z0-9]', '_')}",
+              "batch.id": "${UUID()}",
+              "ingestion.timestamp": "${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'')}",
+              "source.system": "${path:substringBefore('/')}",
+              "processing.priority": "${message.type:matches('MT103|pain.001|pacs.008|FedNow|RTP|PIX'):ifElse('HIGH', 'NORMAL')}"
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "iso20022-routing",
+        "name": "ISO 20022 Message Routing",
+        "comments": "Routes ISO 20022 messages by family and type",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route ISO 20022 PAIN",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "routes": {
+                "pain.001": "${message.type:matches('(?i)pain[._]?001.*')}",
+                "pain.002": "${message.type:matches('(?i)pain[._]?002.*')}",
+                "pain.007": "${message.type:matches('(?i)pain[._]?007.*')}",
+                "pain.008": "${message.type:matches('(?i)pain[._]?008.*')}",
+                "pain.013": "${message.type:matches('(?i)pain[._]?013.*')}",
+                "pain.014": "${message.type:matches('(?i)pain[._]?014.*')}"
+              }
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route ISO 20022 PACS",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "routes": {
+                "pacs.002": "${message.type:matches('(?i)pacs[._]?002.*')}",
+                "pacs.003": "${message.type:matches('(?i)pacs[._]?003.*')}",
+                "pacs.004": "${message.type:matches('(?i)pacs[._]?004.*')}",
+                "pacs.007": "${message.type:matches('(?i)pacs[._]?007.*')}",
+                "pacs.008": "${message.type:matches('(?i)pacs[._]?008.*')}",
+                "pacs.009": "${message.type:matches('(?i)pacs[._]?009.*')}",
+                "pacs.028": "${message.type:matches('(?i)pacs[._]?028.*')}"
+              }
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route ISO 20022 CAMT",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "routes": {
+                "camt.026": "${message.type:matches('(?i)camt[._]?026.*')}",
+                "camt.027": "${message.type:matches('(?i)camt[._]?027.*')}",
+                "camt.028": "${message.type:matches('(?i)camt[._]?028.*')}",
+                "camt.029": "${message.type:matches('(?i)camt[._]?029.*')}",
+                "camt.052": "${message.type:matches('(?i)camt[._]?052.*')}",
+                "camt.053": "${message.type:matches('(?i)camt[._]?053.*')}",
+                "camt.054": "${message.type:matches('(?i)camt[._]?054.*')}",
+                "camt.055": "${message.type:matches('(?i)camt[._]?055.*')}",
+                "camt.056": "${message.type:matches('(?i)camt[._]?056.*')}",
+                "camt.057": "${message.type:matches('(?i)camt[._]?057.*')}",
+                "camt.086": "${message.type:matches('(?i)camt[._]?086.*')}",
+                "camt.087": "${message.type:matches('(?i)camt[._]?087.*')}"
+              }
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route ISO 20022 ACMT",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "routes": {
+                "acmt.001": "${message.type:matches('(?i)acmt[._]?001.*')}",
+                "acmt.002": "${message.type:matches('(?i)acmt[._]?002.*')}",
+                "acmt.003": "${message.type:matches('(?i)acmt[._]?003.*')}",
+                "acmt.005": "${message.type:matches('(?i)acmt[._]?005.*')}",
+                "acmt.006": "${message.type:matches('(?i)acmt[._]?006.*')}",
+                "acmt.007": "${message.type:matches('(?i)acmt[._]?007.*')}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "swift-mt-routing",
+        "name": "SWIFT MT Message Routing",
+        "comments": "Routes SWIFT MT messages by category",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route SWIFT MT",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "routes": {
+                "MT103": "${message.type:matches('(?i)mt[_]?103.*') || content:find('^\\{1:F01.*\\{4:.*:20:')}",
+                "MT103+": "${message.type:matches('(?i)mt[_]?103[+_].*')}",
+                "MT200": "${message.type:matches('(?i)mt[_]?200.*')}",
+                "MT201": "${message.type:matches('(?i)mt[_]?201.*')}",
+                "MT202": "${message.type:matches('(?i)mt[_]?202[^c].*')}",
+                "MT202COV": "${message.type:matches('(?i)mt[_]?202cov.*')}",
+                "MT203": "${message.type:matches('(?i)mt[_]?203.*')}",
+                "MT204": "${message.type:matches('(?i)mt[_]?204.*')}",
+                "MT205": "${message.type:matches('(?i)mt[_]?205.*')}",
+                "MT900": "${message.type:matches('(?i)mt[_]?900.*')}",
+                "MT910": "${message.type:matches('(?i)mt[_]?910.*')}",
+                "MT940": "${message.type:matches('(?i)mt[_]?940.*')}",
+                "MT942": "${message.type:matches('(?i)mt[_]?942.*')}",
+                "MT950": "${message.type:matches('(?i)mt[_]?950.*')}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "domestic-scheme-routing",
+        "name": "Domestic Payment Scheme Routing",
+        "comments": "Routes SEPA, NACHA, Fedwire, UK schemes",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route Domestic Schemes",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "routes": {
+                "SEPA_SCT": "${message.type:matches('(?i)sepa[._]?sct.*') || filename:matches('(?i).*sct.*')}",
+                "SEPA_SDD": "${message.type:matches('(?i)sepa[._]?sdd.*') || filename:matches('(?i).*sdd.*')}",
+                "NACHA_ACH": "${message.type:matches('(?i)(nacha|ach).*') || filename:matches('(?i).*\\.ach')}",
+                "Fedwire": "${message.type:matches('(?i)fedwire.*') || filename:matches('(?i).*fedwire.*')}",
+                "CHIPS": "${message.type:matches('(?i)chips.*')}",
+                "BACS": "${message.type:matches('(?i)bacs.*')}",
+                "CHAPS": "${message.type:matches('(?i)chaps.*')}",
+                "FPS": "${message.type:matches('(?i)(fps|faster[_]?payments).*')}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "realtime-routing",
+        "name": "Real-Time Payment Routing",
+        "comments": "Routes FedNow, RTP, PIX, NPP, UPI and other instant payment systems",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route Real-Time Payments",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "routes": {
+                "FedNow": "${message.type:matches('(?i)fednow.*')}",
+                "RTP": "${message.type:matches('(?i)(rtp|tch[_]?rtp).*')}",
+                "PIX": "${message.type:matches('(?i)pix.*')}",
+                "NPP": "${message.type:matches('(?i)(npp|osko).*')}",
+                "UPI": "${message.type:matches('(?i)(upi|imps).*')}",
+                "PayNow": "${message.type:matches('(?i)paynow.*')}",
+                "PromptPay": "${message.type:matches('(?i)promptpay.*')}",
+                "InstaPay": "${message.type:matches('(?i)instapay.*')}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "rtgs-routing",
+        "name": "RTGS System Routing",
+        "comments": "Routes TARGET2, BOJNET, CNAPS, and other RTGS systems",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Route RTGS Systems",
+            "config": {
+              "routing.strategy": "Route to Property name",
+              "routes": {
+                "TARGET2": "${message.type:matches('(?i)(target2|t2).*')}",
+                "BOJNET": "${message.type:matches('(?i)(bojnet|boj[_]?net).*')}",
+                "CNAPS": "${message.type:matches('(?i)(cnaps|hvps|beps).*')}",
+                "MEPS": "${message.type:matches('(?i)(meps|meps[_]?plus).*')}",
+                "RTGS_HK": "${message.type:matches('(?i)(rtgs[_]?hk|chats).*')}",
+                "SARIE": "${message.type:matches('(?i)sarie.*')}",
+                "UAEFTS": "${message.type:matches('(?i)uaefts.*')}",
+                "KFTC": "${message.type:matches('(?i)(kftc|bok[_]?wire).*')}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "celery-invocation",
+        "name": "Celery Task Invocation",
+        "comments": "Submits messages to Celery workers via Redis/Flower HTTP API",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit Bronze Task",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "http://flower:5555/api/task/async-apply/gps_cdm.orchestration.celery_tasks.process_bronze_partition",
+              "content.type": "application/json",
+              "basic.auth.username": "admin",
+              "basic.auth.password": "${flower.password}",
+              "attributes.to.send": "message.type,batch.id,source.system",
+              "body.template": "{\"args\": [\"${batch.id}:bronze:0\", [\"${absolute.path}\"], \"${message.type}\", \"${batch.id}\", {}]}",
+              "timeout": "30 sec",
+              "max.retries": "3"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit Silver Task",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "http://flower:5555/api/task/async-apply/gps_cdm.orchestration.celery_tasks.process_silver_transform",
+              "content.type": "application/json",
+              "basic.auth.username": "admin",
+              "basic.auth.password": "${flower.password}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "name": "Submit Gold Task",
+            "config": {
+              "http.method": "POST",
+              "remote.url": "http://flower:5555/api/task/async-apply/gps_cdm.orchestration.celery_tasks.process_gold_aggregate",
+              "content.type": "application/json",
+              "basic.auth.username": "admin",
+              "basic.auth.password": "${flower.password}"
+            }
+          }
+        ]
+      },
+      {
+        "identifier": "error-handling",
+        "name": "Error Handling",
+        "comments": "Routes failed messages for retry or dead-letter queue",
+        "processors": [
+          {
+            "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+            "name": "Tag Failed Message",
+            "config": {
+              "error.timestamp": "${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'')}",
+              "retry.count": "${retry.count:plus(1):ifElse('1', '1')}",
+              "error.type": "${route:isEmpty():ifElse('UNRECOGNIZED_MESSAGE_TYPE', 'PROCESSING_ERROR')}"
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "name": "Retry or DLQ",
+            "config": {
+              "routes": {
+                "retry": "${retry.count:lt(3)}",
+                "dlq": "${retry.count:ge(3)}"
+              }
+            }
+          },
+          {
+            "type": "org.apache.nifi.processors.standard.PutFile",
+            "name": "Write to DLQ",
+            "config": {
+              "directory": "/data/dlq/${message.type:replaceAll('[^a-zA-Z0-9]', '_')}",
+              "conflict.resolution": "REPLACE"
+            }
+          }
+        ]
+      }
+    ],
+    "controllerServices": [
+      {
+        "identifier": "redis-connection-pool",
+        "name": "Redis Connection Pool",
+        "type": "org.apache.nifi.redis.service.RedisConnectionPoolService",
+        "config": {
+          "redis.connection": "redis://redis:6379",
+          "redis.database": "0"
+        }
+      }
+    ],
+    "variables": {
+      "sftp.hostname": "localhost",
+      "sftp.port": "22",
+      "sftp.username": "nifi",
+      "kafka.bootstrap.servers": "localhost:9092",
+      "flower.password": "flowerpassword"
+    },
+    "supportedMessageTypes": [
+      "ISO20022: pain.001, pain.002, pain.007, pain.008, pain.013, pain.014",
+      "ISO20022: pacs.002, pacs.003, pacs.004, pacs.007, pacs.008, pacs.009, pacs.028",
+      "ISO20022: camt.026, camt.027, camt.028, camt.029, camt.052, camt.053, camt.054, camt.055, camt.056, camt.057, camt.086, camt.087",
+      "ISO20022: acmt.001, acmt.002, acmt.003, acmt.005, acmt.006, acmt.007",
+      "SWIFT: MT103, MT103+, MT200, MT201, MT202, MT202COV, MT203, MT204, MT205, MT900, MT910, MT940, MT942, MT950",
+      "SEPA: SCT, SDD",
+      "US: NACHA/ACH, Fedwire, CHIPS",
+      "UK: BACS, CHAPS, FPS",
+      "RealTime: FedNow, RTP, PIX, NPP, UPI, PayNow, PromptPay, InstaPay",
+      "RTGS: TARGET2, BOJNET, CNAPS, MEPS, RTGS_HK, SARIE, UAEFTS, KFTC"
+    ]
+  }
+}
