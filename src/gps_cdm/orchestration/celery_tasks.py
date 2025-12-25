@@ -674,7 +674,6 @@ def process_bronze_partition(
     Returns:
         Dict with processing results
     """
-    from gps_cdm.ingestion.persistence.postgresql import PostgreSQLBackend
     from gps_cdm.ingestion.persistence.base import PersistenceConfig, Layer
 
     start_time = datetime.utcnow()
@@ -682,48 +681,145 @@ def process_bronze_partition(
     errors = []
 
     try:
-        # Initialize persistence
-        persistence_config = PersistenceConfig(**config)
+        # Check if message content was passed directly (from NiFi)
+        message_content = config.get('message_content') if config else None
 
-        # Check for existing checkpoint
-        # In production, this would use the actual backend
-        checkpoint = None  # backend.get_checkpoint(f"{batch_id}:{partition_id}")
-        start_offset = checkpoint.get("offset", 0) if checkpoint else 0
+        # Try to use Databricks connector if available
+        try:
+            from gps_cdm.ingestion.persistence.databricks_connector import DatabricksConnector
+            connector = DatabricksConnector()
+            use_databricks = connector.is_available()
+        except Exception:
+            use_databricks = False
+            connector = None
 
-        for i, file_path in enumerate(file_paths[start_offset:], start=start_offset):
+        if message_content and use_databricks and connector:
+            # Process inline message content from NiFi
+            raw_id = f"raw_{uuid.uuid4().hex[:12]}"
+            stg_id = f"stg_{uuid.uuid4().hex[:12]}"
+            instr_id = f"instr_{uuid.uuid4().hex[:12]}"
+
+            # Parse message content - can be dict or string
+            msg_content = message_content if isinstance(message_content, dict) else {}
+            if isinstance(message_content, str):
+                try:
+                    msg_content = json.loads(message_content)
+                except:
+                    msg_content = {"raw": message_content}
+
+            # Extract values from message content (using actual parsed data)
+            msg_id = msg_content.get('messageId', msg_content.get('message_id', f'MSG-{uuid.uuid4().hex[:8]}'))
+
+            # Try to use parser for proper field extraction
             try:
-                # Read file content
-                with open(file_path, 'r') as f:
-                    content = f.read()
+                from gps_cdm.orchestration.message_parsers import MESSAGE_PARSERS
+                parser_class = MESSAGE_PARSERS.get(message_type)
+                if parser_class:
+                    parser = parser_class()
+                    parsed = parser.parse(json.dumps(msg_content))
+                else:
+                    parsed = msg_content
+            except Exception:
+                parsed = msg_content
 
-                # Prepare bronze record
-                bronze_record = {
-                    "message_id": str(uuid.uuid4()),
-                    "source_file_path": file_path,
-                    "source_message_type": message_type,
-                    "raw_content": content,
-                    "ingestion_timestamp": datetime.utcnow().isoformat(),
-                    "batch_id": batch_id,
-                    "partition_id": partition_id,
-                    "processing_status": "SUCCESS",
-                }
+            # Extract field values from parsed data with fallbacks
+            debtor_name = (parsed.get('debtor_name') or parsed.get('payer_name') or
+                          parsed.get('debtorName') or msg_content.get('debtor', {}).get('name', 'Unknown'))
+            creditor_name = (parsed.get('creditor_name') or parsed.get('payee_name') or
+                            parsed.get('creditorName') or msg_content.get('creditor', {}).get('name', 'Unknown'))
+            amount = float(parsed.get('instructed_amount') or parsed.get('amount') or
+                          parsed.get('control_sum') or msg_content.get('amount', 0) or 0)
+            currency = (parsed.get('instructed_currency') or parsed.get('currency') or
+                       msg_content.get('currency', 'USD'))
 
-                # In production, write to bronze table
-                # result = backend.write_bronze(df, "raw_payment_messages", batch_id)
+            # Get routing info for proper payment_type
+            routing = get_table_routing(message_type)
+            payment_type = routing.get('payment_type', 'TRANSFER') if routing else 'TRANSFER'
 
-                records_processed += 1
+            # Escape special characters for SQL
+            def sql_escape(val):
+                if val is None:
+                    return 'NULL'
+                return str(val).replace("'", "''")
 
-                # Save checkpoint every 100 records
-                if records_processed % 100 == 0:
-                    # backend.save_checkpoint(f"{batch_id}:{partition_id}", Layer.BRONZE, i)
-                    pass
+            # 1. Write to Bronze layer (raw data)
+            bronze_table = connector.get_table_name("bronze_raw_payment")
+            bronze_sql = f"""
+                INSERT INTO {bronze_table}
+                (raw_id, message_type, message_id, creation_datetime, raw_xml,
+                 file_name, file_path, _batch_id, _ingested_at)
+                VALUES ('{raw_id}', '{message_type}', '{sql_escape(msg_id)}',
+                        '{datetime.utcnow().isoformat()}', '{sql_escape(json.dumps(msg_content))}',
+                        'nifi_stream', 'nifi://stream/{message_type}', '{batch_id}',
+                        '{datetime.utcnow().isoformat()}')
+            """
+            connector.execute(bronze_sql)
 
-            except Exception as e:
-                errors.append({
-                    "file_path": file_path,
-                    "error": str(e),
-                    "timestamp": datetime.utcnow().isoformat(),
-                })
+            # 2. Write to Silver layer (parsed/normalized data)
+            silver_table = connector.get_table_name("silver_stg_payment_instruction")
+            silver_sql = f"""
+                INSERT INTO {silver_table}
+                (stg_id, raw_id, message_type, message_id,
+                 amount, currency, debtor_name, creditor_name,
+                 dq_score, _batch_id, _ingested_at, created_at)
+                VALUES ('{stg_id}', '{raw_id}', '{message_type}', '{sql_escape(msg_id)}',
+                        {amount}, '{sql_escape(currency)}', '{sql_escape(debtor_name)}', '{sql_escape(creditor_name)}',
+                        0.95, '{batch_id}', '{datetime.utcnow().isoformat()}',
+                        '{datetime.utcnow().isoformat()}')
+            """
+            connector.execute(silver_sql)
+
+            # 3. Write to Gold layer (CDM unified format)
+            gold_table = connector.get_table_name("gold_cdm_payment_instruction")
+            gold_sql = f"""
+                INSERT INTO {gold_table}
+                (instruction_id, stg_id, message_type, payment_type,
+                 amount, currency, status, _batch_id, _ingested_at, created_at)
+                VALUES ('{instr_id}', '{stg_id}', '{message_type}', '{payment_type}',
+                        {amount}, '{sql_escape(currency)}', 'PROCESSED', '{batch_id}',
+                        '{datetime.utcnow().isoformat()}', '{datetime.utcnow().isoformat()}')
+            """
+            connector.execute(gold_sql)
+
+            records_processed = 1
+
+            # 4. Sync to Neo4j
+            try:
+                from gps_cdm.orchestration.neo4j_service import get_neo4j_service
+                neo4j = get_neo4j_service()
+                if neo4j:
+                    neo4j.upsert_batch({
+                        'batch_id': batch_id,
+                        'message_type': message_type,
+                        'source_system': 'NIFI',
+                        'status': 'COMPLETED',
+                        'created_at': datetime.utcnow().isoformat()
+                    })
+                    neo4j.upsert_batch_layer(batch_id, 'bronze', {
+                        'input_count': 1, 'processed_count': 1, 'failed_count': 0
+                    })
+                    neo4j.upsert_batch_layer(batch_id, 'silver', {
+                        'input_count': 1, 'processed_count': 1, 'failed_count': 0
+                    })
+                    neo4j.upsert_batch_layer(batch_id, 'gold', {
+                        'input_count': 1, 'processed_count': 1, 'failed_count': 0
+                    })
+            except Exception as neo4j_err:
+                logger.warning(f"Neo4j sync failed: {neo4j_err}")
+
+        elif file_paths:
+            # Process file paths (original behavior)
+            for i, file_path in enumerate(file_paths):
+                try:
+                    with open(file_path, 'r') as f:
+                        content = f.read()
+                    records_processed += 1
+                except Exception as e:
+                    errors.append({
+                        "file_path": file_path,
+                        "error": str(e),
+                        "timestamp": datetime.utcnow().isoformat(),
+                    })
 
         return {
             "status": "SUCCESS" if not errors else "PARTIAL",
@@ -732,6 +828,7 @@ def process_bronze_partition(
             "records_processed": records_processed,
             "errors": errors,
             "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+            "persisted_to": "databricks" if (message_content and use_databricks) else "none",
         }
 
     except Exception as e:
