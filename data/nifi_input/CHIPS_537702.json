@@ -1,0 +1,21 @@
+{
+  "messageType": "CHIPS",
+  "chipsMessageType": "PaymentMessage",
+  "sequenceNumber": "537702",
+  "senderParticipantId": "835896",
+  "receiverParticipantId": "490350",
+  "valueDate": "2025-12-25",
+  "amount": {
+    "value": 9254321.2,
+    "currency": "USD"
+  },
+  "senderReference": "REF5C3972DFA8A1",
+  "originator": {
+    "name": "Phoenix Enterprises",
+    "account": "3587909645"
+  },
+  "beneficiary": {
+    "name": "Beta Holdings SA",
+    "account": "2196522064"
+  }
+}

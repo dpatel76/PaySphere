@@ -6,6 +6,10 @@ Handles re-processing of failed or updated records through the pipeline.
 Supports individual record re-processing, batch re-processing, and
 update-and-reprocess workflows.
 
+IMPORTANT: Reprocessing uses NiFi for orchestration. Records are submitted
+to NiFi which then triggers Celery tasks via the Flower API. This maintains
+the same E2E flow as initial ingestion.
+
 Usage:
     reprocessor = PipelineReprocessor(db_connection)
 
@@ -19,11 +23,16 @@ Usage:
     result = reprocessor.update_and_reprocess("silver", "stg_pain001", stg_id, updates)
 """
 
+import json
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ReprocessStatus(str, Enum):
@@ -633,34 +642,152 @@ class PipelineReprocessor:
         }
         return field in updatable.get(layer, set())
 
+    def _get_nifi_input_dir(self) -> str:
+        """Get NiFi input directory path (local or Docker-mounted)."""
+        # Check for Docker environment first
+        nifi_input_dir = os.environ.get(
+            'NIFI_INPUT_DIR',
+            '/tmp/nifi_reprocess'  # Local fallback
+        )
+        # Create if doesn't exist
+        os.makedirs(nifi_input_dir, exist_ok=True)
+        return nifi_input_dir
+
+    def _submit_to_nifi(self, raw_content: str, message_type: str, reprocess_id: str) -> bool:
+        """
+        Submit a file to NiFi for reprocessing via the E2E flow.
+
+        This writes a file to NiFi's input directory. NiFi's GetFile processor
+        picks it up, transforms it, and calls Flower API to dispatch Celery tasks.
+
+        Args:
+            raw_content: Raw message content (XML/JSON)
+            message_type: Message type (pain.001, mt103, etc.)
+            reprocess_id: Unique ID for tracking this reprocess request
+
+        Returns:
+            True if file was written successfully
+        """
+        try:
+            nifi_dir = self._get_nifi_input_dir()
+
+            # Create filename with message type prefix for NiFi routing
+            filename = f"{message_type.replace('.', '')}_reprocess_{reprocess_id}.json"
+            filepath = os.path.join(nifi_dir, filename)
+
+            # Wrap in JSON envelope with metadata
+            envelope = {
+                "reprocess_id": reprocess_id,
+                "message_type": message_type,
+                "source": "reprocessor",
+                "timestamp": datetime.utcnow().isoformat(),
+                "content": raw_content,
+            }
+
+            with open(filepath, 'w') as f:
+                json.dump(envelope, f)
+
+            logger.info(f"Submitted to NiFi: {filepath}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to submit to NiFi: {e}")
+            return False
+
     def _promote_bronze_to_silver(self, bronze_record: Dict) -> Optional[str]:
         """
-        Promote a bronze record to silver.
+        Promote a bronze record to silver via NiFi E2E flow.
 
-        This is a simplified version - in production, this would
-        call the actual parsing logic.
+        Extracts raw content from bronze and submits to NiFi for reprocessing.
+        NiFi orchestrates the full Bronze -> Silver -> Gold flow.
+
+        Returns:
+            Silver stg_id if already exists, or reprocess_id for tracking
         """
-        # For now, just return the existing silver_stg_id if present
-        # In real implementation, this would parse the raw content
-        return bronze_record.get('silver_stg_id')
+        # If already has silver link, return it
+        existing_silver = bronze_record.get('silver_stg_id')
+        if existing_silver:
+            return existing_silver
+
+        # Extract raw content and submit to NiFi
+        raw_content = bronze_record.get('raw_content', '')
+        message_type = bronze_record.get('message_type', 'pain.001')
+        raw_id = bronze_record.get('raw_id', '')
+
+        if not raw_content:
+            logger.error(f"No raw content for bronze record {raw_id}")
+            return None
+
+        # Generate reprocess tracking ID
+        reprocess_id = f"reprocess_{uuid.uuid4().hex[:12]}"
+
+        # Submit to NiFi
+        if self._submit_to_nifi(raw_content, message_type, reprocess_id):
+            # Store tracking ID in bronze record for later lookup
+            cursor = self.db.cursor()
+            try:
+                cursor.execute("""
+                    UPDATE bronze.raw_payment_messages
+                    SET processing_status = 'REPROCESSING',
+                        processing_error = %s
+                    WHERE raw_id = %s
+                """, (f"Reprocess submitted: {reprocess_id}", raw_id))
+                self.db.commit()
+            finally:
+                cursor.close()
+
+            # Return tracking ID (NiFi will update silver_stg_id when done)
+            return reprocess_id
+
+        return None
 
     def _promote_silver_to_gold(self, stg_id: str) -> Optional[str]:
         """
-        Promote a silver record to gold.
+        Promote a silver record to gold via NiFi E2E flow.
 
-        This is a simplified version - in production, this would
-        call the actual transformation logic.
+        For silver-to-gold promotion, we re-submit the original raw content
+        through NiFi to ensure the full E2E flow is used.
+
+        Returns:
+            Gold instruction_id if already exists, or reprocess_id for tracking
         """
-        # Check if already promoted
         cursor = self.db.cursor()
         try:
+            # Check if already promoted
             cursor.execute("""
-                SELECT gold_instruction_id FROM silver.stg_pain001
+                SELECT gold_instruction_id, _bronze_raw_id FROM silver.stg_pain001
                 WHERE stg_id = %s
             """, (stg_id,))
             row = cursor.fetchone()
-            if row and row[0]:
-                return row[0]
+            if not row:
+                return None
+
+            existing_gold = row[0]
+            if existing_gold:
+                return existing_gold
+
+            # Get bronze raw_id to re-submit through full flow
+            bronze_raw_id = row[1]
+            if bronze_raw_id:
+                # Fetch bronze record and resubmit
+                cursor.execute("""
+                    SELECT raw_content, message_type FROM bronze.raw_payment_messages
+                    WHERE raw_id = %s
+                """, (bronze_raw_id,))
+                bronze_row = cursor.fetchone()
+                if bronze_row and bronze_row[0]:
+                    reprocess_id = f"reprocess_{uuid.uuid4().hex[:12]}"
+                    if self._submit_to_nifi(bronze_row[0], bronze_row[1] or 'pain.001', reprocess_id):
+                        # Update silver status
+                        cursor.execute("""
+                            UPDATE silver.stg_pain001
+                            SET processing_status = 'REPROCESSING',
+                                processing_error = %s
+                            WHERE stg_id = %s
+                        """, (f"Reprocess submitted: {reprocess_id}", stg_id))
+                        self.db.commit()
+                        return reprocess_id
+
             return None
         finally:
             cursor.close()

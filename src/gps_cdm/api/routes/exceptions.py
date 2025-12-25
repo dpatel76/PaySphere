@@ -56,12 +56,15 @@ class RetryRequest(BaseModel):
 
 # Database connection helper
 def get_db_connection():
-    """Get database connection."""
+    """Get database connection using centralized configuration."""
+    import os
     import psycopg2
     return psycopg2.connect(
-        host="localhost",
-        port=5432,
-        dbname="gps_cdm",
+        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=int(os.environ.get("POSTGRES_PORT", 5433)),
+        database=os.environ.get("POSTGRES_DB", "gps_cdm"),
+        user=os.environ.get("POSTGRES_USER", "gps_cdm_svc"),
+        password=os.environ.get("POSTGRES_PASSWORD", "gps_cdm_password"),
     )
 
 

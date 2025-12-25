@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.002.001.12">
+  <CstmrPmtStsRpt>
+    <GrpHdr>
+      <MsgId>MSGID20251225033038375</MsgId>
+      <CreDtTm>2025-12-25T03:30:38.000Z</CreDtTm>
+      <InitgPty>
+        <Nm>Delta Systems AG</Nm>
+      </InitgPty>
+    </GrpHdr>
+    <OrgnlGrpInfAndSts>
+      <OrgnlMsgId>ORIGMSG4CFD27D0</OrgnlMsgId>
+      <OrgnlMsgNmId>pain.001.001.11</OrgnlMsgNmId>
+      <GrpSts>ACSC</GrpSts>
+    </OrgnlGrpInfAndSts>
+  </CstmrPmtStsRpt>
+</Document>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.007.001.11">
+  <CstmrPmtRvsl>
+    <GrpHdr>
+      <MsgId>MSGID20251225033038610</MsgId>
+      <CreDtTm>2025-12-25T03:30:38.000Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <InitgPty>
+        <Nm>Phoenix Enterprises</Nm>
+      </InitgPty>
+    </GrpHdr>
+  </CstmrPmtRvsl>
+</Document>

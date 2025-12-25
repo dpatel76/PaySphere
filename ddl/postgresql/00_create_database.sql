@@ -34,8 +34,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Observability: obs_<function>      e.g., obs_batch_tracking, obs_field_lineage
 
 -- Verify schemas created
-SELECT schema_name,
+SELECT nspname as schema_name,
        obj_description(oid) as description
 FROM pg_namespace
-WHERE schema_name IN ('bronze', 'silver', 'gold', 'analytical', 'observability')
-ORDER BY schema_name;
+WHERE nspname IN ('bronze', 'silver', 'gold', 'analytical', 'observability')
+ORDER BY nspname;

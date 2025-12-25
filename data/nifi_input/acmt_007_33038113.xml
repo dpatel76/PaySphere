@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:acmt.007.001.05">
+  <AcctOpngReq>
+    <MsgId>MSGID20251225033038113</MsgId>
+  </AcctOpngReq>
+</Document>

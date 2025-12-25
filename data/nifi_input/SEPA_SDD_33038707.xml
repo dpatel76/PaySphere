@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.10">
+  <CstmrDrctDbtInitn>
+    <GrpHdr>
+      <MsgId>MSGID20251225033038707</MsgId>
+      <CreDtTm>2025-12-25T03:30:38.000Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>311210.05</CtrlSum>
+      <InitgPty>
+        <Nm>Phoenix Enterprises</Nm>
+      </InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>PMTINFA9FDDBE7</PmtInfId>
+      <PmtMtd>DD</PmtMtd>
+      <Cdtr>
+        <Nm>Tech Solutions Inc</Nm>
+      </Cdtr>
+    </PmtInf>
+  </CstmrDrctDbtInitn>
+</Document>

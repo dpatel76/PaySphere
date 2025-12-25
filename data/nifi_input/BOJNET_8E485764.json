@@ -1,0 +1,12 @@
+{
+  "messageType": "BOJNET",
+  "transactionId": "BOJNETD28E485764",
+  "creationDateTime": "2025-12-25T03:30:38.000Z",
+  "senderBIC": "SCBLSGSGXXX",
+  "senderAccount": "2015724",
+  "receiverBIC": "CHASUS33XXX",
+  "receiverAccount": "4923313",
+  "amount": 457403.2,
+  "currency": "JPY",
+  "valueDate": "2025-12-25"
+}

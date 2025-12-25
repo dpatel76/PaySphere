@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.014.001.09">
+  <CdtrPmtActvtnReqStsRpt>
+    <GrpHdr>
+      <MsgId>MSGID20251225033038113</MsgId>
+      <CreDtTm>2025-12-25T03:30:38.000Z</CreDtTm>
+      <InitgPty>
+        <Nm>Prime Services GmbH</Nm>
+      </InitgPty>
+    </GrpHdr>
+  </CdtrPmtActvtnReqStsRpt>
+</Document>

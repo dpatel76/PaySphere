@@ -84,9 +84,11 @@ def get_db_connection():
     """Get PostgreSQL database connection."""
     import psycopg2
     return psycopg2.connect(
-        host="localhost",
-        port=5432,
-        dbname="gps_cdm",
+        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=int(os.environ.get("POSTGRES_PORT", 5433)),
+        database=os.environ.get("POSTGRES_DB", "gps_cdm"),
+        user=os.environ.get("POSTGRES_USER", "gps_cdm_svc"),
+        password=os.environ.get("POSTGRES_PASSWORD", "gps_cdm_password"),
     )
 
 
@@ -366,32 +368,31 @@ async def get_batch_records(
 
         if layer == "bronze":
             cursor.execute("""
-                SELECT raw_id, batch_id, message_type, message_format,
-                       source_system, processing_status, processing_error,
-                       ingested_at, silver_stg_id
+                SELECT raw_id, _batch_id as batch_id, message_type, message_format,
+                       source_system, processing_status, source_file_path,
+                       _ingested_at as ingested_at
                 FROM bronze.raw_payment_messages
-                WHERE batch_id = %s
-                ORDER BY ingested_at DESC
+                WHERE _batch_id = %s
+                ORDER BY _ingested_at DESC
                 LIMIT %s OFFSET %s
             """, (batch_id, limit, offset))
         elif layer == "silver":
             cursor.execute("""
-                SELECT stg_id, batch_id, msg_id, instructed_amount,
+                SELECT stg_id, _batch_id as batch_id, msg_id, instructed_amount,
                        instructed_currency, debtor_name, creditor_name,
-                       processing_status, dq_status, dq_score,
-                       gold_instruction_id
+                       processing_status
                 FROM silver.stg_pain001
-                WHERE batch_id = %s
-                ORDER BY created_at DESC
+                WHERE _batch_id = %s
+                ORDER BY _processed_at DESC
                 LIMIT %s OFFSET %s
             """, (batch_id, limit, offset))
         elif layer == "gold":
             cursor.execute("""
                 SELECT instruction_id, payment_id, source_message_type,
                        payment_type, instructed_amount, instructed_currency,
-                       dq_status, reconciliation_status, created_at
+                       current_status, created_at
                 FROM gold.cdm_payment_instruction
-                WHERE batch_id = %s
+                WHERE lineage_batch_id = %s
                 ORDER BY created_at DESC
                 LIMIT %s OFFSET %s
             """, (batch_id, limit, offset))

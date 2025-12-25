@@ -1,0 +1,17 @@
+{
+  "messageType": "KFTC",
+  "transactionId": "KFTCD743A26D545E",
+  "creationDateTime": "2025-12-25T03:30:38.000Z",
+  "sender": {
+    "bankCode": "093",
+    "account": "819971119995",
+    "name": "Global Industries Ltd"
+  },
+  "receiver": {
+    "bankCode": "015",
+    "account": "976242687595",
+    "name": "Delta Systems AG"
+  },
+  "amount": 308749.86,
+  "currency": "KRW"
+}

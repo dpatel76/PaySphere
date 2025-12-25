@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.10">
+  <CstmrDrctDbtInitn>
+    <GrpHdr>
+      <MsgId>MSGID20251225033038249</MsgId>
+      <CreDtTm>2025-12-25T03:30:38.000Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>462108.22</CtrlSum>
+      <InitgPty>
+        <Nm>Alpha Trading Co</Nm>
+      </InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>PMTINF6BAC11CD</PmtInfId>
+      <PmtMtd>DD</PmtMtd>
+      <Cdtr>
+        <Nm>Acme Corporation</Nm>
+      </Cdtr>
+    </PmtInf>
+  </CstmrDrctDbtInitn>
+</Document>

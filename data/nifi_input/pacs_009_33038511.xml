@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.009.001.10">
+  <FICdtTrf>
+    <GrpHdr>
+      <MsgId>MSGID20251225033038511</MsgId>
+      <CreDtTm>2025-12-25T03:30:38.000Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="EUR">163797.45</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-22</IntrBkSttlmDt>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+    </GrpHdr>
+  </FICdtTrf>
+</Document>

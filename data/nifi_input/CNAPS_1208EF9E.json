@@ -1,0 +1,17 @@
+{
+  "messageType": "CNAPS",
+  "transactionId": "CNAPS4851208EF9E",
+  "creationDateTime": "2025-12-25T03:30:38.000Z",
+  "sender": {
+    "bankCode": "666068274367",
+    "account": "5288870089958023",
+    "name": "Robert Williams"
+  },
+  "receiver": {
+    "bankCode": "785122843466",
+    "account": "4725334958942115",
+    "name": "Lisa Wilson"
+  },
+  "amount": 464320.72,
+  "currency": "CNY"
+}

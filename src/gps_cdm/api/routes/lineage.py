@@ -199,8 +199,15 @@ async def persist_lineage(message_type: str):
 
     This populates the obs_field_lineage table from YAML mappings.
     """
+    import os
     import psycopg2
-    db = psycopg2.connect(host="localhost", port=5432, dbname="gps_cdm")
+    db = psycopg2.connect(
+        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=int(os.environ.get("POSTGRES_PORT", 5433)),
+        database=os.environ.get("POSTGRES_DB", "gps_cdm"),
+        user=os.environ.get("POSTGRES_USER", "gps_cdm_svc"),
+        password=os.environ.get("POSTGRES_PASSWORD", "gps_cdm_password"),
+    )
 
     try:
         from gps_cdm.orchestration.lineage_service import LineageService
@@ -223,8 +230,15 @@ async def query_lineage(
 
     Searches persisted lineage records with filters.
     """
+    import os
     import psycopg2
-    db = psycopg2.connect(host="localhost", port=5432, dbname="gps_cdm")
+    db = psycopg2.connect(
+        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=int(os.environ.get("POSTGRES_PORT", 5433)),
+        database=os.environ.get("POSTGRES_DB", "gps_cdm"),
+        user=os.environ.get("POSTGRES_USER", "gps_cdm_svc"),
+        password=os.environ.get("POSTGRES_PASSWORD", "gps_cdm_password"),
+    )
 
     try:
         from gps_cdm.orchestration.lineage_service import LineageService

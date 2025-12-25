@@ -1,0 +1,18 @@
+{
+  "messageType": "InstaPay",
+  "transactionId": "IP81696E77FA4C457D",
+  "creationDateTime": "2025-12-25T03:30:38.000Z",
+  "sender": {
+    "bankCode": "0010",
+    "account": "1863977626",
+    "name": "Anna Wilson"
+  },
+  "receiver": {
+    "bankCode": "0091",
+    "account": "2404228504",
+    "name": "Prime Services GmbH"
+  },
+  "amount": 145271.9,
+  "currency": "PHP",
+  "purpose": "PENS"
+}

@@ -1,0 +1,22 @@
+{
+  "messageType": "UPI",
+  "txnId": "UPI22F90169090A4F63B725",
+  "txnType": "REFUND",
+  "txnNote": "Transfer",
+  "amount": "220192.24",
+  "currency": "INR",
+  "payer": {
+    "vpa": "nexusfinancialservices@upi",
+    "name": "Delta Systems AG",
+    "ifsc": "HDFC0375728",
+    "account": "63704094357"
+  },
+  "payee": {
+    "vpa": "lisataylor@upi",
+    "name": "Sarah Brown",
+    "ifsc": "ICIC0768874",
+    "account": "38307492499"
+  },
+  "timestamp": "2025-12-25T03:30:38.000Z",
+  "refId": "REF961554D99B50"
+}

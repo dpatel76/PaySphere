@@ -1,0 +1,18 @@
+{
+  "messageType": "PromptPay",
+  "transactionId": "PP3A2863C45659429C",
+  "creationDateTime": "2025-12-25T03:30:38.000Z",
+  "sender": {
+    "bankCode": "016",
+    "name": "Emma Davis",
+    "promptPayId": "0888794452"
+  },
+  "receiver": {
+    "bankCode": "002",
+    "name": "John Taylor",
+    "promptPayId": "0900666927"
+  },
+  "amount": 123832.02,
+  "currency": "THB",
+  "reference": "REF692E7D055067"
+}

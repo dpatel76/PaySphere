@@ -160,12 +160,12 @@ CREATE TRIGGER cdc_stg_mt103
     FOR EACH ROW EXECUTE FUNCTION observability.cdc_capture_changes();
 
 -- Index for efficient CDC polling
-CREATE INDEX IF NOT EXISTS idx_cdc_pending
-    ON observability.obs_cdc_tracking(sync_status, captured_at)
+CREATE INDEX IF NOT EXISTS idx_cdc_pending_change
+    ON observability.obs_cdc_tracking(sync_status, change_timestamp)
     WHERE sync_status = 'PENDING';
 
-CREATE INDEX IF NOT EXISTS idx_cdc_table
-    ON observability.obs_cdc_tracking(table_name, captured_at);
+CREATE INDEX IF NOT EXISTS idx_cdc_table_change
+    ON observability.obs_cdc_tracking(table_name, change_timestamp);
 
 -- Function to get pending CDC events for sync
 CREATE OR REPLACE FUNCTION observability.get_pending_cdc_events(
@@ -176,11 +176,11 @@ RETURNS TABLE (
     cdc_id VARCHAR(36),
     layer VARCHAR(20),
     table_name VARCHAR(100),
-    record_id VARCHAR(36),
+    record_id VARCHAR(100),
     operation VARCHAR(10),
     new_data JSONB,
-    changed_fields JSONB,
-    captured_at TIMESTAMP
+    changed_fields TEXT[],
+    change_timestamp TIMESTAMP
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -192,11 +192,11 @@ BEGIN
         c.operation,
         c.new_data,
         c.changed_fields,
-        c.captured_at
+        c.change_timestamp
     FROM observability.obs_cdc_tracking c
     WHERE c.sync_status = 'PENDING'
-      AND (p_target_system IS NULL OR NOT (c.synced_to ? p_target_system))
-    ORDER BY c.captured_at
+      AND (p_target_system IS NULL OR NOT (p_target_system = ANY(c.synced_to)))
+    ORDER BY c.change_timestamp
     LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql;
@@ -212,12 +212,9 @@ DECLARE
 BEGIN
     UPDATE observability.obs_cdc_tracking
     SET
-        synced_to = synced_to || jsonb_build_object(p_target_system, CURRENT_TIMESTAMP),
-        sync_status = CASE
-            WHEN jsonb_array_length(COALESCE(synced_to, '[]'::jsonb)) + 1 >= 1
-            THEN 'SYNCED'
-            ELSE sync_status
-        END
+        synced_to = array_append(COALESCE(synced_to, ARRAY[]::TEXT[]), p_target_system),
+        sync_status = 'SYNCED',
+        last_sync_attempt = CURRENT_TIMESTAMP
     WHERE cdc_id = ANY(p_cdc_ids);
 
     GET DIAGNOSTICS v_count = ROW_COUNT;

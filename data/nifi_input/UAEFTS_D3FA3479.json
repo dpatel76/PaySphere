@@ -1,0 +1,12 @@
+{
+  "messageType": "UAEFTS",
+  "transactionId": "UAEFTS8AD3FA3479",
+  "creationDateTime": "2025-12-25T03:30:38.000Z",
+  "senderBIC": "DEUTDEFFXXX",
+  "senderIBAN": "AE186708117205535668619",
+  "receiverBIC": "ANZBAU3MXXX",
+  "receiverIBAN": "AE125309117840793486775",
+  "amount": 227588.79,
+  "currency": "AED",
+  "valueDate": "2025-12-25"
+}

@@ -28,6 +28,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import json
 import uuid
+import hashlib
 import logging
 
 logger = logging.getLogger(__name__)
@@ -684,14 +685,44 @@ def process_bronze_partition(
         # Check if message content was passed directly (from NiFi)
         message_content = config.get('message_content') if config else None
 
-        # Try to use Databricks connector if available
-        try:
-            from gps_cdm.ingestion.persistence.databricks_connector import DatabricksConnector
-            connector = DatabricksConnector()
-            use_databricks = connector.is_available()
-        except Exception:
-            use_databricks = False
-            connector = None
+        # Check GPS_CDM_DATA_SOURCE environment variable to determine which store to use
+        # Default to 'postgresql' for local development; set to 'databricks' for cloud
+        data_source = os.environ.get('GPS_CDM_DATA_SOURCE', 'postgresql').lower()
+
+        use_databricks = False
+        use_postgres = False
+        connector = None
+        pg_conn = None
+
+        # Only try Databricks if explicitly configured
+        if data_source == 'databricks':
+            try:
+                from gps_cdm.ingestion.persistence.databricks_connector import DatabricksConnector
+                connector = DatabricksConnector()
+                use_databricks = connector.is_available()
+                if not use_databricks:
+                    logger.warning("Databricks configured but not available, will fallback to PostgreSQL")
+            except Exception as db_err:
+                logger.warning(f"Databricks connection failed: {db_err}")
+                use_databricks = False
+                connector = None
+
+        # Use PostgreSQL if configured or as fallback
+        if not use_databricks:
+            try:
+                import psycopg2
+                pg_conn = psycopg2.connect(
+                    host=os.environ.get('POSTGRES_HOST', 'localhost'),
+                    port=int(os.environ.get('POSTGRES_PORT', 5433)),
+                    database=os.environ.get('POSTGRES_DB', 'gps_cdm'),
+                    user=os.environ.get('POSTGRES_USER', 'gps_cdm_svc'),
+                    password=os.environ.get('POSTGRES_PASSWORD', 'gps_cdm_password')
+                )
+                use_postgres = True
+            except Exception as pg_err:
+                logger.warning(f"PostgreSQL connection failed: {pg_err}")
+                use_postgres = False
+                pg_conn = None
 
         if message_content and use_databricks and connector:
             # Process inline message content from NiFi
@@ -807,6 +838,112 @@ def process_bronze_partition(
             except Exception as neo4j_err:
                 logger.warning(f"Neo4j sync failed: {neo4j_err}")
 
+        elif message_content and use_postgres and pg_conn:
+            # PostgreSQL fallback when Databricks is unavailable
+            raw_id = f"raw_{uuid.uuid4().hex[:12]}"
+            stg_id = f"stg_{uuid.uuid4().hex[:12]}"
+            instr_id = f"instr_{uuid.uuid4().hex[:12]}"
+
+            # Parse message content
+            msg_content = message_content if isinstance(message_content, dict) else {}
+            if isinstance(message_content, str):
+                try:
+                    msg_content = json.loads(message_content)
+                except:
+                    msg_content = {"raw": message_content}
+
+            msg_id = msg_content.get('messageId', msg_content.get('message_id', f'MSG-{uuid.uuid4().hex[:8]}'))
+
+            # Try to use parser
+            try:
+                from gps_cdm.orchestration.message_parsers import MESSAGE_PARSERS
+                parser_class = MESSAGE_PARSERS.get(message_type)
+                if parser_class:
+                    parser = parser_class()
+                    parsed = parser.parse(json.dumps(msg_content))
+                else:
+                    parsed = msg_content
+            except Exception:
+                parsed = msg_content
+
+            # Extract values
+            debtor_name = (parsed.get('debtor_name') or parsed.get('payer_name') or
+                          parsed.get('debtorName') or msg_content.get('debtor', {}).get('name') or 'Unknown')
+            creditor_name = (parsed.get('creditor_name') or parsed.get('payee_name') or
+                            parsed.get('creditorName') or msg_content.get('creditor', {}).get('name') or 'Unknown')
+            amount = float(parsed.get('instructed_amount') or parsed.get('amount') or
+                          parsed.get('control_sum') or msg_content.get('amount', 0) or 0)
+            currency = (parsed.get('instructed_currency') or parsed.get('currency') or
+                       msg_content.get('currency', 'USD'))
+
+            routing = get_table_routing(message_type)
+            payment_type = routing.get('payment_type', 'TRANSFER') if routing else 'TRANSFER'
+
+            try:
+                cursor = pg_conn.cursor()
+
+                # Bronze layer - use PostgreSQL schema.table format
+                cursor.execute("""
+                    INSERT INTO bronze.raw_payment_messages
+                    (raw_id, message_type, message_format, raw_content, raw_content_hash,
+                     source_system, source_file_path, processing_status, _batch_id, _ingested_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (raw_id) DO NOTHING
+                """, (raw_id, message_type, 'XML', json.dumps(msg_content),
+                      hashlib.sha256(json.dumps(msg_content).encode()).hexdigest()[:64],
+                      'TEST_SCRIPT', f'test://{message_type}', 'PROCESSED',
+                      batch_id, datetime.utcnow()))
+
+                # Silver layer - use generic stg_pain001 for all types (as fallback)
+                cursor.execute("""
+                    INSERT INTO silver.stg_pain001
+                    (stg_id, raw_id, msg_id, creation_date_time, debtor_name, creditor_name,
+                     instructed_amount, instructed_currency, processing_status, _batch_id, _processed_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (stg_id) DO NOTHING
+                """, (stg_id, raw_id, msg_id, datetime.utcnow(), debtor_name, creditor_name,
+                      amount, currency, 'PROCESSED', batch_id, datetime.utcnow()))
+
+                # Gold layer - use schema-qualified name
+                cursor.execute("""
+                    INSERT INTO gold.cdm_payment_instruction
+                    (instruction_id, payment_id, source_message_type, source_stg_table, source_stg_id,
+                     payment_type, scheme_code, direction, instructed_amount, instructed_currency,
+                     current_status, source_system, lineage_batch_id, partition_year, partition_month)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (instruction_id) DO NOTHING
+                """, (instr_id, str(uuid.uuid4()), message_type, 'stg_pain001', stg_id,
+                      payment_type, message_type.upper()[:10], 'OUTBOUND', amount, currency,
+                      'PROCESSED', 'TEST_SCRIPT', batch_id,
+                      datetime.utcnow().year, datetime.utcnow().month))
+
+                pg_conn.commit()
+                cursor.close()
+                records_processed = 1
+
+                # Sync to Neo4j
+                try:
+                    from gps_cdm.orchestration.neo4j_service import get_neo4j_service
+                    neo4j = get_neo4j_service()
+                    if neo4j:
+                        neo4j.upsert_batch({
+                            'batch_id': batch_id, 'message_type': message_type,
+                            'source_system': 'TEST_SCRIPT', 'status': 'COMPLETED',
+                            'created_at': datetime.utcnow().isoformat()
+                        })
+                        for layer in ['bronze', 'silver', 'gold']:
+                            neo4j.upsert_batch_layer(batch_id, layer, {
+                                'input_count': 1, 'processed_count': 1, 'failed_count': 0
+                            })
+                except Exception as neo4j_err:
+                    logger.warning(f"Neo4j sync failed: {neo4j_err}")
+
+            except Exception as pg_write_err:
+                errors.append({"error": f"PostgreSQL write failed: {pg_write_err}"})
+            finally:
+                if pg_conn:
+                    pg_conn.close()
+
         elif file_paths:
             # Process file paths (original behavior)
             for i, file_path in enumerate(file_paths):
@@ -821,6 +958,9 @@ def process_bronze_partition(
                         "timestamp": datetime.utcnow().isoformat(),
                     })
 
+        persistence_target = "databricks" if (message_content and use_databricks) else \
+                            "postgresql" if (message_content and use_postgres) else "none"
+
         return {
             "status": "SUCCESS" if not errors else "PARTIAL",
             "partition_id": partition_id,
@@ -828,7 +968,7 @@ def process_bronze_partition(
             "records_processed": records_processed,
             "errors": errors,
             "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
-            "persisted_to": "databricks" if (message_content and use_databricks) else "none",
+            "persisted_to": persistence_target,
         }
 
     except Exception as e:
@@ -1598,3 +1738,345 @@ def cancel_batch(batch_id: str) -> bool:
     # Revoke all tasks with batch_id in their arguments
     # app.control.revoke(task_ids, terminate=True)
     return True
+
+
+# =============================================================================
+# REPROCESSING TASKS
+# =============================================================================
+
+@app.task(bind=True, max_retries=3, autoretry_for=(Exception,), retry_backoff=True)
+def reprocess_bronze_to_silver(
+    self,
+    raw_id: str,
+    message_type: str,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """
+    Reprocess a bronze record through to silver layer via Celery.
+
+    This task fetches the bronze record, parses it, and creates/updates
+    the silver staging record.
+
+    Args:
+        raw_id: Bronze record ID
+        message_type: Message type (pain001, mt103, etc.)
+        force: Force reprocessing even if already processed
+
+    Returns:
+        Dict with reprocessing result
+    """
+    import psycopg2
+    from gps_cdm.transformations.pain001_parser import Pain001Parser
+
+    start_time = datetime.utcnow()
+
+    try:
+        # Connect to PostgreSQL
+        pg_conn = psycopg2.connect(
+            host=os.environ.get('POSTGRES_HOST', 'localhost'),
+            port=int(os.environ.get('POSTGRES_PORT', 5433)),
+            database=os.environ.get('POSTGRES_DB', 'gps_cdm'),
+            user=os.environ.get('POSTGRES_USER', 'gps_cdm_svc'),
+            password=os.environ.get('POSTGRES_PASSWORD', 'gps_cdm_password')
+        )
+        cursor = pg_conn.cursor()
+
+        # Fetch bronze record
+        cursor.execute("""
+            SELECT raw_id, raw_content, message_type, processing_status,
+                   silver_stg_id, _batch_id
+            FROM bronze.raw_payment_messages
+            WHERE raw_id = %s
+        """, (raw_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            return {
+                "status": "FAILED",
+                "raw_id": raw_id,
+                "error": "Bronze record not found",
+                "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+            }
+
+        raw_content = row[1]
+        msg_type = row[2] or message_type
+        current_status = row[3]
+        existing_silver_id = row[4]
+        batch_id = row[5] or f"REPROCESS_{uuid.uuid4().hex[:8]}"
+
+        # Check if already processed
+        if current_status == 'PROCESSED' and existing_silver_id and not force:
+            return {
+                "status": "SKIPPED",
+                "raw_id": raw_id,
+                "silver_stg_id": existing_silver_id,
+                "message": "Already processed",
+                "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+            }
+
+        # Update status to reprocessing
+        cursor.execute("""
+            UPDATE bronze.raw_payment_messages
+            SET processing_status = 'REPROCESSING',
+                processing_attempts = processing_attempts + 1
+            WHERE raw_id = %s
+        """, (raw_id,))
+        pg_conn.commit()
+
+        # Parse based on message type
+        if msg_type.lower() in ('pain.001', 'pain001'):
+            parser = Pain001Parser()
+            parsed = parser.parse(raw_content)
+
+            # Generate silver ID
+            stg_id = f"stg_{uuid.uuid4().hex[:12]}"
+
+            # Insert into silver
+            cursor.execute("""
+                INSERT INTO silver.stg_pain001 (
+                    stg_id, msg_id, msg_created_at, debtor_name, debtor_country,
+                    debtor_account_iban, debtor_agent_bic, creditor_name,
+                    creditor_country, creditor_account_iban, creditor_agent_bic,
+                    instructed_amount, instructed_currency, charge_bearer,
+                    processing_status, _batch_id, _bronze_raw_id
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    'PENDING', %s, %s
+                )
+                ON CONFLICT (stg_id) DO UPDATE SET
+                    processing_status = 'PENDING',
+                    _ingested_at = CURRENT_TIMESTAMP
+                RETURNING stg_id
+            """, (
+                stg_id,
+                parsed.get('msg_id', ''),
+                parsed.get('creation_date_time'),
+                parsed.get('debtor_name', ''),
+                parsed.get('debtor_country', ''),
+                parsed.get('debtor_iban', ''),
+                parsed.get('debtor_agent_bic', ''),
+                parsed.get('creditor_name', ''),
+                parsed.get('creditor_country', ''),
+                parsed.get('creditor_iban', ''),
+                parsed.get('creditor_agent_bic', ''),
+                parsed.get('amount', 0),
+                parsed.get('currency', 'USD'),
+                parsed.get('charge_bearer', 'SLEV'),
+                batch_id,
+                raw_id,
+            ))
+            result_stg_id = cursor.fetchone()[0]
+            pg_conn.commit()
+
+            # Update bronze with silver link
+            cursor.execute("""
+                UPDATE bronze.raw_payment_messages
+                SET processing_status = 'PROCESSED',
+                    silver_stg_id = %s,
+                    promoted_to_silver_at = CURRENT_TIMESTAMP,
+                    processing_error = NULL
+                WHERE raw_id = %s
+            """, (result_stg_id, raw_id))
+            pg_conn.commit()
+
+            # Chain to silver-to-gold processing
+            reprocess_silver_to_gold.delay(result_stg_id, msg_type, force=True)
+
+            return {
+                "status": "SUCCESS",
+                "raw_id": raw_id,
+                "silver_stg_id": result_stg_id,
+                "message_type": msg_type,
+                "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+            }
+        else:
+            # For other message types, mark as pending for future implementation
+            cursor.execute("""
+                UPDATE bronze.raw_payment_messages
+                SET processing_status = 'FAILED',
+                    processing_error = 'Unsupported message type for reprocessing'
+                WHERE raw_id = %s
+            """, (raw_id,))
+            pg_conn.commit()
+
+            return {
+                "status": "FAILED",
+                "raw_id": raw_id,
+                "error": f"Unsupported message type: {msg_type}",
+                "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+            }
+
+    except Exception as e:
+        logger.error(f"Reprocess bronze failed: {e}")
+        return {
+            "status": "FAILED",
+            "raw_id": raw_id,
+            "error": str(e),
+            "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+        }
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'pg_conn' in locals():
+            pg_conn.close()
+
+
+@app.task(bind=True, max_retries=3, autoretry_for=(Exception,), retry_backoff=True)
+def reprocess_silver_to_gold(
+    self,
+    stg_id: str,
+    message_type: str,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """
+    Reprocess a silver record through to gold layer via Celery.
+
+    This task transforms the silver staging record and creates/updates
+    the gold CDM entities.
+
+    Args:
+        stg_id: Silver staging record ID
+        message_type: Message type (pain001, mt103, etc.)
+        force: Force reprocessing even if already processed
+
+    Returns:
+        Dict with reprocessing result
+    """
+    import psycopg2
+
+    start_time = datetime.utcnow()
+
+    try:
+        # Connect to PostgreSQL
+        pg_conn = psycopg2.connect(
+            host=os.environ.get('POSTGRES_HOST', 'localhost'),
+            port=int(os.environ.get('POSTGRES_PORT', 5433)),
+            database=os.environ.get('POSTGRES_DB', 'gps_cdm'),
+            user=os.environ.get('POSTGRES_USER', 'gps_cdm_svc'),
+            password=os.environ.get('POSTGRES_PASSWORD', 'gps_cdm_password')
+        )
+        cursor = pg_conn.cursor()
+
+        # Fetch silver record
+        cursor.execute("""
+            SELECT stg_id, msg_id, debtor_name, debtor_country, debtor_account_iban,
+                   debtor_agent_bic, creditor_name, creditor_country,
+                   creditor_account_iban, creditor_agent_bic, instructed_amount,
+                   instructed_currency, charge_bearer, processing_status,
+                   gold_instruction_id, _batch_id
+            FROM silver.stg_pain001
+            WHERE stg_id = %s
+        """, (stg_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            return {
+                "status": "FAILED",
+                "stg_id": stg_id,
+                "error": "Silver record not found",
+                "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+            }
+
+        current_status = row[13]
+        existing_gold_id = row[14]
+        batch_id = row[15] or f"REPROCESS_{uuid.uuid4().hex[:8]}"
+
+        # Check if already processed
+        if current_status == 'PROCESSED' and existing_gold_id and not force:
+            return {
+                "status": "SKIPPED",
+                "stg_id": stg_id,
+                "gold_instruction_id": existing_gold_id,
+                "message": "Already processed",
+                "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+            }
+
+        # Update status to reprocessing
+        cursor.execute("""
+            UPDATE silver.stg_pain001
+            SET processing_status = 'REPROCESSING'
+            WHERE stg_id = %s
+        """, (stg_id,))
+        pg_conn.commit()
+
+        # Generate gold ID
+        instruction_id = f"pi_{uuid.uuid4().hex[:12]}"
+
+        # Insert into gold cdm_payment_instruction
+        cursor.execute("""
+            INSERT INTO gold.cdm_payment_instruction (
+                instruction_id, instruction_type, payer_name, payer_country,
+                payer_account_id, payer_agent_bic, payee_name, payee_country,
+                payee_account_id, payee_agent_bic, amount, currency,
+                charge_bearer, status, _batch_id, _silver_stg_id
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE', %s, %s
+            )
+            ON CONFLICT (instruction_id) DO UPDATE SET
+                status = 'ACTIVE',
+                _updated_at = CURRENT_TIMESTAMP
+            RETURNING instruction_id
+        """, (
+            instruction_id,
+            'CREDIT_TRANSFER',
+            row[2],   # debtor_name -> payer_name
+            row[3],   # debtor_country -> payer_country
+            row[4],   # debtor_account_iban -> payer_account_id
+            row[5],   # debtor_agent_bic -> payer_agent_bic
+            row[6],   # creditor_name -> payee_name
+            row[7],   # creditor_country -> payee_country
+            row[8],   # creditor_account_iban -> payee_account_id
+            row[9],   # creditor_agent_bic -> payee_agent_bic
+            row[10],  # instructed_amount -> amount
+            row[11],  # instructed_currency -> currency
+            row[12],  # charge_bearer
+            batch_id,
+            stg_id,
+        ))
+        result_gold_id = cursor.fetchone()[0]
+        pg_conn.commit()
+
+        # Update silver with gold link
+        cursor.execute("""
+            UPDATE silver.stg_pain001
+            SET processing_status = 'PROCESSED',
+                gold_instruction_id = %s,
+                promoted_to_gold_at = CURRENT_TIMESTAMP,
+                processing_error = NULL
+            WHERE stg_id = %s
+        """, (result_gold_id, stg_id))
+        pg_conn.commit()
+
+        return {
+            "status": "SUCCESS",
+            "stg_id": stg_id,
+            "gold_instruction_id": result_gold_id,
+            "message_type": message_type,
+            "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+        }
+
+    except Exception as e:
+        logger.error(f"Reprocess silver failed: {e}")
+        # Update silver status to failed
+        try:
+            cursor.execute("""
+                UPDATE silver.stg_pain001
+                SET processing_status = 'FAILED',
+                    processing_error = %s
+                WHERE stg_id = %s
+            """, (str(e), stg_id))
+            pg_conn.commit()
+        except:
+            pass
+
+        return {
+            "status": "FAILED",
+            "stg_id": stg_id,
+            "error": str(e),
+            "duration_seconds": (datetime.utcnow() - start_time).total_seconds(),
+        }
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'pg_conn' in locals():
+            pg_conn.close()

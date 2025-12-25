@@ -1,0 +1,12 @@
+{
+  "messageType": "SARIE",
+  "transactionId": "SARIEAA1801CAACF",
+  "creationDateTime": "2025-12-25T03:30:38.000Z",
+  "senderBIC": "SCBLSGSGXXX",
+  "senderIBAN": "SA367920436701978646277603",
+  "receiverBIC": "ANZBAU3MXXX",
+  "receiverIBAN": "SA917287622401765901689944",
+  "amount": 253502.63,
+  "currency": "SAR",
+  "valueDate": "2025-12-25"
+}
