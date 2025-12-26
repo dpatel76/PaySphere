@@ -219,13 +219,13 @@ INSERT INTO auth.users (email, username, password_hash, first_name, last_name, i
 VALUES (
     'admin@gpscdm.local',
     'admin',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.G6F8gJL5GzQz6G',  -- admin123
+    '$2b$12$wzI3d71Z.BCllCV5d40VBucVNVo4ASK1hr6PnEuA3ZgtnN1Q34uJC',  -- admin123
     'System',
     'Administrator',
     TRUE,
     TRUE
 )
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash;
 
 -- Assign admin role to admin user
 INSERT INTO auth.user_roles (user_id, role_id)

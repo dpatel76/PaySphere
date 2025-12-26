@@ -5,19 +5,36 @@
 // Pipeline & Batch Types
 export interface BatchTracking {
   batch_id: string;
-  source_system: string;
+  source_system?: string;
   message_type: string;
+  message_format?: string;
+  source_file?: string;
   status: string;
-  bronze_records: number;
-  silver_records: number;
-  gold_records: number;
-  failed_records: number;
-  started_at: string;
+  // Record counts
+  record_count?: number;
+  bronze_count?: number;
+  silver_count?: number;
+  gold_count?: number;
+  processed_count?: number;
+  failed_count?: number;
+  pending_count?: number;
+  // Legacy field names for backwards compatibility
+  bronze_records?: number;
+  silver_records?: number;
+  gold_records?: number;
+  failed_records?: number;
+  // Timestamps
+  created_at?: string;
+  updated_at?: string;
+  started_at?: string;
   completed_at?: string;
+  // DQ and recon
   dq_score?: number;
   dq_status?: string;
   recon_status?: string;
   recon_match_rate?: number;
+  // Data source
+  data_source?: string;
 }
 
 // Exception Types

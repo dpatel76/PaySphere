@@ -1,0 +1,27 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+.vite
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Logs
+*.log
+logs
+
+# Local env files
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Temporary
+*.tmp
+*.bak

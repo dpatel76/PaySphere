@@ -256,6 +256,66 @@ async def trigger_sync(background_tasks: BackgroundTasks):
     }
 
 
+@router.post("/sync/mappings")
+async def sync_dynamic_mappings():
+    """
+    Sync dynamic field mappings from PostgreSQL to Neo4j.
+
+    Reads from mapping.message_formats, mapping.silver_field_mappings,
+    and mapping.gold_field_mappings tables and creates/updates
+    corresponding nodes and relationships in Neo4j.
+    """
+    neo4j = get_neo4j_service()
+    if not neo4j.is_available():
+        raise HTTPException(status_code=503, detail="Neo4j service not available")
+
+    stats = neo4j.sync_all_mappings_from_postgres()
+
+    return {
+        "status": "completed",
+        "synced": {
+            "message_formats": stats.get("message_formats", 0),
+            "silver_mappings": stats.get("silver_mappings", 0),
+            "gold_mappings": stats.get("gold_mappings", 0),
+        },
+        "errors": stats.get("errors", 0),
+    }
+
+
+@router.get("/mappings/{format_id}/lineage")
+async def get_dynamic_field_lineage(
+    format_id: str,
+    zone: Optional[str] = Query(None, description="Filter by target zone: silver, gold"),
+):
+    """
+    Get field lineage for a message format from dynamic mappings.
+
+    Shows how fields flow from Bronze (raw JSON) through Silver and Gold layers
+    based on the configured field mappings in the database.
+    """
+    neo4j = get_neo4j_service()
+    if not neo4j.is_available():
+        raise HTTPException(status_code=503, detail="Neo4j service not available")
+
+    lineage = neo4j.get_dynamic_field_lineage(format_id, zone)
+
+    if not lineage:
+        # Return empty list if no mappings found
+        return {
+            "format_id": format_id,
+            "zone_filter": zone,
+            "fields": [],
+            "message": "No field mappings found. Run POST /sync/mappings to sync from PostgreSQL.",
+        }
+
+    return {
+        "format_id": format_id,
+        "zone_filter": zone,
+        "fields": lineage,
+        "total_fields": len(lineage),
+    }
+
+
 @router.get("/health")
 async def graph_health():
     """Check Neo4j connection health."""

@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+env
+*.egg
+*.egg-info
+dist
+build
+.eggs
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+.tox
+
+# Documentation
+docs/_build
+
+# Logs
+*.log
+logs
+
+# Local development
+.env
+.env.*
+*.local
+
+# Frontend (handled by frontend Dockerfile)
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# Temporary files
+tmp
+*.tmp
+*.bak
+
+# macOS
+.DS_Store
+
+# Notebooks
+*.ipynb_checkpoints

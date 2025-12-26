@@ -1,0 +1,329 @@
+{
+  "records": [
+    {
+      "messageId": "PAIN001-2025-001",
+      "creationDateTime": "2025-12-25T10:00:00Z",
+      "numberOfTransactions": 1,
+      "controlSum": 5000.00,
+      "initiatingParty": {
+        "name": "Acme Corporation",
+        "id": "ACME001",
+        "idType": "BIC"
+      },
+      "paymentInformation": {
+        "paymentInfoId": "PMTINF-001",
+        "paymentMethod": "TRF",
+        "batchBooking": false,
+        "requestedExecutionDate": "2025-12-26"
+      },
+      "debtor": {
+        "name": "Acme Corporation",
+        "streetName": "123 Main Street",
+        "buildingNumber": "100",
+        "postalCode": "10001",
+        "townName": "New York",
+        "country": "US",
+        "id": "ACME001",
+        "idType": "CUST"
+      },
+      "debtorAccount": {
+        "iban": "US12345678901234567890",
+        "currency": "USD"
+      },
+      "debtorAgent": {
+        "bic": "CHASUS33XXX",
+        "name": "JPMorgan Chase Bank",
+        "clearingSystem": "USABA",
+        "memberId": "021000021"
+      },
+      "instructionId": "INSTR-001",
+      "endToEndId": "E2E-2025-001",
+      "uetr": "97ed4827-7b6f-4491-a06f-b548d5a7512d",
+      "instructedAmount": 5000.00,
+      "instructedCurrency": "USD",
+      "creditorAgent": {
+        "bic": "BOFAUS3NXXX",
+        "name": "Bank of America",
+        "clearingSystem": "USABA",
+        "memberId": "026009593"
+      },
+      "creditor": {
+        "name": "Global Suppliers Inc",
+        "streetName": "456 Commerce Ave",
+        "buildingNumber": "200",
+        "postalCode": "90210",
+        "townName": "Los Angeles",
+        "country": "US",
+        "id": "GLSUP001",
+        "idType": "CUST"
+      },
+      "creditorAccount": {
+        "iban": "US98765432109876543210",
+        "currency": "USD"
+      },
+      "purposeCode": "SUPP",
+      "chargeBearer": "SHAR",
+      "remittanceInformation": "Invoice INV-2025-001 Payment"
+    },
+    {
+      "messageId": "PAIN001-2025-002",
+      "creationDateTime": "2025-12-25T10:15:00Z",
+      "numberOfTransactions": 1,
+      "controlSum": 12500.50,
+      "initiatingParty": {
+        "name": "Tech Solutions Ltd",
+        "id": "TECH002",
+        "idType": "BIC"
+      },
+      "paymentInformation": {
+        "paymentInfoId": "PMTINF-002",
+        "paymentMethod": "TRF",
+        "batchBooking": false,
+        "requestedExecutionDate": "2025-12-27"
+      },
+      "debtor": {
+        "name": "Tech Solutions Ltd",
+        "streetName": "789 Innovation Blvd",
+        "buildingNumber": "500",
+        "postalCode": "94105",
+        "townName": "San Francisco",
+        "country": "US",
+        "id": "TECH002",
+        "idType": "CUST"
+      },
+      "debtorAccount": {
+        "iban": "US11223344556677889900",
+        "currency": "USD"
+      },
+      "debtorAgent": {
+        "bic": "WFBIUS6SXXX",
+        "name": "Wells Fargo Bank",
+        "clearingSystem": "USABA",
+        "memberId": "121000248"
+      },
+      "instructionId": "INSTR-002",
+      "endToEndId": "E2E-2025-002",
+      "uetr": "a1b2c3d4-5e6f-7890-abcd-ef1234567890",
+      "instructedAmount": 12500.50,
+      "instructedCurrency": "USD",
+      "creditorAgent": {
+        "bic": "CITIUS33XXX",
+        "name": "Citibank",
+        "clearingSystem": "USABA",
+        "memberId": "021000089"
+      },
+      "creditor": {
+        "name": "Cloud Services Corp",
+        "streetName": "321 Cloud Way",
+        "buildingNumber": "1000",
+        "postalCode": "98101",
+        "townName": "Seattle",
+        "country": "US",
+        "id": "CLOUD001",
+        "idType": "CUST"
+      },
+      "creditorAccount": {
+        "iban": "US99887766554433221100",
+        "currency": "USD"
+      },
+      "purposeCode": "SERV",
+      "chargeBearer": "DEBT",
+      "remittanceInformation": "Monthly cloud services fee December 2025"
+    },
+    {
+      "messageId": "PAIN001-2025-003",
+      "creationDateTime": "2025-12-25T10:30:00Z",
+      "numberOfTransactions": 1,
+      "controlSum": 75000.00,
+      "initiatingParty": {
+        "name": "Manufacturing Co",
+        "id": "MANU003",
+        "idType": "LEI"
+      },
+      "paymentInformation": {
+        "paymentInfoId": "PMTINF-003",
+        "paymentMethod": "TRF",
+        "batchBooking": true,
+        "requestedExecutionDate": "2025-12-28"
+      },
+      "debtor": {
+        "name": "Manufacturing Co",
+        "streetName": "1000 Factory Lane",
+        "buildingNumber": "A1",
+        "postalCode": "48201",
+        "townName": "Detroit",
+        "country": "US",
+        "id": "549300EXAMPLE12345",
+        "idType": "LEI"
+      },
+      "debtorAccount": {
+        "iban": "US55667788990011223344",
+        "currency": "USD"
+      },
+      "debtorAgent": {
+        "bic": "PNCCUS33XXX",
+        "name": "PNC Bank",
+        "clearingSystem": "USABA",
+        "memberId": "043000096"
+      },
+      "instructionId": "INSTR-003",
+      "endToEndId": "E2E-2025-003",
+      "uetr": "f1e2d3c4-b5a6-0987-6543-210fedcba098",
+      "instructedAmount": 75000.00,
+      "instructedCurrency": "USD",
+      "creditorAgent": {
+        "bic": "ABOROB2XXXX",
+        "name": "ABN AMRO Bank",
+        "clearingSystem": "BICFI",
+        "memberId": ""
+      },
+      "creditor": {
+        "name": "European Parts Supplier BV",
+        "streetName": "Keizersgracht 123",
+        "buildingNumber": "A",
+        "postalCode": "1015CJ",
+        "townName": "Amsterdam",
+        "country": "NL",
+        "id": "EURPS001",
+        "idType": "CUST"
+      },
+      "creditorAccount": {
+        "iban": "NL91ABNA0417164300",
+        "currency": "EUR"
+      },
+      "purposeCode": "GDDS",
+      "chargeBearer": "SHAR",
+      "remittanceInformation": "PO-2025-12345 Auto parts shipment"
+    },
+    {
+      "messageId": "PAIN001-2025-004",
+      "creationDateTime": "2025-12-25T11:00:00Z",
+      "numberOfTransactions": 1,
+      "controlSum": 3250.75,
+      "initiatingParty": {
+        "name": "Retail Store Inc",
+        "id": "RETL004",
+        "idType": "CUST"
+      },
+      "paymentInformation": {
+        "paymentInfoId": "PMTINF-004",
+        "paymentMethod": "TRF",
+        "batchBooking": false,
+        "requestedExecutionDate": "2025-12-26"
+      },
+      "debtor": {
+        "name": "Retail Store Inc",
+        "streetName": "555 Shopping Center",
+        "buildingNumber": "B2",
+        "postalCode": "33101",
+        "townName": "Miami",
+        "country": "US",
+        "id": "RETL004",
+        "idType": "CUST"
+      },
+      "debtorAccount": {
+        "iban": "US44556677889900112233",
+        "currency": "USD"
+      },
+      "debtorAgent": {
+        "bic": "TABOROB2XXX",
+        "name": "TD Bank",
+        "clearingSystem": "USABA",
+        "memberId": "031101279"
+      },
+      "instructionId": "INSTR-004",
+      "endToEndId": "E2E-2025-004",
+      "uetr": "12345678-90ab-cdef-1234-567890abcdef",
+      "instructedAmount": 3250.75,
+      "instructedCurrency": "USD",
+      "creditorAgent": {
+        "bic": "HABOROB2XXX",
+        "name": "HSBC Bank",
+        "clearingSystem": "USABA",
+        "memberId": "021001088"
+      },
+      "creditor": {
+        "name": "Wholesale Distributors LLC",
+        "streetName": "999 Warehouse Rd",
+        "buildingNumber": "C3",
+        "postalCode": "30301",
+        "townName": "Atlanta",
+        "country": "US",
+        "id": "WHSL001",
+        "idType": "CUST"
+      },
+      "creditorAccount": {
+        "iban": "US77889900112233445566",
+        "currency": "USD"
+      },
+      "purposeCode": "GDDS",
+      "chargeBearer": "CRED",
+      "remittanceInformation": "Merchandise order MO-2025-789"
+    },
+    {
+      "messageId": "PAIN001-2025-005",
+      "creationDateTime": "2025-12-25T11:30:00Z",
+      "numberOfTransactions": 1,
+      "controlSum": 150000.00,
+      "initiatingParty": {
+        "name": "Investment Holdings LLC",
+        "id": "INVH005",
+        "idType": "LEI"
+      },
+      "paymentInformation": {
+        "paymentInfoId": "PMTINF-005",
+        "paymentMethod": "TRF",
+        "batchBooking": false,
+        "requestedExecutionDate": "2025-12-29"
+      },
+      "debtor": {
+        "name": "Investment Holdings LLC",
+        "streetName": "One Financial Center",
+        "buildingNumber": "50",
+        "postalCode": "02111",
+        "townName": "Boston",
+        "country": "US",
+        "id": "549300INVH12345678",
+        "idType": "LEI"
+      },
+      "debtorAccount": {
+        "iban": "US00112233445566778899",
+        "currency": "USD"
+      },
+      "debtorAgent": {
+        "bic": "STBKUS33XXX",
+        "name": "State Street Bank",
+        "clearingSystem": "USABA",
+        "memberId": "011000028"
+      },
+      "instructionId": "INSTR-005",
+      "endToEndId": "E2E-2025-005",
+      "uetr": "abcdef12-3456-7890-abcd-ef1234567890",
+      "instructedAmount": 150000.00,
+      "instructedCurrency": "USD",
+      "creditorAgent": {
+        "bic": "DEUTDEFFXXX",
+        "name": "Deutsche Bank AG",
+        "clearingSystem": "BICFI",
+        "memberId": ""
+      },
+      "creditor": {
+        "name": "German Investment Fund GmbH",
+        "streetName": "Taunusanlage 12",
+        "buildingNumber": "",
+        "postalCode": "60325",
+        "townName": "Frankfurt",
+        "country": "DE",
+        "id": "GIFU001",
+        "idType": "LEI"
+      },
+      "creditorAccount": {
+        "iban": "DE89370400440532013000",
+        "currency": "EUR"
+      },
+      "purposeCode": "INVS",
+      "chargeBearer": "SHAR",
+      "remittanceInformation": "Fund transfer FT-2025-Q4"
+    }
+  ]
+}

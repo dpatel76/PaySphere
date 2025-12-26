@@ -84,8 +84,15 @@ class LineageService:
     """
     Provides data lineage visualization and querying.
 
-    Uses YAML mapping files to build lineage graphs and supports
-    both forward (source→target) and backward (target→source) queries.
+    Data source priority:
+    1. Database mapping tables (mapping.silver_field_mappings, mapping.gold_field_mappings)
+       - Single source of truth for runtime
+       - Populated from YAML during deployment via sync script
+    2. YAML mapping files (fallback if database unavailable)
+       - Design-time documentation
+       - Should be synced to database before production use
+
+    Uses both forward (source→target) and backward (target→source) queries.
     """
 
     def __init__(self, db_connection=None, mappings_dir: str = None):
@@ -99,10 +106,145 @@ class LineageService:
         self.db = db_connection
         self.mappings_dir = Path(mappings_dir) if mappings_dir else None
         self._lineage_cache: Dict[str, FullLineage] = {}
+        self._use_database = True  # Prefer database over YAML
+
+    def _get_db_connection(self):
+        """Get or create database connection."""
+        if self.db:
+            return self.db
+        # Create connection from environment
+        import os
+        import psycopg2
+        try:
+            return psycopg2.connect(
+                host=os.environ.get("POSTGRES_HOST", "localhost"),
+                port=int(os.environ.get("POSTGRES_PORT", 5433)),
+                database=os.environ.get("POSTGRES_DB", "gps_cdm"),
+                user=os.environ.get("POSTGRES_USER", "gps_cdm_svc"),
+                password=os.environ.get("POSTGRES_PASSWORD", "gps_cdm_password"),
+            )
+        except Exception:
+            return None
+
+    def _load_lineage_from_database(self, message_type: str) -> Optional[FullLineage]:
+        """Load lineage from database mapping tables (single source of truth)."""
+        conn = self._get_db_connection()
+        if not conn:
+            return None
+
+        try:
+            cursor = conn.cursor()
+
+            # Get bronze→silver mappings
+            # Schema: source_path (XPath/JSONPath), target_column, data_type, transform_function, transform_expression
+            cursor.execute("""
+                SELECT source_path, target_column, data_type,
+                       transform_function, transform_expression
+                FROM mapping.silver_field_mappings
+                WHERE format_id = %s AND is_active = true
+                ORDER BY ordinal_position
+            """, (message_type,))
+
+            b2s_fields = []
+            silver_table = f"stg_{message_type.replace('.', '').lower()}"
+            for row in cursor.fetchall():
+                source_path = row[0]
+                # Extract field name from path (e.g., "GrpHdr/MsgId" -> "MsgId")
+                source_field = source_path.split('/')[-1] if '/' in source_path else source_path
+                b2s_fields.append(FieldLineage(
+                    source_layer="bronze",
+                    source_table="raw_payment_messages",
+                    source_field=source_field,
+                    source_path=source_path,
+                    target_layer="silver",
+                    target_table=silver_table,
+                    target_field=row[1],  # target_column
+                    transformation_type=row[3],  # transform_function
+                    transformation_logic=row[4],  # transform_expression
+                    data_type=row[2] or "string",
+                    message_type=message_type,
+                ))
+
+            # Get silver→gold mappings
+            # Schema: source_expression, gold_table, gold_column, data_type, entity_role, transform_expression
+            cursor.execute("""
+                SELECT source_expression, gold_table, gold_column, data_type,
+                       entity_role, transform_expression
+                FROM mapping.gold_field_mappings
+                WHERE format_id = %s AND is_active = true
+                ORDER BY gold_table, ordinal_position
+            """, (message_type,))
+
+            s2g_fields = []
+            entity_mappings: Dict[str, List[FieldLineage]] = {}
+            for row in cursor.fetchall():
+                field = FieldLineage(
+                    source_layer="silver",
+                    source_table=silver_table,
+                    source_field=row[0],  # source_expression
+                    source_path=None,
+                    target_layer="gold",
+                    target_table=row[1],  # gold_table
+                    target_field=row[2],  # gold_column
+                    transformation_type=None,
+                    transformation_logic=row[5],  # transform_expression
+                    data_type=row[3] or "string",
+                    message_type=message_type,
+                )
+                # Group by entity role if specified (e.g., 'debtor', 'creditor')
+                entity_role = row[4]
+                if entity_role:
+                    if entity_role not in entity_mappings:
+                        entity_mappings[entity_role] = []
+                    entity_mappings[entity_role].append(field)
+                else:
+                    s2g_fields.append(field)
+
+            cursor.close()
+            if not self.db:
+                conn.close()
+
+            # Only return if we found data
+            if not b2s_fields and not s2g_fields and not entity_mappings:
+                return None
+
+            b2s = LayerLineage(
+                source_layer="bronze",
+                source_table="raw_payment_messages",
+                target_layer="silver",
+                target_table=silver_table,
+                field_mappings=b2s_fields,
+                message_type=message_type,
+            ) if b2s_fields else None
+
+            s2g = LayerLineage(
+                source_layer="silver",
+                source_table=silver_table,
+                target_layer="gold",
+                target_table="cdm_payment_instruction",
+                field_mappings=s2g_fields,
+                message_type=message_type,
+            ) if s2g_fields else None
+
+            return FullLineage(
+                message_type=message_type,
+                bronze_to_silver=b2s,
+                silver_to_gold=s2g,
+                entity_mappings=entity_mappings,
+            )
+
+        except Exception as e:
+            import logging
+            logging.warning(f"Failed to load lineage from database for {message_type}: {e}")
+            return None
 
     def get_message_type_lineage(self, message_type: str) -> Optional[FullLineage]:
         """
         Get complete lineage for a message type.
+
+        Data source priority:
+        1. Database mapping tables (single source of truth)
+        2. YAML files (fallback for development/testing)
 
         Args:
             message_type: Message type (e.g., "pain.001", "MT103")
@@ -114,8 +256,16 @@ class LineageService:
         if message_type in self._lineage_cache:
             return self._lineage_cache[message_type]
 
-        # Load from mapping files
-        lineage = self._load_lineage_from_mapping(message_type)
+        lineage = None
+
+        # Try database first (single source of truth)
+        if self._use_database:
+            lineage = self._load_lineage_from_database(message_type)
+
+        # Fallback to YAML files if database unavailable or empty
+        if not lineage:
+            lineage = self._load_lineage_from_mapping(message_type)
+
         if lineage:
             self._lineage_cache[message_type] = lineage
 
@@ -127,17 +277,46 @@ class LineageService:
             # Default path
             self.mappings_dir = Path(__file__).parent.parent.parent.parent / "mappings" / "message_types"
 
-        # Map message type to file
+        # Map message type to file - includes all available YAML mapping files
         file_map = {
+            # ISO 20022
             "pain.001": "pain001.yaml",
             "pain001": "pain001.yaml",
+            "pacs.008": "pacs008.yaml",
+            "pacs008": "pacs008.yaml",
+            # SWIFT MT
             "MT103": "mt103.yaml",
             "mt103": "mt103.yaml",
+            "MT202": "mt202.yaml",
+            "mt202": "mt202.yaml",
+            # US Regional
+            "FEDWIRE": "fedwire.yaml",
+            "fedwire": "fedwire.yaml",
+            "ACH": "ach.yaml",
+            "ach": "ach.yaml",
+            "RTP": "rtp.yaml",
+            "rtp": "rtp.yaml",
+            "FEDNOW": "fednow.yaml",
+            "fednow": "fednow.yaml",
+            # EU Regional
+            "SEPA": "sepa.yaml",
+            "sepa": "sepa.yaml",
+            # UK Regional
+            "CHAPS": "chaps.yaml",
+            "chaps": "chaps.yaml",
+            "BACS": "bacs.yaml",
+            "bacs": "bacs.yaml",
         }
 
         filename = file_map.get(message_type)
         if not filename:
-            return None
+            # Try to find a matching file dynamically
+            normalized = message_type.lower().replace(".", "")
+            candidate = f"{normalized}.yaml"
+            if (self.mappings_dir / candidate).exists():
+                filename = candidate
+            else:
+                return None
 
         mapping_file = self.mappings_dir / filename
         if not mapping_file.exists():
@@ -416,7 +595,20 @@ class LineageService:
         Get lineage as a graph structure for visualization.
 
         Returns nodes and edges for rendering in a UI.
+        Fetches entity structure from Neo4j for complete multi-entity gold layer.
         """
+        # Try to get entity structure from Neo4j first
+        try:
+            from gps_cdm.orchestration.neo4j_service import get_neo4j_service
+            neo4j = get_neo4j_service()
+            if neo4j.is_available():
+                schema_lineage = neo4j.get_schema_lineage(message_type)
+                if schema_lineage:
+                    return self._build_graph_from_neo4j(schema_lineage, message_type)
+        except Exception as e:
+            logger.warning(f"Failed to get schema from Neo4j: {e}")
+
+        # Fallback to YAML-based lineage
         lineage = self.get_message_type_lineage(message_type)
         if not lineage:
             return {"nodes": [], "edges": []}
@@ -460,6 +652,79 @@ class LineageService:
             node_id += 1
 
         # Add field edges
+        for f in self.get_field_lineage(message_type):
+            source_key = f"{f.source_layer}.{f.source_table}"
+            target_key = f"{f.target_layer}.{f.target_table}"
+
+            if source_key in table_nodes and target_key in table_nodes:
+                edges.append({
+                    "source": table_nodes[source_key],
+                    "target": table_nodes[target_key],
+                    "source_field": f.source_field,
+                    "target_field": f.target_field,
+                    "transformation": f.transformation_type,
+                })
+
+        return {"nodes": nodes, "edges": edges}
+
+    def _build_graph_from_neo4j(self, schema_lineage: Dict, message_type: str) -> Dict:
+        """Build graph structure from Neo4j schema lineage."""
+        nodes = []
+        edges = []
+        node_id = 0
+
+        # Add layer nodes
+        layers = ["bronze", "silver", "gold"]
+        layer_nodes = {}
+        for layer in layers:
+            layer_nodes[layer] = node_id
+            nodes.append({
+                "id": node_id,
+                "type": "layer",
+                "name": layer.upper(),
+                "layer": layer,
+            })
+            node_id += 1
+
+        # Add entity/table nodes from Neo4j
+        table_nodes = {}
+        for entity_data in schema_lineage.get("entities", []):
+            entity = entity_data.get("entity", {})
+            entity_id = entity.get("entity_id", "")
+            layer = entity.get("layer", "")
+            entity_type = entity.get("entity_type", "")
+
+            if entity_id and layer:
+                # Use entity_id as key (e.g., "bronze.raw_payment_messages")
+                table_name = entity_type or entity_id.split(".")[-1]
+                table_nodes[entity_id] = node_id
+                nodes.append({
+                    "id": node_id,
+                    "type": "table",
+                    "name": table_name,
+                    "layer": layer,
+                })
+                node_id += 1
+
+        # Add transformation edges from Neo4j
+        for transform in schema_lineage.get("transforms", []):
+            source = transform.get("source", {})
+            target = transform.get("target", {})
+            transform_info = transform.get("transform", {})
+
+            source_id = source.get("entity_id", "")
+            target_id = target.get("entity_id", "")
+
+            if source_id in table_nodes and target_id in table_nodes:
+                edges.append({
+                    "source": table_nodes[source_id],
+                    "target": table_nodes[target_id],
+                    "source_field": "",
+                    "target_field": "",
+                    "transformation": transform_info.get("transformation_type", ""),
+                })
+
+        # Add field-level edges from YAML mappings
         for f in self.get_field_lineage(message_type):
             source_key = f"{f.source_layer}.{f.source_table}"
             target_key = f"{f.target_layer}.{f.target_table}"

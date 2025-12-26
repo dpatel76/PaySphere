@@ -67,59 +67,65 @@ const BatchDetailDialog: React.FC<BatchDetailDialogProps> = ({
   // Fetch batch details
   const { data: batchDetail, isLoading } = useQuery<BatchDetail>({
     queryKey: ['batchDetail', batchId],
-    queryFn: async () => {
+    queryFn: async (): Promise<BatchDetail> => {
       if (!batchId) throw new Error('No batch ID');
       const batch = await pipelineApi.getBatch(batchId);
 
-      // Transform to BatchDetail format
+      // Transform API response to BatchDetail format
+      // API returns: batch_id, message_type, message_format, source_system, source_file,
+      //              record_count, bronze_count, silver_count, gold_count,
+      //              processed_count, failed_count, pending_count, created_at, updated_at, status
+      const createdAt = batch.created_at || new Date().toISOString();
+      const updatedAt = batch.updated_at;
+
       return {
         batch_id: batch.batch_id,
-        source_system: batch.source_system,
+        source_system: batch.source_system || 'Unknown',
         message_type: batch.message_type,
         status: batch.status,
-        created_at: batch.started_at,
-        completed_at: batch.completed_at,
-        duration_seconds: batch.completed_at
-          ? Math.round((new Date(batch.completed_at).getTime() - new Date(batch.started_at).getTime()) / 1000)
+        created_at: createdAt,
+        completed_at: updatedAt,
+        duration_seconds: createdAt && updatedAt
+          ? Math.round((new Date(updatedAt).getTime() - new Date(createdAt).getTime()) / 1000)
           : undefined,
         metrics: {
           bronze: {
-            input_records: batch.bronze_records || 0,
-            processed_records: batch.bronze_records || 0,
-            failed_records: 0,
-            pending_records: 0,
+            input_records: batch.record_count || batch.bronze_count || 0,
+            processed_records: batch.processed_count || batch.bronze_count || 0,
+            failed_records: batch.failed_count || 0,
+            pending_records: batch.pending_count || 0,
             exceptions: 0,
           },
           silver: {
-            input_records: batch.bronze_records || 0,
-            processed_records: batch.silver_records || 0,
-            failed_records: batch.failed_records || 0,
+            input_records: batch.processed_count || batch.bronze_count || 0,
+            processed_records: batch.silver_count || 0,
+            failed_records: 0,
             pending_records: 0,
             exceptions: 0,
-            dq_passed: batch.silver_records || 0,
+            dq_passed: batch.silver_count || 0,
             dq_failed: 0,
-            dq_score: batch.dq_score,
+            dq_score: undefined,
           },
           gold: {
-            input_records: batch.silver_records || 0,
-            processed_records: batch.gold_records || 0,
+            input_records: batch.silver_count || 0,
+            processed_records: batch.gold_count || 0,
             failed_records: 0,
             pending_records: 0,
             exceptions: 0,
           },
           analytics: {
-            input_records: batch.gold_records || 0,
-            processed_records: 0,
+            input_records: batch.gold_count || 0,
+            processed_records: batch.gold_count || 0,
             failed_records: 0,
             pending_records: 0,
             exceptions: 0,
           },
         },
         timing: {
-          ingestion_start: batch.started_at,
-          bronze_complete: batch.started_at,
-          silver_complete: batch.completed_at,
-          gold_complete: batch.completed_at,
+          ingestion_start: createdAt,
+          bronze_complete: createdAt,
+          silver_complete: updatedAt,
+          gold_complete: updatedAt,
         },
       };
     },

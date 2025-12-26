@@ -134,3 +134,7 @@ derby.log
 
 # Databricks
 .databricks/
+
+# Node modules
+node_modules/
+

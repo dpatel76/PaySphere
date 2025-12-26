@@ -335,7 +335,9 @@ export const pipelineApi = {
     message_type?: string;
     hours_back?: number;
     limit?: number;
-  }): Promise<BatchTracking[]> => {
+    page?: number;
+    page_size?: number;
+  }): Promise<{ items: BatchTracking[]; total: number; page: number; page_size: number; total_pages: number } | BatchTracking[]> => {
     const params = new URLSearchParams();
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
@@ -368,6 +370,93 @@ export const pipelineApi = {
       offset: offset.toString(),
     });
     const { data } = await api.get(`/pipeline/batches/${batchId}/records/${layer}?${params}`);
+    return data;
+  },
+
+  // Get full record details
+  getRecordDetails: async (
+    layer: 'bronze' | 'silver' | 'gold',
+    recordId: string
+  ): Promise<any> => {
+    const { data } = await api.get(`/pipeline/records/${layer}/${recordId}`);
+    return data;
+  },
+
+  // Get cross-zone record lineage
+  getRecordLineage: async (
+    layer: 'bronze' | 'silver' | 'gold',
+    recordId: string
+  ): Promise<{
+    bronze: any;
+    silver: any;
+    gold: any;
+    gold_entities?: {
+      debtor_party?: Record<string, any>;
+      debtor_account?: Record<string, any>;
+      debtor_agent?: Record<string, any>;
+      creditor_party?: Record<string, any>;
+      creditor_account?: Record<string, any>;
+      creditor_agent?: Record<string, any>;
+      intermediary_agent1?: Record<string, any>;
+      intermediary_agent2?: Record<string, any>;
+      ultimate_debtor?: Record<string, any>;
+      ultimate_creditor?: Record<string, any>;
+    };
+    field_mappings: any[];
+  }> => {
+    const { data } = await api.get(`/pipeline/records/${layer}/${recordId}/lineage`);
+    return data;
+  },
+
+  // Pipeline Overview
+  getOverview: async (): Promise<any> => {
+    const { data } = await api.get('/pipeline/overview');
+    return data;
+  },
+
+  // NiFi Status
+  getNifiStatus: async (): Promise<any> => {
+    const { data } = await api.get('/pipeline/nifi/status');
+    return data;
+  },
+
+  getNifiConnections: async (): Promise<any> => {
+    const { data } = await api.get('/pipeline/nifi/connections');
+    return data;
+  },
+
+  // Celery/Flower Status
+  getCeleryWorkers: async (): Promise<any> => {
+    const { data } = await api.get('/pipeline/celery/workers');
+    return data;
+  },
+
+  getCeleryTasks: async (state?: string, limit: number = 50): Promise<any> => {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (state) params.append('state', state);
+    const { data } = await api.get(`/pipeline/celery/tasks?${params}`);
+    return data;
+  },
+
+  getCeleryQueues: async (): Promise<any> => {
+    const { data } = await api.get('/pipeline/celery/queues');
+    return data;
+  },
+
+  // Message Type Stats
+  getMessageTypeStats: async (hoursBack: number = 24): Promise<any> => {
+    const { data } = await api.get(`/pipeline/message-types/stats?hours_back=${hoursBack}`);
+    return data;
+  },
+
+  getMessageTypeFlow: async (messageType: string, hoursBack: number = 24): Promise<any> => {
+    const { data } = await api.get(`/pipeline/message-types/${messageType}/flow?hours_back=${hoursBack}`);
+    return data;
+  },
+
+  // Throughput
+  getThroughput: async (hoursBack: number = 24, intervalMinutes: number = 60): Promise<any> => {
+    const { data } = await api.get(`/pipeline/throughput?hours_back=${hoursBack}&interval_minutes=${intervalMinutes}`);
     return data;
   },
 };
@@ -443,6 +532,190 @@ export const schemaApi = {
 
   getValidations: async (messageType: string): Promise<any> => {
     const { data } = await api.get(`/schema/validations/${messageType}`);
+    return data;
+  },
+};
+
+// =====================
+// Processing Errors API
+// =====================
+export interface ProcessingError {
+  error_id: string;
+  batch_id: string;
+  chunk_index?: number;
+  total_chunks?: number;
+  zone: 'BRONZE' | 'SILVER' | 'GOLD';
+  raw_id?: string;
+  stg_id?: string;
+  content_hash?: string;
+  message_type: string;
+  message_id?: string;
+  error_code?: string;
+  error_message: string;
+  error_stack_trace?: string;
+  original_content?: string;
+  status: 'PENDING' | 'RETRYING' | 'RESOLVED' | 'SKIPPED' | 'ABANDONED';
+  retry_count: number;
+  max_retries: number;
+  last_retry_at?: string;
+  next_retry_at?: string;
+  resolved_at?: string;
+  resolved_by?: string;
+  resolution_notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ErrorListResponse {
+  items: ProcessingError[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface ErrorStats {
+  total_errors: number;
+  by_zone: Record<string, number>;
+  by_status: Record<string, number>;
+  by_message_type: Record<string, number>;
+  by_error_code: Record<string, number>;
+  pending_count: number;
+  retrying_count: number;
+  resolved_count: number;
+  abandoned_count: number;
+  avg_retry_count: number;
+  errors_last_hour: number;
+  errors_last_24h: number;
+  oldest_pending?: string;
+  newest_error?: string;
+}
+
+export interface ErrorTrend {
+  timestamps: string[];
+  counts: number[];
+  by_zone: Record<string, number[]>;
+}
+
+export interface ErrorCode {
+  error_code: string;
+  error_category: string;
+  description?: string;
+  is_retryable: boolean;
+  suggested_action?: string;
+}
+
+export interface BulkActionResponse {
+  action: string;
+  requested_count: number;
+  success_count: number;
+  failed_ids: string[];
+}
+
+export const errorsApi = {
+  getErrors: async (filters: {
+    zone?: string;
+    status?: string;
+    message_type?: string;
+    error_code?: string;
+    batch_id?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+    sort_by?: string;
+    sort_desc?: boolean;
+  }): Promise<ErrorListResponse> => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+    const { data } = await api.get(`/errors?${params}`);
+    return data;
+  },
+
+  getError: async (errorId: string): Promise<ProcessingError> => {
+    const { data } = await api.get(`/errors/${errorId}`);
+    return data;
+  },
+
+  getErrorHistory: async (errorId: string): Promise<any[]> => {
+    const { data } = await api.get(`/errors/${errorId}/history`);
+    return data;
+  },
+
+  getStats: async (zone?: string, hoursBack: number = 24): Promise<ErrorStats> => {
+    const params = new URLSearchParams({ hours_back: hoursBack.toString() });
+    if (zone) params.append('zone', zone);
+    const { data } = await api.get(`/errors/stats?${params}`);
+    return data;
+  },
+
+  getTrend: async (hoursBack: number = 24, intervalMinutes: number = 60): Promise<ErrorTrend> => {
+    const { data } = await api.get(`/errors/trend?hours_back=${hoursBack}&interval_minutes=${intervalMinutes}`);
+    return data;
+  },
+
+  retryError: async (errorId: string, delayMinutes: number = 5): Promise<any> => {
+    const { data } = await api.post(`/errors/${errorId}/retry`, { delay_minutes: delayMinutes });
+    return data;
+  },
+
+  skipError: async (errorId: string, reason: string): Promise<any> => {
+    const { data } = await api.post(`/errors/${errorId}/skip`, { reason });
+    return data;
+  },
+
+  resolveError: async (errorId: string, notes: string, resolvedBy: string): Promise<any> => {
+    const { data } = await api.post(`/errors/${errorId}/resolve`, {
+      resolution_notes: notes,
+      resolved_by: resolvedBy,
+    });
+    return data;
+  },
+
+  abandonError: async (errorId: string, reason: string): Promise<any> => {
+    const { data } = await api.post(`/errors/${errorId}/abandon`, { reason });
+    return data;
+  },
+
+  bulkAction: async (
+    errorIds: string[],
+    action: 'retry' | 'skip' | 'resolve' | 'abandon',
+    notes?: string,
+    resolvedBy?: string
+  ): Promise<BulkActionResponse> => {
+    const { data } = await api.post('/errors/bulk', {
+      error_ids: errorIds,
+      action,
+      notes,
+      resolved_by: resolvedBy,
+    });
+    return data;
+  },
+
+  retryAllPending: async (
+    zone?: string,
+    messageType?: string,
+    maxCount: number = 100
+  ): Promise<any> => {
+    const params = new URLSearchParams({ max_count: maxCount.toString() });
+    if (zone) params.append('zone', zone);
+    if (messageType) params.append('message_type', messageType);
+    const { data } = await api.post(`/errors/bulk/retry-all-pending?${params}`);
+    return data;
+  },
+
+  getErrorCodes: async (): Promise<ErrorCode[]> => {
+    const { data } = await api.get('/errors/codes/list');
+    return data;
+  },
+
+  getErrorCode: async (errorCode: string): Promise<ErrorCode> => {
+    const { data } = await api.get(`/errors/codes/${errorCode}`);
     return data;
   },
 };

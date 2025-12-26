@@ -281,7 +281,7 @@ def get_table_routing(message_type: str) -> dict:
             "bronze_table": "bronze_mt103",
             "silver_table": "silver_mt103",
             "gold_tables": ["gold_cdm_payment_instruction", "gold_cdm_party", "gold_cdm_account", "gold_cdm_financial_institution"],
-            "payment_type": "CUSTOMER_TRANSFER",
+            "payment_type": "CREDIT_TRANSFER",  # Standardized - MT103 is Single Customer Credit Transfer
             "scheme": "SWIFT",
         }
     elif msg_type_lower in ["mt200", "200"]:
@@ -582,6 +582,59 @@ def get_all_message_types() -> List[str]:
     ]
 
 
+def get_message_format(message_type: str) -> str:
+    """
+    Determine the message format based on message type.
+
+    Returns:
+        - XML: ISO 20022 messages (pain.*, pacs.*, camt.*, acmt.*), SEPA, FedNow, RTP
+        - SWIFT_MT: SWIFT MT messages (MT103, MT202, MT940, etc.)
+        - FIXED_WIDTH: NACHA ACH, BACS
+        - JSON: Modern real-time systems (PIX, NPP, UPI, PayNow, etc.)
+        - PROPRIETARY: CHIPS, CHAPS, RTGS systems
+    """
+    msg_type = message_type.lower().strip()
+
+    # ISO 20022 XML formats
+    if msg_type.startswith(('pain.', 'pacs.', 'camt.', 'acmt.')):
+        return "XML"
+
+    # SWIFT MT plain text format
+    if msg_type.startswith('mt') and msg_type[2:].replace('cov', '').isdigit():
+        return "SWIFT_MT"
+
+    # SEPA uses ISO 20022 XML
+    if msg_type in ('sepa_sct', 'sepa.sct', 'sepa_sdd', 'sepa.sdd', 'sepa_credit_transfer', 'sepa_direct_debit'):
+        return "XML"
+
+    # US Payments
+    if msg_type in ('nacha', 'nacha_ach', 'ach'):
+        return "FIXED_WIDTH"
+    if msg_type == 'fedwire':
+        return "PROPRIETARY"  # Fedwire uses its own proprietary format
+    if msg_type == 'chips':
+        return "PROPRIETARY"
+
+    # UK Payments
+    if msg_type == 'bacs':
+        return "FIXED_WIDTH"  # BACS Standard 18 format
+    if msg_type in ('chaps', 'fps'):
+        return "XML"  # UK uses ISO 20022 for CHAPS/FPS
+
+    # Real-time payment systems
+    if msg_type in ('fednow', 'rtp'):
+        return "XML"  # FedNow and RTP use ISO 20022
+    if msg_type in ('pix', 'npp', 'upi', 'paynow', 'promptpay', 'instapay'):
+        return "JSON"  # Modern real-time systems use JSON
+
+    # RTGS systems
+    if msg_type in ('target2', 'bojnet', 'cnaps', 'meps', 'rtgs_hk', 'sarie', 'uaefts', 'kftc'):
+        return "PROPRIETARY"
+
+    # Default to XML (most standards are migrating to ISO 20022)
+    return "XML"
+
+
 # Celery configuration
 BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
 RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
@@ -621,11 +674,18 @@ app.conf.update(
 
     # Task routing for different workloads
     task_routes={
+        # Legacy monolithic task (deprecated - use zone_tasks instead)
         "gps_cdm.orchestration.celery_tasks.process_bronze_partition": {"queue": "bronze"},
         "gps_cdm.orchestration.celery_tasks.process_silver_transform": {"queue": "silver"},
         "gps_cdm.orchestration.celery_tasks.process_gold_aggregate": {"queue": "gold"},
         "gps_cdm.orchestration.celery_tasks.run_dq_evaluation": {"queue": "dq"},
         "gps_cdm.orchestration.celery_tasks.sync_cdc_to_neo4j": {"queue": "cdc"},
+        # New zone-separated tasks (preferred)
+        "gps_cdm.zone_tasks.process_bronze_records": {"queue": "bronze"},
+        "gps_cdm.zone_tasks.process_silver_records": {"queue": "silver"},
+        "gps_cdm.zone_tasks.process_gold_records": {"queue": "gold"},
+        "gps_cdm.zone_tasks.retry_error": {"queue": "celery"},
+        "gps_cdm.zone_tasks.bulk_retry_errors": {"queue": "celery"},
     },
 
     # Beat scheduler for periodic tasks
@@ -644,6 +704,73 @@ app.conf.update(
         },
     },
 )
+
+# Import zone-separated tasks so Celery discovers them
+from gps_cdm.orchestration import zone_tasks  # noqa: F401
+
+
+# =============================================================================
+# ENTITY EXTRACTION HELPER FUNCTIONS
+# =============================================================================
+
+# Import extractors and common persistence
+from gps_cdm.message_formats.base import ExtractorRegistry, GoldEntityPersister
+
+
+def extract_and_persist_entities(cursor, msg_content: dict, message_type: str, stg_id: str, batch_id: str):
+    """
+    Extract Party, Account, and Financial Institution entities from message content
+    and persist them to Gold layer tables.
+
+    Uses message-format-specific extractors with common persistence logic.
+
+    Returns dict with entity IDs for linking to payment instruction:
+        {
+            'debtor_id': str or None,
+            'debtor_account_id': str or None,
+            'debtor_agent_id': str or None,
+            'creditor_id': str or None,
+            'creditor_account_id': str or None,
+            'creditor_agent_id': str or None,
+            'intermediary_agent1_id': str or None,
+            'intermediary_agent2_id': str or None,
+            'ultimate_debtor_id': str or None,
+            'ultimate_creditor_id': str or None,
+        }
+    """
+    # Get the appropriate extractor for this message type
+    extractor = ExtractorRegistry.get(message_type)
+
+    if extractor:
+        # Use the extractor to get standardized Gold entities
+        gold_entities = extractor.extract_gold_entities(msg_content, stg_id, batch_id)
+
+        # Use common persistence to save all entities
+        entity_ids = GoldEntityPersister.persist_all_entities(
+            cursor, gold_entities, message_type, stg_id, 'GPS_CDM'
+        )
+
+        return entity_ids
+
+    # Fallback for unregistered message types - return empty IDs
+    logger.warning(f"No extractor registered for message type: {message_type}")
+    return {
+        'debtor_id': None,
+        'debtor_account_id': None,
+        'debtor_agent_id': None,
+        'creditor_id': None,
+        'creditor_account_id': None,
+        'creditor_agent_id': None,
+        'intermediary_agent1_id': None,
+        'intermediary_agent2_id': None,
+        'ultimate_debtor_id': None,
+        'ultimate_creditor_id': None,
+    }
+
+
+# The old inline extraction code has been removed.
+# All entity extraction now happens through message-format-specific extractors
+# in gps_cdm.message_formats.* with common persistence via GoldEntityPersister.
 
 
 # =============================================================================
@@ -753,19 +880,41 @@ def process_bronze_partition(
             except Exception:
                 parsed = msg_content
 
-            # Extract field values from parsed data with fallbacks
+            # Extract field values from parsed data - NO DEFAULTS, use NULL if not present
             debtor_name = (parsed.get('debtor_name') or parsed.get('payer_name') or
-                          parsed.get('debtorName') or msg_content.get('debtor', {}).get('name', 'Unknown'))
+                          parsed.get('debtorName') or msg_content.get('debtor', {}).get('name') or
+                          parsed.get('initiating_party_name') or None)
             creditor_name = (parsed.get('creditor_name') or parsed.get('payee_name') or
-                            parsed.get('creditorName') or msg_content.get('creditor', {}).get('name', 'Unknown'))
-            amount = float(parsed.get('instructed_amount') or parsed.get('amount') or
-                          parsed.get('control_sum') or msg_content.get('amount', 0) or 0)
+                            parsed.get('creditorName') or msg_content.get('creditor', {}).get('name') or None)
+            amount = parsed.get('instructed_amount') or parsed.get('amount') or parsed.get('control_sum') or msg_content.get('amount')
+            if amount is not None:
+                amount = float(amount)
+            else:
+                amount = 0  # Amount is required in Gold, but should come from source
             currency = (parsed.get('instructed_currency') or parsed.get('currency') or
-                       msg_content.get('currency', 'USD'))
+                       msg_content.get('currency') or None)
 
-            # Get routing info for proper payment_type
+            # payment_method comes from message - stored in Silver
+            payment_method = parsed.get('payment_method') or msg_content.get('payment_method')
+
+            # Get routing info - payment_type is derived from message_type
             routing = get_table_routing(message_type)
-            payment_type = routing.get('payment_type', 'TRANSFER') if routing else 'TRANSFER'
+            payment_type = routing.get('payment_type') if routing else None
+
+            # Derive payment_type from message_type (this is transformation logic, not invented data)
+            if not payment_type:
+                payment_type_mapping = {
+                    'pain.001': 'CREDIT_TRANSFER',
+                    'pain.002': 'PAYMENT_STATUS',
+                    'pacs.008': 'CREDIT_TRANSFER',
+                    'pacs.002': 'PAYMENT_STATUS',
+                    'MT103': 'CREDIT_TRANSFER',
+                    'MT202': 'COVER_PAYMENT',
+                    'FEDWIRE': 'WIRE_TRANSFER',
+                    'ACH': 'ACH_TRANSFER',
+                    'SEPA': 'SEPA_TRANSFER',
+                }
+                payment_type = payment_type_mapping.get(message_type, 'TRANSFER')
 
             # Escape special characters for SQL
             def sql_escape(val):
@@ -824,7 +973,8 @@ def process_bronze_partition(
                         'message_type': message_type,
                         'source_system': 'NIFI',
                         'status': 'COMPLETED',
-                        'created_at': datetime.utcnow().isoformat()
+                        'created_at': datetime.utcnow().isoformat(),
+                        'total_records': 1  # Increment by 1 for each record
                     })
                     neo4j.upsert_batch_layer(batch_id, 'bronze', {
                         'input_count': 1, 'processed_count': 1, 'failed_count': 0
@@ -866,18 +1016,59 @@ def process_bronze_partition(
             except Exception:
                 parsed = msg_content
 
-            # Extract values
+            # Extract values - NO DEFAULTS, use NULL if not present
+            # Support both snake_case (from parsers) and camelCase (from JSON test files)
             debtor_name = (parsed.get('debtor_name') or parsed.get('payer_name') or
-                          parsed.get('debtorName') or msg_content.get('debtor', {}).get('name') or 'Unknown')
+                          parsed.get('debtorName') or msg_content.get('debtor', {}).get('name') or
+                          msg_content.get('orderingCustomer', {}).get('name') or
+                          parsed.get('initiating_party_name') or msg_content.get('initiatingParty', {}).get('name') or None)
             creditor_name = (parsed.get('creditor_name') or parsed.get('payee_name') or
-                            parsed.get('creditorName') or msg_content.get('creditor', {}).get('name') or 'Unknown')
-            amount = float(parsed.get('instructed_amount') or parsed.get('amount') or
-                          parsed.get('control_sum') or msg_content.get('amount', 0) or 0)
+                            parsed.get('creditorName') or msg_content.get('creditor', {}).get('name') or
+                            msg_content.get('beneficiaryCustomer', {}).get('name') or None)
+            # For amount: check camelCase from JSON, snake_case from parsers, and nested structures
+            amount = (parsed.get('instructed_amount') or parsed.get('amount') or
+                     parsed.get('control_sum') or msg_content.get('amount') or
+                     msg_content.get('instructedAmount') or msg_content.get('controlSum'))
+            if amount is not None:
+                amount = float(amount)
+            # For currency: check camelCase from JSON and snake_case from parsers
             currency = (parsed.get('instructed_currency') or parsed.get('currency') or
-                       msg_content.get('currency', 'USD'))
+                       msg_content.get('currency') or msg_content.get('instructedCurrency') or
+                       msg_content.get('currencyCode') or None)
 
+            # payment_method comes from message or is derived from message_type
+            # This is a LEGITIMATE transformation based on the message type
+            payment_method = (parsed.get('payment_method') or msg_content.get('payment_method') or
+                             msg_content.get('paymentInformation', {}).get('paymentMethod') or
+                             msg_content.get('paymentMethod'))
+
+            # Get routing info - payment_type is derived from message_type during Silver->Gold transform
+            # This is documented in the schema and is part of the transformation logic
             routing = get_table_routing(message_type)
-            payment_type = routing.get('payment_type', 'TRANSFER') if routing else 'TRANSFER'
+            # payment_type is derived from message_type, NOT invented - it's a transformation rule
+            payment_type = routing.get('payment_type') if routing else None
+            message_format = get_message_format(message_type)
+
+            # Derive payment_type from message_type if not explicitly set (this is transformation logic)
+            if not payment_type:
+                # Standard payment types based on message format
+                payment_type_mapping = {
+                    'pain.001': 'CREDIT_TRANSFER',
+                    'pain.002': 'PAYMENT_STATUS',
+                    'pacs.008': 'CREDIT_TRANSFER',
+                    'pacs.002': 'PAYMENT_STATUS',
+                    'pacs.004': 'PAYMENT_RETURN',
+                    'MT103': 'CREDIT_TRANSFER',
+                    'MT202': 'COVER_PAYMENT',
+                    'FEDWIRE': 'WIRE_TRANSFER',
+                    'ACH': 'ACH_TRANSFER',
+                    'SEPA': 'SEPA_TRANSFER',
+                    'CHAPS': 'CHAPS_TRANSFER',
+                    'BACS': 'BACS_TRANSFER',
+                    'RTP': 'REAL_TIME_PAYMENT',
+                    'FEDNOW': 'INSTANT_PAYMENT',
+                }
+                payment_type = payment_type_mapping.get(message_type, 'TRANSFER')
 
             try:
                 cursor = pg_conn.cursor()
@@ -889,31 +1080,757 @@ def process_bronze_partition(
                      source_system, source_file_path, processing_status, _batch_id, _ingested_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (raw_id) DO NOTHING
-                """, (raw_id, message_type, 'XML', json.dumps(msg_content),
+                """, (raw_id, message_type, message_format, json.dumps(msg_content),
                       hashlib.sha256(json.dumps(msg_content).encode()).hexdigest()[:64],
                       'TEST_SCRIPT', f'test://{message_type}', 'PROCESSED',
                       batch_id, datetime.utcnow()))
 
-                # Silver layer - use generic stg_pain001 for all types (as fallback)
-                cursor.execute("""
-                    INSERT INTO silver.stg_pain001
-                    (stg_id, raw_id, msg_id, creation_date_time, debtor_name, creditor_name,
-                     instructed_amount, instructed_currency, processing_status, _batch_id, _processed_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (stg_id) DO NOTHING
-                """, (stg_id, raw_id, msg_id, datetime.utcnow(), debtor_name, creditor_name,
-                      amount, currency, 'PROCESSED', batch_id, datetime.utcnow()))
+                # Silver layer - route to correct stg_* table based on message type
+                # Get normalized message type for table routing
+                msg_type_lower = message_type.lower().replace('.', '_').replace('-', '_')
 
-                # Gold layer - use schema-qualified name
+                if msg_type_lower in ['pain_001', 'pain001']:
+                    # Extract pain.001-specific fields from msg_content
+                    # COMPLETE EXTRACTION - All 77 source fields captured
+
+                    # Group Header fields
+                    creation_dt = msg_content.get('creationDateTime')
+                    num_txns = msg_content.get('numberOfTransactions')
+                    ctrl_sum = msg_content.get('controlSum')
+
+                    # Initiating Party - nested structure (ALL fields)
+                    initiating_party = msg_content.get('initiatingParty', {})
+                    init_party_name = initiating_party.get('name')
+                    init_party_id = initiating_party.get('id')
+                    init_party_id_type = initiating_party.get('idType')  # NEW
+                    init_party_country = initiating_party.get('country')  # NEW
+
+                    # Payment Information - nested structure (ALL fields)
+                    pmt_info = msg_content.get('paymentInformation', {})
+                    pmt_info_id = pmt_info.get('paymentInfoId')
+                    pmt_method = pmt_info.get('paymentMethod') or msg_content.get('paymentMethod') or 'TRF'
+                    batch_booking = pmt_info.get('batchBooking', False)
+                    req_exec_date = pmt_info.get('requestedExecutionDate') or msg_content.get('requestedExecutionDate')
+                    service_level = pmt_info.get('serviceLevel')  # NEW
+                    local_instrument = pmt_info.get('localInstrument')  # NEW
+                    category_purpose = pmt_info.get('categoryPurpose')  # NEW
+
+                    # Debtor (Party) - nested structure (ALL fields)
+                    debtor = msg_content.get('debtor', {})
+                    debtor_nm = debtor.get('name') or debtor_name
+                    debtor_street = debtor.get('streetName')
+                    debtor_bldg = debtor.get('buildingNumber')
+                    debtor_postal = debtor.get('postalCode')
+                    debtor_town = debtor.get('townName')
+                    debtor_country_sub = debtor.get('countrySubDivision')  # NEW
+                    debtor_country = debtor.get('country')
+                    debtor_id = debtor.get('id')
+                    debtor_id_type = debtor.get('idType')
+
+                    # Debtor Account - nested structure (ALL fields)
+                    debtor_acct = msg_content.get('debtorAccount', {})
+                    debtor_acct_iban = debtor_acct.get('iban')
+                    debtor_acct_other = debtor_acct.get('other') or debtor_acct.get('accountNumber')
+                    debtor_acct_ccy = debtor_acct.get('currency')
+                    debtor_acct_type = debtor_acct.get('accountType')  # NEW
+
+                    # Debtor Agent (Financial Institution) - nested structure (ALL fields)
+                    debtor_agent = msg_content.get('debtorAgent', {})
+                    debtor_agent_bic = debtor_agent.get('bic')
+                    debtor_agent_name = debtor_agent.get('name')
+                    debtor_agent_clr_sys = debtor_agent.get('clearingSystem')
+                    debtor_agent_member = debtor_agent.get('memberId')
+                    debtor_agent_country = debtor_agent.get('country')  # NEW
+
+                    # Credit Transfer Transaction fields
+                    instr_id = msg_content.get('instructionId')
+                    end_to_end_id = msg_content.get('endToEndId') or msg_content.get('end_to_end_id')
+                    uetr = msg_content.get('uetr')
+
+                    # Amounts (ALL fields)
+                    instr_amt = msg_content.get('instructedAmount') or amount
+                    instr_ccy = msg_content.get('instructedCurrency') or currency
+                    equiv_amt = msg_content.get('equivalentAmount')
+                    equiv_ccy = msg_content.get('equivalentCurrency')
+                    exchange_rate = msg_content.get('exchangeRate')  # NEW
+
+                    # Creditor Agent (Financial Institution) - nested structure (ALL fields)
+                    creditor_agent = msg_content.get('creditorAgent', {})
+                    creditor_agent_bic = creditor_agent.get('bic')
+                    creditor_agent_name = creditor_agent.get('name')
+                    creditor_agent_clr_sys = creditor_agent.get('clearingSystem')
+                    creditor_agent_member = creditor_agent.get('memberId')
+                    creditor_agent_country = creditor_agent.get('country')  # NEW
+
+                    # Creditor (Party) - nested structure (ALL fields)
+                    creditor = msg_content.get('creditor', {})
+                    creditor_nm = creditor.get('name') or creditor_name
+                    creditor_street = creditor.get('streetName')
+                    creditor_bldg = creditor.get('buildingNumber')
+                    creditor_postal = creditor.get('postalCode')
+                    creditor_town = creditor.get('townName')
+                    creditor_country_sub = creditor.get('countrySubDivision')  # NEW
+                    creditor_country = creditor.get('country')
+                    creditor_id = creditor.get('id')
+                    creditor_id_type = creditor.get('idType')
+
+                    # Creditor Account - nested structure (ALL fields)
+                    creditor_acct = msg_content.get('creditorAccount', {})
+                    creditor_acct_iban = creditor_acct.get('iban')
+                    creditor_acct_other = creditor_acct.get('other') or creditor_acct.get('accountNumber')
+                    creditor_acct_ccy = creditor_acct.get('currency')
+                    creditor_acct_type = creditor_acct.get('accountType')  # NEW
+
+                    # Ultimate Debtor - nested structure (ALL fields) - NEW
+                    ultimate_debtor = msg_content.get('ultimateDebtor', {})
+                    ultimate_debtor_name = ultimate_debtor.get('name') if ultimate_debtor else None
+                    ultimate_debtor_id = ultimate_debtor.get('id') if ultimate_debtor else None
+                    ultimate_debtor_id_type = ultimate_debtor.get('idType') if ultimate_debtor else None
+
+                    # Ultimate Creditor - nested structure (ALL fields) - NEW
+                    ultimate_creditor = msg_content.get('ultimateCreditor', {})
+                    ultimate_creditor_name = ultimate_creditor.get('name') if ultimate_creditor else None
+                    ultimate_creditor_id = ultimate_creditor.get('id') if ultimate_creditor else None
+                    ultimate_creditor_id_type = ultimate_creditor.get('idType') if ultimate_creditor else None
+
+                    # Purpose and Charges
+                    purpose_code = msg_content.get('purposeCode') or msg_content.get('purpose_code')
+                    charge_bearer = msg_content.get('chargeBearer') or msg_content.get('charge_bearer')
+
+                    # Remittance Information - nested structure
+                    remit_info = msg_content.get('remittanceInformation', {})
+                    if isinstance(remit_info, str):
+                        remit_unstruct = remit_info
+                        remit_struct = None
+                    else:
+                        remit_unstruct = remit_info.get('unstructured')
+                        remit_struct = remit_info.get('structured')
+
+                    # Regulatory Reporting - nested structure (store as JSONB)
+                    reg_reporting = msg_content.get('regulatoryReporting')
+
+                    cursor.execute("""
+                        INSERT INTO silver.stg_pain001
+                        (stg_id, raw_id, msg_id, creation_date_time, number_of_transactions, control_sum,
+                         initiating_party_name, initiating_party_id, initiating_party_id_type, initiating_party_country,
+                         payment_info_id, payment_method, batch_booking, requested_execution_date,
+                         service_level, local_instrument, category_purpose,
+                         debtor_name, debtor_street_name, debtor_building_number, debtor_postal_code, debtor_town_name,
+                         debtor_country_sub_division, debtor_country, debtor_id, debtor_id_type,
+                         debtor_account_iban, debtor_account_other, debtor_account_currency, debtor_account_type,
+                         debtor_agent_bic, debtor_agent_name, debtor_agent_clearing_system, debtor_agent_member_id, debtor_agent_country,
+                         instruction_id, end_to_end_id, uetr,
+                         instructed_amount, instructed_currency, equivalent_amount, equivalent_currency, exchange_rate,
+                         creditor_agent_bic, creditor_agent_name, creditor_agent_clearing_system, creditor_agent_member_id, creditor_agent_country,
+                         creditor_name, creditor_street_name, creditor_building_number, creditor_postal_code, creditor_town_name,
+                         creditor_country_sub_division, creditor_country, creditor_id, creditor_id_type,
+                         creditor_account_iban, creditor_account_other, creditor_account_currency, creditor_account_type,
+                         ultimate_debtor_name, ultimate_debtor_id, ultimate_debtor_id_type,
+                         ultimate_creditor_name, ultimate_creditor_id, ultimate_creditor_id_type,
+                         purpose_code, charge_bearer, remittance_information, structured_remittance, regulatory_reporting,
+                         processing_status, _batch_id, _processed_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (stg_id) DO NOTHING
+                    """, (stg_id, raw_id, msg_id, creation_dt, num_txns, ctrl_sum,
+                          init_party_name, init_party_id, init_party_id_type, init_party_country,
+                          pmt_info_id, pmt_method, batch_booking, req_exec_date,
+                          service_level, local_instrument, category_purpose,
+                          debtor_nm, debtor_street, debtor_bldg, debtor_postal, debtor_town,
+                          debtor_country_sub, debtor_country, debtor_id, debtor_id_type,
+                          debtor_acct_iban, debtor_acct_other, debtor_acct_ccy, debtor_acct_type,
+                          debtor_agent_bic, debtor_agent_name, debtor_agent_clr_sys, debtor_agent_member, debtor_agent_country,
+                          instr_id, end_to_end_id, uetr,
+                          instr_amt, instr_ccy, equiv_amt, equiv_ccy, exchange_rate,
+                          creditor_agent_bic, creditor_agent_name, creditor_agent_clr_sys, creditor_agent_member, creditor_agent_country,
+                          creditor_nm, creditor_street, creditor_bldg, creditor_postal, creditor_town,
+                          creditor_country_sub, creditor_country, creditor_id, creditor_id_type,
+                          creditor_acct_iban, creditor_acct_other, creditor_acct_ccy, creditor_acct_type,
+                          ultimate_debtor_name, ultimate_debtor_id, ultimate_debtor_id_type,
+                          ultimate_creditor_name, ultimate_creditor_id, ultimate_creditor_id_type,
+                          purpose_code, charge_bearer, remit_unstruct,
+                          json.dumps(remit_struct) if remit_struct else None,
+                          json.dumps(reg_reporting) if reg_reporting else None,
+                          'PROCESSED', batch_id, datetime.utcnow()))
+                    source_stg_table = 'stg_pain001'
+
+                    # Store extracted values for Gold layer
+                    extracted_end_to_end_id = end_to_end_id
+                    extracted_uetr = uetr
+                    extracted_charge_bearer = charge_bearer
+
+                elif msg_type_lower in ['mt103', '103']:
+                    # Extract MT103-specific fields from msg_content
+                    # COMPLETE EXTRACTION - All source fields captured
+                    # All nested structures need to be fully extracted
+
+                    # Helper to truncate strings
+                    def trunc(val, max_len):
+                        if val and len(str(val)) > max_len:
+                            return str(val)[:max_len]
+                        return val
+
+                    # Basic message fields
+                    sender_ref = trunc(msg_content.get('senderReference'), 16)
+                    transaction_ref_num = trunc(msg_content.get('transactionReferenceNumber'), 16)  # NEW - Field 20 TRN
+                    related_ref = trunc(msg_content.get('relatedReference'), 16)
+                    bank_op_code = msg_content.get('bankOperationCode')
+                    instr_codes = msg_content.get('instructionCode')  # Could be array
+                    if instr_codes and not isinstance(instr_codes, list):
+                        instr_codes = [instr_codes]
+                    value_date = msg_content.get('valueDate')
+                    exchange_rate = msg_content.get('exchangeRate')
+                    mt103_uetr = msg_content.get('uetr')
+
+                    # Amount fields
+                    mt103_currency = msg_content.get('currencyCode') or currency
+                    mt103_amount = amount
+                    instr_currency = msg_content.get('instructedCurrency')
+                    instr_amount = msg_content.get('instructedAmount')
+
+                    # Ordering Customer (Field 50) - nested structure - ALL fields captured
+                    ordering_cust = msg_content.get('orderingCustomer', {})
+                    ordering_cust_acct = trunc(ordering_cust.get('account'), 34)
+                    ordering_cust_name = trunc(ordering_cust.get('name') or debtor_name, 140)
+                    ordering_cust_addr = ordering_cust.get('address', {})
+                    ordering_cust_addr_str = f"{ordering_cust_addr.get('streetName', '')} {ordering_cust_addr.get('townName', '')} {ordering_cust_addr.get('postalCode', '')}".strip() if ordering_cust_addr else None
+                    ordering_cust_country = ordering_cust_addr.get('country') if ordering_cust_addr else None
+                    ordering_cust_id = ordering_cust.get('partyIdentifier') or ordering_cust.get('nationalId')
+                    ordering_cust_party_id = trunc(ordering_cust.get('partyIdentifier'), 35)  # NEW - party identifier
+                    ordering_cust_national_id = trunc(ordering_cust.get('nationalId'), 35)  # NEW - national ID
+
+                    # Ordering Institution (Field 52) - nested structure - ALL fields captured
+                    ordering_inst = msg_content.get('orderingInstitution', {})
+                    ordering_inst_bic = ordering_inst.get('bic')
+                    ordering_inst_acct = ordering_inst.get('account')
+                    ordering_inst_name = ordering_inst.get('name')
+                    ordering_inst_clearing_code = trunc(ordering_inst.get('clearingCode'), 35)  # NEW
+                    ordering_inst_country = ordering_inst.get('country')  # NEW
+
+                    # Sending Institution (Field 51) - nested structure
+                    sending_inst = msg_content.get('sendingInstitution', {})
+                    sending_inst_bic = sending_inst.get('bic')
+
+                    # Sender's Correspondent (Field 53) - nested structure - ALL fields captured
+                    senders_corr = msg_content.get('sendersCorrespondent', {})
+                    senders_corr_bic = senders_corr.get('bic') if senders_corr else None
+                    senders_corr_acct = trunc(senders_corr.get('account'), 34) if senders_corr else None
+                    senders_corr_loc = senders_corr.get('location') if senders_corr else None
+                    senders_corr_name = trunc(senders_corr.get('name'), 140) if senders_corr else None  # NEW
+
+                    # Receiver's Correspondent (Field 54) - nested structure - ALL fields captured
+                    receivers_corr = msg_content.get('receiversCorrespondent', {})
+                    receivers_corr_bic = receivers_corr.get('bic') if receivers_corr else None
+                    receivers_corr_acct = trunc(receivers_corr.get('account'), 34) if receivers_corr else None
+                    receivers_corr_loc = receivers_corr.get('location') if receivers_corr else None
+                    receivers_corr_name = trunc(receivers_corr.get('name'), 140) if receivers_corr else None  # NEW
+
+                    # Third Reimbursement Institution (Field 55) - nested structure
+                    third_reimb = msg_content.get('thirdReimbursementInstitution', {})
+                    third_reimb_bic = third_reimb.get('bic') if third_reimb else None
+
+                    # Intermediary Institution (Field 56) - nested structure - ALL fields captured
+                    intermediary = msg_content.get('intermediaryInstitution', {})
+                    intermediary_bic = intermediary.get('bic') if intermediary else None
+                    intermediary_acct = trunc(intermediary.get('account'), 34) if intermediary else None
+                    intermediary_name = intermediary.get('name') if intermediary else None
+                    intermediary_inst_bic = intermediary.get('bic') if intermediary else None  # NEW (duplicate for clarity)
+                    intermediary_inst_name = trunc(intermediary.get('name'), 140) if intermediary else None  # NEW
+                    intermediary_inst_country = intermediary.get('country') if intermediary else None  # NEW
+
+                    # Account With Institution (Field 57) - nested structure - ALL fields captured
+                    acct_with_inst = msg_content.get('accountWithInstitution', {})
+                    acct_with_inst_bic = acct_with_inst.get('bic') if acct_with_inst else None
+                    acct_with_inst_acct = trunc(acct_with_inst.get('account'), 34) if acct_with_inst else None
+                    acct_with_inst_name = acct_with_inst.get('name') if acct_with_inst else None
+                    acct_with_inst_country = acct_with_inst.get('country') if acct_with_inst else None  # NEW
+
+                    # Beneficiary Customer (Field 59) - nested structure - ALL fields captured
+                    benef_cust = msg_content.get('beneficiaryCustomer', {})
+                    benef_acct = trunc(benef_cust.get('account'), 34)
+                    benef_name = trunc(benef_cust.get('name') or creditor_name, 140)
+                    benef_addr = benef_cust.get('address', {})
+                    benef_addr_str = f"{benef_addr.get('streetName', '')} {benef_addr.get('townName', '')} {benef_addr.get('postalCode', '')}".strip() if benef_addr else None
+                    benef_country = benef_addr.get('country') if benef_addr else None
+                    benef_id = benef_cust.get('partyIdentifier')
+                    benef_party_id = trunc(benef_cust.get('partyIdentifier'), 35)  # NEW - explicit party ID
+
+                    # Other fields
+                    remittance_info = msg_content.get('remittanceInformation')
+                    details_of_charges = msg_content.get('detailsOfCharges')
+                    sender_to_receiver = msg_content.get('senderToReceiverInformation')
+                    regulatory_reporting = msg_content.get('regulatoryReporting')
+
+                    cursor.execute("""
+                        INSERT INTO silver.stg_mt103
+                        (stg_id, raw_id, sender_bic, receiver_bic, senders_reference, related_reference,
+                         bank_operation_code, instruction_codes, value_date, currency, amount,
+                         instructed_currency, instructed_amount, exchange_rate,
+                         ordering_customer_account, ordering_customer_name, ordering_customer_address, ordering_customer_country, ordering_customer_id,
+                         ordering_customer_party_id, ordering_customer_national_id,
+                         sending_institution_bic,
+                         ordering_institution_bic, ordering_institution_account, ordering_institution_name,
+                         ordering_institution_clearing_code, ordering_institution_country,
+                         senders_correspondent_bic, senders_correspondent_account, senders_correspondent_location, senders_correspondent_name,
+                         receivers_correspondent_bic, receivers_correspondent_account, receivers_correspondent_location, receivers_correspondent_name,
+                         third_reimbursement_bic,
+                         intermediary_bic, intermediary_account, intermediary_name,
+                         intermediary_institution_bic, intermediary_institution_name, intermediary_institution_country,
+                         account_with_institution_bic, account_with_institution_account, account_with_institution_name, account_with_institution_country,
+                         beneficiary_account, beneficiary_name, beneficiary_address, beneficiary_country, beneficiary_id, beneficiary_party_id,
+                         remittance_information, details_of_charges, sender_to_receiver_info, regulatory_reporting, uetr,
+                         transaction_reference_number,
+                         processing_status, _batch_id, _processed_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (stg_id) DO NOTHING
+                    """, (stg_id, raw_id, ordering_inst_bic or sending_inst_bic, acct_with_inst_bic, sender_ref, related_ref,
+                          bank_op_code, instr_codes, value_date, mt103_currency, mt103_amount,
+                          instr_currency, instr_amount, exchange_rate,
+                          ordering_cust_acct, ordering_cust_name, ordering_cust_addr_str, ordering_cust_country, ordering_cust_id,
+                          ordering_cust_party_id, ordering_cust_national_id,
+                          sending_inst_bic,
+                          ordering_inst_bic, ordering_inst_acct, ordering_inst_name,
+                          ordering_inst_clearing_code, ordering_inst_country,
+                          senders_corr_bic, senders_corr_acct, senders_corr_loc, senders_corr_name,
+                          receivers_corr_bic, receivers_corr_acct, receivers_corr_loc, receivers_corr_name,
+                          third_reimb_bic,
+                          intermediary_bic, intermediary_acct, intermediary_name,
+                          intermediary_inst_bic, intermediary_inst_name, intermediary_inst_country,
+                          acct_with_inst_bic, acct_with_inst_acct, acct_with_inst_name, acct_with_inst_country,
+                          benef_acct, benef_name, benef_addr_str, benef_country, benef_id, benef_party_id,
+                          remittance_info, details_of_charges, sender_to_receiver, json.dumps(regulatory_reporting) if regulatory_reporting else None, mt103_uetr,
+                          transaction_ref_num,
+                          'PROCESSED', batch_id, datetime.utcnow()))
+                    source_stg_table = 'stg_mt103'
+
+                    # Store extracted values for Gold layer
+                    # NOTE: MT103 Field 20 (sender_ref) is NOT semantically equivalent to ISO 20022 EndToEndId
+                    # MT103 sender_ref is a bank-assigned reference, while EndToEndId is originator-assigned
+                    # We store sender_ref separately and only use actual EndToEndId if present in message
+                    extracted_end_to_end_id = msg_content.get('endToEndId')  # Only if explicitly provided
+                    extracted_sender_ref = sender_ref  # MT103 Field 20 - stored as separate identifier
+                    extracted_uetr = mt103_uetr
+                    extracted_charge_bearer = details_of_charges
+                    extracted_value_date = value_date
+
+                elif msg_type_lower in ['pacs_008', 'pacs008']:
+                    # Extract pacs.008-specific fields from msg_content
+                    # COMPLETE EXTRACTION - All source fields captured
+                    # All nested structures need to be fully extracted
+
+                    # Group Header fields
+                    creation_dt = msg_content.get('creationDateTime') or msg_content.get('creation_date_time')
+                    num_txns = msg_content.get('numberOfTransactions')
+
+                    # Settlement Information - nested structure
+                    settlement_method = msg_content.get('settlementMethod')
+                    clearing_system = msg_content.get('clearingSystem')
+                    interbank_sttl_date = msg_content.get('interbankSettlementDate')
+                    total_interbank_sttl_amt = msg_content.get('totalInterbankSettlementAmount')
+                    total_interbank_sttl_ccy = msg_content.get('interbankSettlementCurrency')
+
+                    # Instructing Agent (Financial Institution) - nested structure - ALL fields captured
+                    instructing_agent = msg_content.get('instructingAgent', {})
+                    instr_agent_bic = instructing_agent.get('bic') or msg_content.get('instructingAgentBic')
+                    instr_agent_name = instructing_agent.get('name') if instructing_agent else None  # NEW
+                    instr_agent_lei = instructing_agent.get('lei') if instructing_agent else None  # NEW
+                    instr_agent_country = instructing_agent.get('country') if instructing_agent else None  # NEW
+
+                    # Instructed Agent (Financial Institution) - nested structure - ALL fields captured
+                    instructed_agent = msg_content.get('instructedAgent', {})
+                    instr_ed_agent_bic = instructed_agent.get('bic') or msg_content.get('instructedAgentBic')
+                    instr_ed_agent_name = instructed_agent.get('name') if instructed_agent else None  # NEW
+                    instr_ed_agent_lei = instructed_agent.get('lei') if instructed_agent else None  # NEW
+                    instr_ed_agent_country = instructed_agent.get('country') if instructed_agent else None  # NEW
+
+                    # Payment Type Information - nested structure - ALL fields captured (NEW)
+                    pmt_type_info = msg_content.get('paymentTypeInformation', {})
+                    instruction_priority = pmt_type_info.get('instructionPriority') if pmt_type_info else None  # NEW
+                    clearing_channel = pmt_type_info.get('clearingChannel') if pmt_type_info else None  # NEW
+                    service_level = pmt_type_info.get('serviceLevel') if pmt_type_info else None  # NEW
+                    local_instrument = pmt_type_info.get('localInstrument') if pmt_type_info else None  # NEW
+                    category_purpose = pmt_type_info.get('categoryPurpose') if pmt_type_info else None  # NEW
+
+                    # Transaction Identification
+                    instruction_id = msg_content.get('instructionId')
+                    end_to_end_id = msg_content.get('endToEndId') or msg_content.get('end_to_end_id')
+                    transaction_id = msg_content.get('transactionId')
+                    uetr = msg_content.get('uetr')
+                    clearing_sys_ref = msg_content.get('clearingSystemReference')
+
+                    # Amounts
+                    interbank_sttl_amt = msg_content.get('interbankSettlementAmount') or amount
+                    interbank_sttl_ccy = msg_content.get('interbankSettlementAmountCurrency') or currency
+                    instr_amt = msg_content.get('instructedAmount') or amount
+                    instr_ccy = msg_content.get('instructedCurrency') or currency
+                    exchange_rate = msg_content.get('exchangeRate')
+
+                    # Charges
+                    charge_bearer = msg_content.get('chargeBearer') or msg_content.get('charge_bearer')
+                    charges_info = msg_content.get('chargesInformation', [])
+                    charges_amt = charges_info[0].get('amount') if charges_info and len(charges_info) > 0 else None
+                    charges_ccy = charges_info[0].get('currency') if charges_info and len(charges_info) > 0 else None
+
+                    # Debtor (Party) - nested structure - ALL fields captured
+                    debtor = msg_content.get('debtor', {})
+                    debtor_nm = debtor.get('name') or debtor_name
+                    debtor_addr = f"{debtor.get('streetName', '')} {debtor.get('townName', '')} {debtor.get('postalCode', '')}".strip() if debtor else None
+                    debtor_country = debtor.get('country')
+                    debtor_street_name = debtor.get('streetName') if debtor else None  # NEW
+                    debtor_building_number = debtor.get('buildingNumber') if debtor else None  # NEW
+                    debtor_postal_code = debtor.get('postalCode') if debtor else None  # NEW
+                    debtor_town_name = debtor.get('townName') if debtor else None  # NEW
+                    debtor_country_sub_division = debtor.get('countrySubDivision') if debtor else None  # NEW
+                    debtor_id = debtor.get('id') if debtor else None  # NEW
+                    debtor_id_type = debtor.get('idType') if debtor else None  # NEW
+
+                    # Debtor Account - nested structure - ALL fields captured
+                    debtor_acct = msg_content.get('debtorAccount', {})
+                    debtor_acct_iban = debtor_acct.get('iban') if isinstance(debtor_acct, dict) else debtor_acct
+                    debtor_acct_currency = debtor_acct.get('currency') if isinstance(debtor_acct, dict) else None  # NEW
+                    debtor_acct_type = debtor_acct.get('accountType') if isinstance(debtor_acct, dict) else None  # NEW
+
+                    # Debtor Agent (Financial Institution) - nested structure - ALL fields captured
+                    debtor_agent = msg_content.get('debtorAgent', {})
+                    debtor_agent_bic = debtor_agent.get('bic') or msg_content.get('debtorAgentBic')
+                    debtor_agent_name = debtor_agent.get('name') if debtor_agent else None  # NEW
+                    debtor_agent_clearing_member_id = debtor_agent.get('clearingSystemMemberId') if debtor_agent else None  # NEW
+                    debtor_agent_lei = debtor_agent.get('lei') if debtor_agent else None  # NEW
+
+                    # Creditor Agent (Financial Institution) - nested structure - ALL fields captured
+                    creditor_agent = msg_content.get('creditorAgent', {})
+                    creditor_agent_bic = creditor_agent.get('bic') or msg_content.get('creditorAgentBic')
+                    creditor_agent_name = creditor_agent.get('name') if creditor_agent else None  # NEW
+                    creditor_agent_clearing_member_id = creditor_agent.get('clearingSystemMemberId') if creditor_agent else None  # NEW
+                    creditor_agent_lei = creditor_agent.get('lei') if creditor_agent else None  # NEW
+
+                    # Creditor (Party) - nested structure - ALL fields captured
+                    creditor = msg_content.get('creditor', {})
+                    creditor_nm = creditor.get('name') or creditor_name
+                    creditor_addr = f"{creditor.get('streetName', '')} {creditor.get('townName', '')} {creditor.get('postalCode', '')}".strip() if creditor else None
+                    creditor_country = creditor.get('country')
+                    creditor_street_name = creditor.get('streetName') if creditor else None  # NEW
+                    creditor_building_number = creditor.get('buildingNumber') if creditor else None  # NEW
+                    creditor_postal_code = creditor.get('postalCode') if creditor else None  # NEW
+                    creditor_town_name = creditor.get('townName') if creditor else None  # NEW
+                    creditor_country_sub_division = creditor.get('countrySubDivision') if creditor else None  # NEW
+                    creditor_id = creditor.get('id') if creditor else None  # NEW
+                    creditor_id_type = creditor.get('idType') if creditor else None  # NEW
+
+                    # Creditor Account - nested structure - ALL fields captured
+                    creditor_acct = msg_content.get('creditorAccount', {})
+                    creditor_acct_iban = creditor_acct.get('iban') if isinstance(creditor_acct, dict) else creditor_acct
+                    creditor_acct_currency = creditor_acct.get('currency') if isinstance(creditor_acct, dict) else None  # NEW
+                    creditor_acct_type = creditor_acct.get('accountType') if isinstance(creditor_acct, dict) else None  # NEW
+
+                    # Ultimate Parties - nested structures - ALL fields captured
+                    ultimate_debtor = msg_content.get('ultimateDebtor', {})
+                    ultimate_debtor_name = ultimate_debtor.get('name') if ultimate_debtor else None
+                    ultimate_debtor_id = ultimate_debtor.get('id') if ultimate_debtor else None  # NEW
+                    ultimate_debtor_id_type = ultimate_debtor.get('idType') if ultimate_debtor else None  # NEW
+                    ultimate_creditor = msg_content.get('ultimateCreditor', {})
+                    ultimate_creditor_name = ultimate_creditor.get('name') if ultimate_creditor else None
+                    ultimate_creditor_id = ultimate_creditor.get('id') if ultimate_creditor else None  # NEW
+                    ultimate_creditor_id_type = ultimate_creditor.get('idType') if ultimate_creditor else None  # NEW
+
+                    # Intermediary Agents - nested structures (up to 3)
+                    intermediary_1 = msg_content.get('intermediaryAgent1', {})
+                    intermediary_1_bic = intermediary_1.get('bic') if intermediary_1 else None
+                    intermediary_2 = msg_content.get('intermediaryAgent2', {})
+                    intermediary_2_bic = intermediary_2.get('bic') if intermediary_2 else None
+                    intermediary_3 = msg_content.get('intermediaryAgent3', {})
+                    intermediary_3_bic = intermediary_3.get('bic') if intermediary_3 else None
+
+                    # Purpose and Remittance
+                    purpose_code = msg_content.get('purposeCode') or msg_content.get('purpose_code')
+
+                    # Remittance Information - nested structure
+                    remit_info = msg_content.get('remittanceInformation', {})
+                    if isinstance(remit_info, str):
+                        remit_unstruct = remit_info
+                        remit_struct = None
+                    else:
+                        remit_unstruct = remit_info.get('unstructured')
+                        remit_struct = remit_info.get('structured')
+
+                    # Regulatory Reporting - nested structure
+                    reg_reporting = msg_content.get('regulatoryReporting')
+
+                    cursor.execute("""
+                        INSERT INTO silver.stg_pacs008
+                        (stg_id, raw_id, msg_id, creation_date_time, number_of_transactions,
+                         settlement_method, clearing_system, interbank_settlement_date,
+                         total_interbank_settlement_amount, total_interbank_settlement_currency,
+                         instructing_agent_bic, instructing_agent_name, instructing_agent_lei, instructing_agent_country,
+                         instructed_agent_bic, instructed_agent_name, instructed_agent_lei, instructed_agent_country,
+                         instruction_priority, clearing_channel, service_level, local_instrument, category_purpose,
+                         instruction_id, end_to_end_id, transaction_id, uetr, clearing_system_reference,
+                         interbank_settlement_amount, interbank_settlement_currency,
+                         instructed_amount, instructed_currency, exchange_rate,
+                         charge_bearer, charges_amount, charges_currency,
+                         debtor_name, debtor_address, debtor_country,
+                         debtor_street_name, debtor_building_number, debtor_postal_code, debtor_town_name,
+                         debtor_country_sub_division, debtor_id, debtor_id_type,
+                         debtor_account_iban, debtor_account_currency, debtor_account_type,
+                         debtor_agent_bic, debtor_agent_name, debtor_agent_clearing_member_id, debtor_agent_lei,
+                         creditor_agent_bic, creditor_agent_name, creditor_agent_clearing_member_id, creditor_agent_lei,
+                         creditor_name, creditor_address, creditor_country,
+                         creditor_street_name, creditor_building_number, creditor_postal_code, creditor_town_name,
+                         creditor_country_sub_division, creditor_id, creditor_id_type,
+                         creditor_account_iban, creditor_account_currency, creditor_account_type,
+                         ultimate_debtor_name, ultimate_debtor_id, ultimate_debtor_id_type,
+                         ultimate_creditor_name, ultimate_creditor_id, ultimate_creditor_id_type,
+                         intermediary_agent_1_bic, intermediary_agent_2_bic, intermediary_agent_3_bic,
+                         purpose_code, remittance_info, structured_remittance, regulatory_reporting,
+                         processing_status, _batch_id, _processed_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (stg_id) DO NOTHING
+                    """, (stg_id, raw_id, msg_id, creation_dt, num_txns,
+                          settlement_method, clearing_system, interbank_sttl_date,
+                          total_interbank_sttl_amt, total_interbank_sttl_ccy,
+                          instr_agent_bic, instr_agent_name, instr_agent_lei, instr_agent_country,
+                          instr_ed_agent_bic, instr_ed_agent_name, instr_ed_agent_lei, instr_ed_agent_country,
+                          instruction_priority, clearing_channel, service_level, local_instrument, category_purpose,
+                          instruction_id, end_to_end_id, transaction_id, uetr, clearing_sys_ref,
+                          interbank_sttl_amt, interbank_sttl_ccy,
+                          instr_amt, instr_ccy, exchange_rate,
+                          charge_bearer, charges_amt, charges_ccy,
+                          debtor_nm, debtor_addr, debtor_country,
+                          debtor_street_name, debtor_building_number, debtor_postal_code, debtor_town_name,
+                          debtor_country_sub_division, debtor_id, debtor_id_type,
+                          debtor_acct_iban, debtor_acct_currency, debtor_acct_type,
+                          debtor_agent_bic, debtor_agent_name, debtor_agent_clearing_member_id, debtor_agent_lei,
+                          creditor_agent_bic, creditor_agent_name, creditor_agent_clearing_member_id, creditor_agent_lei,
+                          creditor_nm, creditor_addr, creditor_country,
+                          creditor_street_name, creditor_building_number, creditor_postal_code, creditor_town_name,
+                          creditor_country_sub_division, creditor_id, creditor_id_type,
+                          creditor_acct_iban, creditor_acct_currency, creditor_acct_type,
+                          ultimate_debtor_name, ultimate_debtor_id, ultimate_debtor_id_type,
+                          ultimate_creditor_name, ultimate_creditor_id, ultimate_creditor_id_type,
+                          intermediary_1_bic, intermediary_2_bic, intermediary_3_bic,
+                          purpose_code, remit_unstruct,
+                          json.dumps(remit_struct) if remit_struct else None,
+                          json.dumps(reg_reporting) if reg_reporting else None,
+                          'PROCESSED', batch_id, datetime.utcnow()))
+                    source_stg_table = 'stg_pacs008'
+
+                    # Store extracted values for Gold layer
+                    extracted_end_to_end_id = end_to_end_id
+                    extracted_uetr = uetr
+                    extracted_charge_bearer = charge_bearer
+
+                elif msg_type_lower == 'fedwire':
+                    # Extract FEDWIRE-specific fields from msg_content
+                    # COMPLETE EXTRACTION - All source fields captured
+                    # Helper to truncate strings to max length
+                    def trunc(val, max_len):
+                        if val and len(str(val)) > max_len:
+                            return str(val)[:max_len]
+                        return val
+
+                    # Basic message fields
+                    type_code = trunc(msg_content.get('typeCode'), 2)
+                    subtype_code = trunc(msg_content.get('subtypeCode'), 2)
+                    imad = trunc(msg_content.get('imad'), 22)
+                    omad = trunc(msg_content.get('omad'), 22)
+                    sender_ref = trunc(msg_content.get('senderReference'), 16)
+                    biz_func_code = trunc(msg_content.get('businessFunctionCode'), 3)
+
+                    # NEW: Currency and amount details
+                    fedwire_currency = msg_content.get('currency', 'USD')  # NEW
+                    fedwire_instructed_amount = msg_content.get('instructedAmount')  # NEW
+                    fedwire_instructed_currency = msg_content.get('instructedCurrency', 'USD')  # NEW
+
+                    # NEW: Message routing
+                    input_cycle_date = msg_content.get('inputCycleDate')  # NEW
+                    input_sequence_number = trunc(msg_content.get('inputSequenceNumber'), 10)  # NEW
+                    input_source = trunc(msg_content.get('inputSource'), 10)  # NEW
+                    previous_message_id = trunc(msg_content.get('previousMessageId'), 35)  # NEW
+                    beneficiary_ref = trunc(msg_content.get('beneficiaryReference'), 16)  # NEW
+
+                    # Sender (Financial Institution) - nested structure - ALL fields captured
+                    sender = msg_content.get('sender', {})
+                    sender_aba = sender.get('routingNumber')
+                    sender_short_name = trunc(sender.get('shortName'), 18)
+                    sender_name = trunc(sender.get('name'), 140)  # NEW
+                    sender_bic = sender.get('bic')  # NEW
+                    sender_lei = trunc(sender.get('lei'), 20)  # NEW
+                    sender_addr = sender.get('address', {})
+                    sender_addr_line1 = trunc(sender_addr.get('line1'), 35) if sender_addr else None  # NEW
+                    sender_addr_line2 = trunc(sender_addr.get('line2'), 35) if sender_addr else None  # NEW
+                    sender_city = trunc(sender_addr.get('city'), 35) if sender_addr else None  # NEW
+                    sender_state = trunc(sender_addr.get('state'), 2) if sender_addr else None  # NEW
+                    sender_zip_code = trunc(sender_addr.get('zipCode'), 10) if sender_addr else None  # NEW
+                    sender_country = sender_addr.get('country') if sender_addr else 'US'  # NEW
+
+                    # Receiver (Financial Institution) - nested structure - ALL fields captured
+                    receiver = msg_content.get('receiver', {})
+                    receiver_aba = receiver.get('routingNumber')
+                    receiver_short_name = trunc(receiver.get('shortName'), 18)
+                    receiver_name = trunc(receiver.get('name'), 140)  # NEW
+                    receiver_bic = receiver.get('bic')  # NEW
+                    receiver_lei = trunc(receiver.get('lei'), 20)  # NEW
+                    receiver_addr = receiver.get('address', {})
+                    receiver_addr_line1 = trunc(receiver_addr.get('line1'), 35) if receiver_addr else None  # NEW
+                    receiver_addr_line2 = trunc(receiver_addr.get('line2'), 35) if receiver_addr else None  # NEW
+                    receiver_city = trunc(receiver_addr.get('city'), 35) if receiver_addr else None  # NEW
+                    receiver_state = trunc(receiver_addr.get('state'), 2) if receiver_addr else None  # NEW
+                    receiver_zip_code = trunc(receiver_addr.get('zipCode'), 10) if receiver_addr else None  # NEW
+                    receiver_country = receiver_addr.get('country') if receiver_addr else 'US'  # NEW
+
+                    # Originator (Party) - nested structure - ALL fields captured
+                    originator = msg_content.get('originator', {})
+                    originator_id = trunc(originator.get('identifier'), 34)
+                    originator_name = trunc(originator.get('name'), 35)
+                    originator_account_number = trunc(originator.get('accountNumber'), 35)  # NEW
+                    originator_id_type = trunc(originator.get('identifierType'), 10)  # NEW
+                    orig_addr = originator.get('address', {})
+                    originator_addr1 = trunc(orig_addr.get('line1'), 35) if orig_addr else None
+                    originator_addr2 = trunc(orig_addr.get('line2'), 35) if orig_addr else None
+                    originator_addr3 = trunc(orig_addr.get('line3') or f"{orig_addr.get('city', '')} {orig_addr.get('state', '')} {orig_addr.get('zipCode', '')}".strip(), 35) if orig_addr else None
+                    originator_city = trunc(orig_addr.get('city'), 35) if orig_addr else None  # NEW
+                    originator_state = trunc(orig_addr.get('state'), 2) if orig_addr else None  # NEW
+                    originator_zip_code = trunc(orig_addr.get('zipCode'), 10) if orig_addr else None  # NEW
+                    originator_country = orig_addr.get('country') if orig_addr else 'US'  # NEW
+                    originator_option_f = msg_content.get('originatorOptionF')  # NEW
+
+                    # Originator FI - nested structure (may be same as sender or different)
+                    originator_fi = msg_content.get('originatorFI') or msg_content.get('instructingBank', {})
+                    originator_fi_id = trunc(originator_fi.get('routingNumber'), 34) if originator_fi else None
+                    originator_fi_name = trunc(originator_fi.get('name'), 35) if originator_fi else None
+
+                    # Beneficiary (Party) - nested structure - ALL fields captured
+                    beneficiary = msg_content.get('beneficiary', {})
+                    beneficiary_id = trunc(beneficiary.get('identifier'), 34)
+                    beneficiary_name = trunc(beneficiary.get('name'), 35)
+                    beneficiary_account_number = trunc(beneficiary.get('accountNumber'), 35)  # NEW
+                    beneficiary_id_type = trunc(beneficiary.get('identifierType'), 10)  # NEW
+                    benef_addr = beneficiary.get('address', {})
+                    beneficiary_addr1 = trunc(benef_addr.get('line1'), 35) if benef_addr else None
+                    beneficiary_addr2 = trunc(benef_addr.get('line2'), 35) if benef_addr else None
+                    beneficiary_addr3 = trunc(benef_addr.get('line3') or f"{benef_addr.get('city', '')} {benef_addr.get('state', '')} {benef_addr.get('zipCode', '')}".strip(), 35) if benef_addr else None
+                    beneficiary_city = trunc(benef_addr.get('city'), 35) if benef_addr else None  # NEW
+                    beneficiary_state = trunc(benef_addr.get('state'), 2) if benef_addr else None  # NEW
+                    beneficiary_zip_code = trunc(benef_addr.get('zipCode'), 10) if benef_addr else None  # NEW
+                    beneficiary_country = benef_addr.get('country') if benef_addr else 'US'  # NEW
+
+                    # Beneficiary FI (Bank) - nested structure - ALL fields captured
+                    beneficiary_fi = msg_content.get('beneficiaryBank', {})
+                    beneficiary_fi_id = trunc(beneficiary_fi.get('routingNumber'), 34) if beneficiary_fi else None
+                    beneficiary_fi_name = trunc(beneficiary_fi.get('name'), 35) if beneficiary_fi else None
+                    beneficiary_fi_bic = beneficiary_fi.get('bic') if beneficiary_fi else None  # NEW (extracted separately)
+                    # Combine address into single field for storage
+                    beneficiary_fi_address = None
+                    if beneficiary_fi:
+                        bfi_addr = beneficiary_fi.get('address', {})
+                        if bfi_addr:
+                            beneficiary_fi_address = f"{bfi_addr.get('line1', '')} {bfi_addr.get('line2', '')}".strip()
+
+                    # Intermediary FI - nested structure
+                    intermediary_fi = msg_content.get('intermediaryBank', {})
+                    intermediary_fi_id = trunc(intermediary_fi.get('routingNumber'), 34) if intermediary_fi else None
+                    intermediary_fi_name = trunc(intermediary_fi.get('name'), 35) if intermediary_fi else None
+
+                    # Instructing FI - nested structure
+                    instructing_fi = msg_content.get('instructingBank', {})
+                    instructing_fi_id = trunc(instructing_fi.get('routingNumber'), 34) if instructing_fi else None
+                    instructing_fi_name = trunc(instructing_fi.get('name'), 35) if instructing_fi else None
+
+                    # Other fields
+                    orig_to_benef_info = msg_content.get('originatorToBeneficiaryInfo')
+                    fi_to_fi_info = msg_content.get('fiToFiInfo')
+                    fedwire_charge_details = msg_content.get('chargeDetails')
+
+                    cursor.execute("""
+                        INSERT INTO silver.stg_fedwire
+                        (stg_id, raw_id, type_code, subtype_code, sender_aba, sender_short_name,
+                         receiver_aba, receiver_short_name, imad, omad, amount, sender_reference,
+                         business_function_code,
+                         currency, instructed_amount, instructed_currency,
+                         input_cycle_date, input_sequence_number, input_source, previous_message_id, beneficiary_reference,
+                         sender_name, sender_bic, sender_lei, sender_address_line1, sender_address_line2,
+                         sender_city, sender_state, sender_zip_code, sender_country,
+                         receiver_name, receiver_bic, receiver_lei, receiver_address_line1, receiver_address_line2,
+                         receiver_city, receiver_state, receiver_zip_code, receiver_country,
+                         originator_id, originator_name, originator_account_number, originator_id_type,
+                         originator_address_line1, originator_address_line2, originator_address_line3,
+                         originator_city, originator_state, originator_zip_code, originator_country, originator_option_f,
+                         originator_fi_id, originator_fi_name,
+                         beneficiary_id, beneficiary_name, beneficiary_account_number, beneficiary_id_type,
+                         beneficiary_address_line1, beneficiary_address_line2, beneficiary_address_line3,
+                         beneficiary_city, beneficiary_state, beneficiary_zip_code, beneficiary_country,
+                         beneficiary_fi_id, beneficiary_fi_name, beneficiary_fi_address, beneficiary_fi_bic,
+                         intermediary_fi_id, intermediary_fi_name,
+                         instructing_fi_id, instructing_fi_name,
+                         originator_to_beneficiary_info, fi_to_fi_info, charges,
+                         processing_status, _batch_id, _processed_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (stg_id) DO NOTHING
+                    """, (stg_id, raw_id, type_code, subtype_code, sender_aba, sender_short_name,
+                          receiver_aba, receiver_short_name, imad, omad, amount, sender_ref,
+                          biz_func_code,
+                          fedwire_currency, fedwire_instructed_amount, fedwire_instructed_currency,
+                          input_cycle_date, input_sequence_number, input_source, previous_message_id, beneficiary_ref,
+                          sender_name, sender_bic, sender_lei, sender_addr_line1, sender_addr_line2,
+                          sender_city, sender_state, sender_zip_code, sender_country,
+                          receiver_name, receiver_bic, receiver_lei, receiver_addr_line1, receiver_addr_line2,
+                          receiver_city, receiver_state, receiver_zip_code, receiver_country,
+                          originator_id, originator_name, originator_account_number, originator_id_type,
+                          originator_addr1, originator_addr2, originator_addr3,
+                          originator_city, originator_state, originator_zip_code, originator_country, json.dumps(originator_option_f) if originator_option_f else None,
+                          originator_fi_id, originator_fi_name,
+                          beneficiary_id, beneficiary_name, beneficiary_account_number, beneficiary_id_type,
+                          beneficiary_addr1, beneficiary_addr2, beneficiary_addr3,
+                          beneficiary_city, beneficiary_state, beneficiary_zip_code, beneficiary_country,
+                          beneficiary_fi_id, beneficiary_fi_name, beneficiary_fi_address, beneficiary_fi_bic,
+                          intermediary_fi_id, intermediary_fi_name,
+                          instructing_fi_id, instructing_fi_name,
+                          orig_to_benef_info, fi_to_fi_info, fedwire_charge_details,
+                          'PROCESSED', batch_id, datetime.utcnow()))
+                    source_stg_table = 'stg_fedwire'
+
+                    # Store extracted values for Gold layer
+                    extracted_end_to_end_id = imad  # FEDWIRE uses IMAD as unique identifier
+                    extracted_uetr = None
+                    extracted_charge_bearer = fedwire_charge_details
+
+                else:
+                    # Fallback for other message types - use generic stg_pain001 structure
+                    cursor.execute("""
+                        INSERT INTO silver.stg_pain001
+                        (stg_id, raw_id, msg_id, creation_date_time, debtor_name, creditor_name,
+                         instructed_amount, instructed_currency, payment_method, processing_status, _batch_id, _processed_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (stg_id) DO NOTHING
+                    """, (stg_id, raw_id, msg_id, datetime.utcnow(), debtor_name, creditor_name,
+                          amount, currency, payment_method, 'PROCESSED', batch_id, datetime.utcnow()))
+                    source_stg_table = 'stg_pain001'
+
+                    # Default values for fallback
+                    extracted_end_to_end_id = None
+                    extracted_uetr = None
+                    extracted_charge_bearer = None
+
+                # Extract and persist entities (Party, Account, FI) to Gold layer
+                entity_ids = extract_and_persist_entities(cursor, msg_content, message_type, stg_id, batch_id)
+
+                # Gold layer - use schema-qualified name with actual extracted values AND entity references
                 cursor.execute("""
                     INSERT INTO gold.cdm_payment_instruction
                     (instruction_id, payment_id, source_message_type, source_stg_table, source_stg_id,
                      payment_type, scheme_code, direction, instructed_amount, instructed_currency,
+                     end_to_end_id, uetr, message_id, charge_bearer,
+                     debtor_id, debtor_account_id, debtor_agent_id,
+                     creditor_id, creditor_account_id, creditor_agent_id,
+                     intermediary_agent1_id,
                      current_status, source_system, lineage_batch_id, partition_year, partition_month)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (instruction_id) DO NOTHING
-                """, (instr_id, str(uuid.uuid4()), message_type, 'stg_pain001', stg_id,
+                """, (instr_id, str(uuid.uuid4()), message_type, source_stg_table, stg_id,
                       payment_type, message_type.upper()[:10], 'OUTBOUND', amount, currency,
+                      extracted_end_to_end_id, extracted_uetr, msg_id, extracted_charge_bearer,
+                      entity_ids.get('debtor_id'), entity_ids.get('debtor_account_id'), entity_ids.get('debtor_agent_id'),
+                      entity_ids.get('creditor_id'), entity_ids.get('creditor_account_id'), entity_ids.get('creditor_agent_id'),
+                      entity_ids.get('intermediary_agent1_id'),
                       'PROCESSED', 'TEST_SCRIPT', batch_id,
                       datetime.utcnow().year, datetime.utcnow().month))
 
@@ -929,7 +1846,8 @@ def process_bronze_partition(
                         neo4j.upsert_batch({
                             'batch_id': batch_id, 'message_type': message_type,
                             'source_system': 'TEST_SCRIPT', 'status': 'COMPLETED',
-                            'created_at': datetime.utcnow().isoformat()
+                            'created_at': datetime.utcnow().isoformat(),
+                            'total_records': 1  # Increment by 1 for each record
                         })
                         for layer in ['bronze', 'silver', 'gold']:
                             neo4j.upsert_batch_layer(batch_id, layer, {

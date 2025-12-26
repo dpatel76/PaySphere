@@ -61,13 +61,20 @@ CREATE TABLE IF NOT EXISTS silver.stg_pacs008 (
     creditor_account_iban VARCHAR(34),
     creditor_agent_bic VARCHAR(11),
 
-    -- Intermediary
-    intermediary_agent1_bic VARCHAR(11),
-    intermediary_agent2_bic VARCHAR(11),
+    -- Ultimate Parties
+    ultimate_debtor_name VARCHAR(140),
+    ultimate_creditor_name VARCHAR(140),
+
+    -- Intermediary Agents (up to 3)
+    intermediary_agent_1_bic VARCHAR(11),
+    intermediary_agent_2_bic VARCHAR(11),
+    intermediary_agent_3_bic VARCHAR(11),
 
     -- Purpose
     purpose_code VARCHAR(10),
     remittance_info TEXT,
+    structured_remittance JSONB,
+    regulatory_reporting JSONB,
 
     -- Metadata
     processing_status VARCHAR(20) DEFAULT 'PENDING',

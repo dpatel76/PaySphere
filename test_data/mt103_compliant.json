@@ -1,0 +1,434 @@
+{
+  "records": [
+    {
+      "messageId": "MT103-20251225-0001",
+      "senderReference": "REF20251225001JPM",
+      "bankOperationCode": "CRED",
+      "instructionCode": "SDVA",
+      "transactionReferenceNumber": "TRN2025122500001",
+      "relatedReference": "RELREF2025001",
+      "valueDate": "2025-12-26",
+      "currencyCode": "USD",
+      "amount": 75000.00,
+      "instructedAmount": 75000.00,
+      "instructedCurrency": "USD",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "Global Manufacturing Corp",
+        "account": "123456789012",
+        "address": {
+          "streetName": "100 Industrial Way",
+          "townName": "Chicago",
+          "countrySubDivision": "IL",
+          "country": "US",
+          "postalCode": "60601"
+        },
+        "partyIdentifier": "GLMFG001",
+        "nationalId": "12-3456789"
+      },
+      "orderingInstitution": {
+        "bic": "CHASUS33XXX",
+        "name": "JPMorgan Chase Bank NA",
+        "clearingCode": "021000021",
+        "country": "US"
+      },
+      "sendersCorrespondent": {
+        "bic": "CHASUS33XXX",
+        "account": "001-1-000000",
+        "name": "JPMorgan Chase Bank NA"
+      },
+      "receiversCorrespondent": {
+        "bic": "BABOROB2XXX",
+        "account": "400-1-000000",
+        "name": "Barclays Bank PLC"
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "BABOROB2XXX",
+        "name": "Barclays Bank PLC",
+        "country": "GB"
+      },
+      "beneficiaryCustomer": {
+        "name": "British Engineering Solutions Ltd",
+        "account": "GB82BARC20035398765432",
+        "address": {
+          "streetName": "50 Canary Wharf",
+          "townName": "London",
+          "countrySubDivision": "England",
+          "country": "GB",
+          "postalCode": "E14 5AB"
+        },
+        "partyIdentifier": "BRENG001"
+      },
+      "remittanceInformation": "Payment for Engineering Contract EC-2025-001",
+      "detailsOfCharges": "SHA",
+      "senderToReceiverInformation": "/ACC/PRIORITY PAYMENT FOR CONTRACT",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "SERV",
+        "amount": 75000.00,
+        "currency": "USD",
+        "country": "US"
+      }
+    },
+    {
+      "messageId": "MT103-20251225-0002",
+      "senderReference": "REF20251225002CITI",
+      "bankOperationCode": "CRED",
+      "instructionCode": "REPA",
+      "transactionReferenceNumber": "TRN2025122500002",
+      "relatedReference": "RELREF2025002",
+      "valueDate": "2025-12-27",
+      "currencyCode": "EUR",
+      "amount": 150000.00,
+      "instructedAmount": 150000.00,
+      "instructedCurrency": "EUR",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "European Trade Partners GmbH",
+        "account": "DE89370400440532013000",
+        "address": {
+          "streetName": "Friedrichstrasse 200",
+          "townName": "Frankfurt",
+          "countrySubDivision": "Hessen",
+          "country": "DE",
+          "postalCode": "60311"
+        },
+        "partyIdentifier": "EUTRP001",
+        "nationalId": "DE123456789"
+      },
+      "orderingInstitution": {
+        "bic": "CITIDEFFXXX",
+        "name": "Citibank Europe PLC Germany Branch",
+        "clearingCode": "37040044",
+        "country": "DE"
+      },
+      "sendersCorrespondent": {
+        "bic": "CITIDEFFXXX",
+        "account": "370-4-004400",
+        "name": "Citibank Europe PLC"
+      },
+      "receiversCorrespondent": {
+        "bic": "ABOROB2XXXX",
+        "account": "500-1-000000",
+        "name": "ABN AMRO Bank NV"
+      },
+      "intermediaryInstitution": {
+        "bic": "COBADEFFXXX",
+        "name": "Commerzbank AG",
+        "country": "DE"
+      },
+      "accountWithInstitution": {
+        "bic": "ABOROB2XXXX",
+        "name": "ABN AMRO Bank NV",
+        "country": "NL"
+      },
+      "beneficiaryCustomer": {
+        "name": "Dutch Industrial Supplies BV",
+        "account": "NL91ABNA0417164300",
+        "address": {
+          "streetName": "Keizersgracht 500",
+          "townName": "Amsterdam",
+          "countrySubDivision": "Noord-Holland",
+          "country": "NL",
+          "postalCode": "1017EJ"
+        },
+        "partyIdentifier": "DUTIS001"
+      },
+      "remittanceInformation": "Industrial equipment order PO-EU-2025-500",
+      "detailsOfCharges": "OUR",
+      "senderToReceiverInformation": "/RFB/EQUIPMENT ORDER PRIORITY",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "GDDS",
+        "amount": 150000.00,
+        "currency": "EUR",
+        "country": "DE"
+      }
+    },
+    {
+      "messageId": "MT103-20251225-0003",
+      "senderReference": "REF20251225003WF",
+      "bankOperationCode": "CRED",
+      "instructionCode": "SDVA",
+      "transactionReferenceNumber": "TRN2025122500003",
+      "relatedReference": "",
+      "valueDate": "2025-12-26",
+      "currencyCode": "GBP",
+      "amount": 45000.00,
+      "instructedAmount": 45000.00,
+      "instructedCurrency": "GBP",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "Pacific Rim Trading LLC",
+        "account": "789012345678",
+        "address": {
+          "streetName": "One Market Street",
+          "townName": "San Francisco",
+          "countrySubDivision": "CA",
+          "country": "US",
+          "postalCode": "94105"
+        },
+        "partyIdentifier": "PACRT001",
+        "nationalId": "94-1234567"
+      },
+      "orderingInstitution": {
+        "bic": "WFBIUS6SXXX",
+        "name": "Wells Fargo Bank NA",
+        "clearingCode": "121000248",
+        "country": "US"
+      },
+      "sendersCorrespondent": {
+        "bic": "WFBIUS6SXXX",
+        "account": "121-0-000248",
+        "name": "Wells Fargo Bank NA"
+      },
+      "receiversCorrespondent": {
+        "bic": "NABOROB2XXX",
+        "account": "600-1-000000",
+        "name": "NatWest Bank PLC"
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "NABOROB2XXX",
+        "name": "NatWest Bank PLC",
+        "country": "GB"
+      },
+      "beneficiaryCustomer": {
+        "name": "Scottish Textiles Manufacturing Ltd",
+        "account": "GB29NWBK60161331926819",
+        "address": {
+          "streetName": "100 Royal Mile",
+          "townName": "Edinburgh",
+          "countrySubDivision": "Scotland",
+          "country": "GB",
+          "postalCode": "EH1 1SG"
+        },
+        "partyIdentifier": "SCOTX001"
+      },
+      "remittanceInformation": "Textile materials order TM-2025-UK-100",
+      "detailsOfCharges": "SHA",
+      "senderToReceiverInformation": "",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "GDDS",
+        "amount": 45000.00,
+        "currency": "GBP",
+        "country": "US"
+      }
+    },
+    {
+      "messageId": "MT103-20251225-0004",
+      "senderReference": "REF20251225004BOA",
+      "bankOperationCode": "CRED",
+      "instructionCode": "CHQB",
+      "transactionReferenceNumber": "TRN2025122500004",
+      "relatedReference": "RELREF2025004",
+      "valueDate": "2025-12-28",
+      "currencyCode": "JPY",
+      "amount": 15000000,
+      "instructedAmount": 15000000,
+      "instructedCurrency": "JPY",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "Asian Electronics Distribution Inc",
+        "account": "012345678901",
+        "address": {
+          "streetName": "500 Tech Park Boulevard",
+          "townName": "Austin",
+          "countrySubDivision": "TX",
+          "country": "US",
+          "postalCode": "78701"
+        },
+        "partyIdentifier": "ASEDIS001",
+        "nationalId": "74-9876543"
+      },
+      "orderingInstitution": {
+        "bic": "BOFAUS3NXXX",
+        "name": "Bank of America NA",
+        "clearingCode": "026009593",
+        "country": "US"
+      },
+      "sendersCorrespondent": {
+        "bic": "BOFAUS3NXXX",
+        "account": "026-9-593000",
+        "name": "Bank of America NA"
+      },
+      "receiversCorrespondent": {
+        "bic": "MABOROB2XXX",
+        "account": "700-1-000000",
+        "name": "MUFG Bank Ltd"
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "MABOROB2XXX",
+        "name": "MUFG Bank Ltd",
+        "country": "JP"
+      },
+      "beneficiaryCustomer": {
+        "name": "Tokyo Electronics Manufacturing Co Ltd",
+        "account": "JP12345678901234567890",
+        "address": {
+          "streetName": "1-2-3 Akihabara",
+          "townName": "Tokyo",
+          "countrySubDivision": "Chiyoda-ku",
+          "country": "JP",
+          "postalCode": "101-0021"
+        },
+        "partyIdentifier": "TOKEL001"
+      },
+      "remittanceInformation": "Electronics components shipment ES-2025-JP-789",
+      "detailsOfCharges": "BEN",
+      "senderToReceiverInformation": "/ACC/ELECTRONIC COMPONENTS PAYMENT URGENT",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "GDDS",
+        "amount": 15000000,
+        "currency": "JPY",
+        "country": "US"
+      }
+    },
+    {
+      "messageId": "MT103-20251225-0005",
+      "senderReference": "REF20251225005HSBC",
+      "bankOperationCode": "CRED",
+      "instructionCode": "SDVA",
+      "transactionReferenceNumber": "TRN2025122500005",
+      "relatedReference": "",
+      "valueDate": "2025-12-29",
+      "currencyCode": "CHF",
+      "amount": 200000.00,
+      "instructedAmount": 200000.00,
+      "instructedCurrency": "CHF",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "Luxury Goods Importers LLC",
+        "account": "345678901234",
+        "address": {
+          "streetName": "Fifth Avenue 700",
+          "townName": "New York",
+          "countrySubDivision": "NY",
+          "country": "US",
+          "postalCode": "10019"
+        },
+        "partyIdentifier": "LUXGI001",
+        "nationalId": "13-5678901"
+      },
+      "orderingInstitution": {
+        "bic": "HABOROB2XXX",
+        "name": "HSBC Bank USA NA",
+        "clearingCode": "021001088",
+        "country": "US"
+      },
+      "sendersCorrespondent": {
+        "bic": "HABOROB2XXX",
+        "account": "021-1-001088",
+        "name": "HSBC Bank USA NA"
+      },
+      "receiversCorrespondent": {
+        "bic": "UBSWCHZHXXX",
+        "account": "800-1-000000",
+        "name": "UBS Switzerland AG"
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "UBSWCHZHXXX",
+        "name": "UBS Switzerland AG",
+        "country": "CH"
+      },
+      "beneficiaryCustomer": {
+        "name": "Swiss Precision Timepieces SA",
+        "account": "CH9300762011623852957",
+        "address": {
+          "streetName": "Bahnhofstrasse 45",
+          "townName": "Zurich",
+          "countrySubDivision": "Zurich",
+          "country": "CH",
+          "postalCode": "8001"
+        },
+        "partyIdentifier": "SWPRT001"
+      },
+      "remittanceInformation": "Luxury watch collection order WC-2025-CH-001",
+      "detailsOfCharges": "SHA",
+      "senderToReceiverInformation": "/ACC/LUXURY GOODS PRIORITY PAYMENT",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "GDDS",
+        "amount": 200000.00,
+        "currency": "CHF",
+        "country": "US"
+      }
+    },
+    {
+      "messageId": "MT103-20251225-0006",
+      "senderReference": "REF20251225006STAN",
+      "bankOperationCode": "CRED",
+      "instructionCode": "SDVA",
+      "transactionReferenceNumber": "TRN2025122500006",
+      "relatedReference": "RELREF2025006",
+      "valueDate": "2025-12-27",
+      "currencyCode": "SGD",
+      "amount": 85000.00,
+      "instructedAmount": 85000.00,
+      "instructedCurrency": "SGD",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "Southeast Asia Logistics Corp",
+        "account": "567890123456",
+        "address": {
+          "streetName": "200 Harbor Drive",
+          "townName": "Long Beach",
+          "countrySubDivision": "CA",
+          "country": "US",
+          "postalCode": "90802"
+        },
+        "partyIdentifier": "SEALC001",
+        "nationalId": "95-4567890"
+      },
+      "orderingInstitution": {
+        "bic": "SCBLUS33XXX",
+        "name": "Standard Chartered Bank",
+        "clearingCode": "026002561",
+        "country": "US"
+      },
+      "sendersCorrespondent": {
+        "bic": "SCBLUS33XXX",
+        "account": "026-0-025610",
+        "name": "Standard Chartered Bank"
+      },
+      "receiversCorrespondent": {
+        "bic": "DBSSSGSGXXX",
+        "account": "900-1-000000",
+        "name": "DBS Bank Ltd"
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "DBSSSGSGXXX",
+        "name": "DBS Bank Ltd",
+        "country": "SG"
+      },
+      "beneficiaryCustomer": {
+        "name": "Singapore Shipping Services Pte Ltd",
+        "account": "SG12345678901234567890",
+        "address": {
+          "streetName": "1 Marina Boulevard",
+          "townName": "Singapore",
+          "countrySubDivision": "Central",
+          "country": "SG",
+          "postalCode": "018989"
+        },
+        "partyIdentifier": "SGSHS001"
+      },
+      "remittanceInformation": "Shipping services contract SS-2025-SG-200",
+      "detailsOfCharges": "SHA",
+      "senderToReceiverInformation": "/RFB/SHIPPING SERVICES Q4 2025",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "SERV",
+        "amount": 85000.00,
+        "currency": "SGD",
+        "country": "US"
+      }
+    }
+  ]
+}

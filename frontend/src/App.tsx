@@ -22,6 +22,8 @@ import LineagePage from './pages/LineagePage';
 const DataQualityPage = React.lazy(() => import('./pages/DataQualityPage'));
 const ReconciliationPage = React.lazy(() => import('./pages/ReconciliationPage'));
 const ReprocessPage = React.lazy(() => import('./pages/ReprocessPage'));
+const MonitoringDashboardPage = React.lazy(() => import('./pages/MonitoringDashboardPage'));
+const ErrorsDashboardPage = React.lazy(() => import('./pages/ErrorsDashboardPage'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -72,6 +74,16 @@ const App: React.FC = () => {
                   <Route path="reprocess" element={
                     <React.Suspense fallback={<div>Loading...</div>}>
                       <ReprocessPage />
+                    </React.Suspense>
+                  } />
+                  <Route path="monitoring" element={
+                    <React.Suspense fallback={<div>Loading...</div>}>
+                      <MonitoringDashboardPage />
+                    </React.Suspense>
+                  } />
+                  <Route path="errors" element={
+                    <React.Suspense fallback={<div>Loading...</div>}>
+                      <ErrorsDashboardPage />
                     </React.Suspense>
                   } />
                 </Route>

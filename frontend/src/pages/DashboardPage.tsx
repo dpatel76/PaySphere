@@ -129,9 +129,10 @@ const DashboardPage: React.FC = () => {
   const isLoading = loadingExceptions || loadingDQ || loadingRecon || loadingPipeline;
 
   // Use live data with fallback to defaults
+  // Note: API returns camelCase (dqPassed) which PipelineFlowDiagram expects
   const pipelineStats = pipelineStatsData || {
     bronze: { total: 0, processed: 0, failed: 0, pending: 0 },
-    silver: { total: 0, processed: 0, failed: 0, pending: 0, dq_passed: 0, dq_failed: 0 },
+    silver: { total: 0, processed: 0, failed: 0, pending: 0, dqPassed: 0, dqFailed: 0 },
     gold: { total: 0, processed: 0, failed: 0, pending: 0 },
     analytical: { total: 0, processed: 0, failed: 0, pending: 0 },
   };

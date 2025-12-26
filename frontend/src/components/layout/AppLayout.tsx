@@ -33,6 +33,8 @@ import {
   Settings as SettingsIcon,
   Person as PersonIcon,
   Logout as LogoutIcon,
+  MonitorHeart as MonitoringIcon,
+  ErrorOutline as ErrorIcon,
 } from '@mui/icons-material';
 import { colors } from '../../styles/design-system';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,6 +43,8 @@ const DRAWER_WIDTH = 260;
 
 const navItems = [
   { path: '/', label: 'Pipeline Dashboard', icon: <DashboardIcon /> },
+  { path: '/monitoring', label: 'Full Monitoring', icon: <MonitoringIcon /> },
+  { path: '/errors', label: 'Processing Errors', icon: <ErrorIcon /> },
   { path: '/exceptions', label: 'Exception Handling', icon: <WarningIcon /> },
   { path: '/data-quality', label: 'Data Quality', icon: <CheckCircleIcon /> },
   { path: '/reconciliation', label: 'Reconciliation', icon: <CompareArrowsIcon /> },

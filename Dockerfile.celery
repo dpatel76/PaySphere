@@ -1,0 +1,61 @@
+# GPS CDM - Celery Worker Container
+# Multi-stage build for smaller production image
+
+# Stage 1: Build
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY pyproject.toml ./
+COPY src/ ./src/
+
+# Install dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir .
+
+# Stage 2: Production
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && adduser --disabled-password --gecos "" celeryuser
+
+# Copy Python packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
+
+# Copy application code
+COPY --chown=celeryuser:celeryuser src/ ./src/
+COPY --chown=celeryuser:celeryuser mappings/ ./mappings/
+
+# Switch to non-root user
+USER celeryuser
+
+# Environment variables
+ENV PYTHONPATH=/app/src:$PYTHONPATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    GPS_CDM_DATA_SOURCE=postgresql \
+    CELERY_BROKER_URL=redis://redis:6379/0 \
+    C_FORCE_ROOT=false
+
+# Default concurrency (can be overridden at runtime)
+ENV CELERY_CONCURRENCY=4
+
+# Run the Celery worker
+CMD ["celery", "-A", "gps_cdm.orchestration.celery_tasks", "worker", \
+     "-Q", "celery,bronze,silver,gold,dq,cdc", \
+     "--loglevel=info", \
+     "--concurrency=4"]

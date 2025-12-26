@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party (
     address_line1 VARCHAR(200),
     address_line2 VARCHAR(200),
     street_name VARCHAR(100),
-    building_number VARCHAR(20),
+    building_number VARCHAR(50),
     post_code VARCHAR(20),
     town_name VARCHAR(100),
     country_sub_division VARCHAR(50),

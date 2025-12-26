@@ -19,6 +19,7 @@ interface LayerStats {
   pending: number;
   dqPassed?: number;
   dqFailed?: number;
+  batchCount?: number;
 }
 
 interface PipelineFlowDiagramProps {
@@ -36,6 +37,123 @@ const LayerCard: React.FC<{
 }> = ({ layer, stats, onClick }) => {
   const layerColor = colors.zones[layer];
   const successRate = stats.total > 0 ? ((stats.processed / stats.total) * 100).toFixed(1) : 0;
+
+  // Determine DQ section content based on layer
+  const getDQSection = () => {
+    if (layer === 'bronze') {
+      // Bronze: Show ingestion quality metrics
+      const validRecords = stats.processed;
+      const invalidRecords = stats.failed;
+      return (
+        <Box sx={{ mb: 1.5, pt: 1, borderTop: `1px solid ${colors.grey[200]}` }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            Ingestion Quality
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Chip
+              size="small"
+              icon={<SuccessIcon sx={{ fontSize: 14 }} />}
+              label={validRecords}
+              color="success"
+              variant="outlined"
+              sx={{ fontSize: 11 }}
+            />
+            <Chip
+              size="small"
+              icon={<ErrorIcon sx={{ fontSize: 14 }} />}
+              label={invalidRecords}
+              color="error"
+              variant="outlined"
+              sx={{ fontSize: 11 }}
+            />
+          </Box>
+        </Box>
+      );
+    } else if (layer === 'silver') {
+      // Silver: Show DQ validation metrics
+      return (
+        <Box sx={{ mb: 1.5, pt: 1, borderTop: `1px solid ${colors.grey[200]}` }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            Data Quality
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Chip
+              size="small"
+              icon={<SuccessIcon sx={{ fontSize: 14 }} />}
+              label={stats.dqPassed ?? stats.processed}
+              color="success"
+              variant="outlined"
+              sx={{ fontSize: 11 }}
+            />
+            <Chip
+              size="small"
+              icon={<ErrorIcon sx={{ fontSize: 14 }} />}
+              label={stats.dqFailed ?? stats.failed}
+              color="error"
+              variant="outlined"
+              sx={{ fontSize: 11 }}
+            />
+          </Box>
+        </Box>
+      );
+    } else if (layer === 'gold') {
+      // Gold: Show conformance quality metrics
+      const conformant = stats.processed;
+      const nonConformant = stats.failed;
+      return (
+        <Box sx={{ mb: 1.5, pt: 1, borderTop: `1px solid ${colors.grey[200]}` }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            CDM Conformance
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Chip
+              size="small"
+              icon={<SuccessIcon sx={{ fontSize: 14 }} />}
+              label={conformant}
+              color="success"
+              variant="outlined"
+              sx={{ fontSize: 11 }}
+            />
+            <Chip
+              size="small"
+              icon={<ErrorIcon sx={{ fontSize: 14 }} />}
+              label={nonConformant}
+              color="error"
+              variant="outlined"
+              sx={{ fontSize: 11 }}
+            />
+          </Box>
+        </Box>
+      );
+    } else {
+      // Analytical: Show analytics readiness
+      return (
+        <Box sx={{ mb: 1.5, pt: 1, borderTop: `1px solid ${colors.grey[200]}` }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            Analytics Ready
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Chip
+              size="small"
+              icon={<SuccessIcon sx={{ fontSize: 14 }} />}
+              label={stats.processed}
+              color="success"
+              variant="outlined"
+              sx={{ fontSize: 11 }}
+            />
+            <Chip
+              size="small"
+              icon={<PendingIcon sx={{ fontSize: 14 }} />}
+              label={stats.pending}
+              color="warning"
+              variant="outlined"
+              sx={{ fontSize: 11 }}
+            />
+          </Box>
+        </Box>
+      );
+    }
+  };
 
   return (
     <Paper
@@ -72,8 +190,16 @@ const LayerCard: React.FC<{
 
       {/* Stats */}
       <Box sx={{ mb: 1.5 }}>
+        {stats.batchCount !== undefined && (
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, pb: 0.5, borderBottom: `1px dashed ${colors.grey[200]}` }}>
+            <Typography variant="body2" color="text.secondary">Batches</Typography>
+            <Typography variant="body2" fontWeight={600} color="primary.main">
+              {stats.batchCount.toLocaleString()}
+            </Typography>
+          </Box>
+        )}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">Total</Typography>
+          <Typography variant="body2" color="text.secondary">Records</Typography>
           <Typography variant="body2" fontWeight={600}>{stats.total.toLocaleString()}</Typography>
         </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
@@ -100,32 +226,8 @@ const LayerCard: React.FC<{
         )}
       </Box>
 
-      {/* DQ Stats for Silver */}
-      {stats.dqPassed !== undefined && (
-        <Box sx={{ mb: 1.5, pt: 1, borderTop: `1px solid ${colors.grey[200]}` }}>
-          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-            Data Quality
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <Chip
-              size="small"
-              icon={<SuccessIcon sx={{ fontSize: 14 }} />}
-              label={stats.dqPassed}
-              color="success"
-              variant="outlined"
-              sx={{ fontSize: 11 }}
-            />
-            <Chip
-              size="small"
-              icon={<ErrorIcon sx={{ fontSize: 14 }} />}
-              label={stats.dqFailed}
-              color="error"
-              variant="outlined"
-              sx={{ fontSize: 11 }}
-            />
-          </Box>
-        </Box>
-      )}
+      {/* Quality Section - consistent across all layers */}
+      {getDQSection()}
 
       {/* Progress Bar */}
       <Box>

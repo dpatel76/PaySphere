@@ -64,41 +64,52 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
     pageSize: 25,
   });
 
-  // Fetch batches with pagination
+  // Fetch batches with server-side pagination
   const { data, isLoading, refetch } = useQuery<PaginatedResponse<BatchTrackingExtended>>({
     queryKey: ['batchesExtended', dateRange, paginationModel],
     queryFn: async () => {
       const hoursBack = dateRangeToHoursBack(dateRange);
       const response = await pipelineApi.getBatches({
         hours_back: hoursBack,
-        limit: paginationModel.pageSize,
+        page: paginationModel.page + 1, // API uses 1-indexed pages
+        page_size: paginationModel.pageSize,
       });
 
+      // Handle both paginated response and legacy array response
+      const batches = Array.isArray(response) ? response : (response as any).items || [];
+      const total = Array.isArray(response) ? response.length : (response as any).total || 0;
+      const totalPages = Array.isArray(response) ? 1 : (response as any).total_pages || 1;
+
       // Transform response to extended format
-      // The backend should return extended format, but for now we'll transform
-      const items: BatchTrackingExtended[] = response.map((batch) => ({
+      // Map API response fields to display fields
+      const items: BatchTrackingExtended[] = batches.map((batch: any) => ({
         ...batch,
-        created_at: batch.started_at,
-        bronze_input: batch.bronze_records || 0,
-        bronze_processed: batch.bronze_records || 0,
-        bronze_exceptions: 0,
-        silver_input: batch.bronze_records || 0,
-        silver_processed: batch.silver_records || 0,
+        // Use created_at from API directly (it's already in ISO format)
+        created_at: batch.created_at,
+        // Bronze zone: input = record_count, processed = processed_count
+        bronze_input: batch.record_count || batch.bronze_count || 0,
+        bronze_processed: batch.processed_count || batch.bronze_count || 0,
+        bronze_exceptions: batch.failed_count || 0,
+        // Silver zone: input = processed bronze, processed = silver_count
+        silver_input: batch.processed_count || batch.bronze_count || 0,
+        silver_processed: batch.silver_count || batch.processed_count || 0,
         silver_exceptions: 0,
-        gold_input: batch.silver_records || 0,
-        gold_processed: batch.gold_records || 0,
+        // Gold zone: input = silver, processed = gold_count
+        gold_input: batch.silver_count || batch.processed_count || 0,
+        gold_processed: batch.gold_count || batch.processed_count || 0,
         gold_exceptions: 0,
-        analytics_input: batch.gold_records || 0,
-        analytics_processed: 0,
+        // Analytics zone: input = gold, processed = gold (same for now)
+        analytics_input: batch.gold_count || batch.processed_count || 0,
+        analytics_processed: batch.gold_count || batch.processed_count || 0,
         analytics_exceptions: 0,
       }));
 
       return {
         items,
-        total: items.length,
+        total,
         page: paginationModel.page + 1,
         page_size: paginationModel.pageSize,
-        total_pages: 1,
+        total_pages: totalPages,
       };
     },
     refetchInterval: 30000,
@@ -123,11 +134,13 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
       headerName: 'Batch ID',
       width: 130,
       renderCell: (params: GridRenderCellParams) => (
-        <Tooltip title={params.value}>
-          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
-            {params.value?.substring(0, 8)}...
-          </Typography>
-        </Tooltip>
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
+          <Tooltip title={params.value}>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+              {params.value?.substring(0, 8)}...
+            </Typography>
+          </Tooltip>
+        </Box>
       ),
     },
     {
@@ -140,16 +153,18 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
       headerName: 'Type',
       width: 100,
       renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={params.value}
-          size="small"
-          sx={{
-            backgroundColor: colors.primary.light + '30',
-            color: colors.primary.dark,
-            fontWeight: 500,
-            fontSize: 11,
-          }}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
+          <Chip
+            label={params.value}
+            size="small"
+            sx={{
+              backgroundColor: colors.primary.light + '30',
+              color: colors.primary.dark,
+              fontWeight: 500,
+              fontSize: 11,
+            }}
+          />
+        </Box>
       ),
     },
     {
@@ -157,12 +172,14 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
       headerName: 'Status',
       width: 100,
       renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={params.value}
-          size="small"
-          color={statusColors[params.value] || 'default'}
-          sx={{ fontWeight: 600, fontSize: 11 }}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', height: '100%' }}>
+          <Chip
+            label={params.value}
+            size="small"
+            color={statusColors[params.value] || 'default'}
+            sx={{ fontWeight: 600, fontSize: 11 }}
+          />
+        </Box>
       ),
     },
     // Bronze columns
@@ -190,13 +207,15 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
       align: 'right',
       headerAlign: 'right',
       renderCell: (params: GridRenderCellParams) => (
-        <Typography
-          variant="body2"
-          color={params.value > 0 ? 'error' : 'text.secondary'}
-          fontWeight={params.value > 0 ? 600 : 400}
-        >
-          {params.value}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%', height: '100%' }}>
+          <Typography
+            variant="body2"
+            color={params.value > 0 ? 'error' : 'text.secondary'}
+            fontWeight={params.value > 0 ? 600 : 400}
+          >
+            {params.value}
+          </Typography>
+        </Box>
       ),
     },
     // Silver columns
@@ -224,13 +243,15 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
       align: 'right',
       headerAlign: 'right',
       renderCell: (params: GridRenderCellParams) => (
-        <Typography
-          variant="body2"
-          color={params.value > 0 ? 'error' : 'text.secondary'}
-          fontWeight={params.value > 0 ? 600 : 400}
-        >
-          {params.value}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%', height: '100%' }}>
+          <Typography
+            variant="body2"
+            color={params.value > 0 ? 'error' : 'text.secondary'}
+            fontWeight={params.value > 0 ? 600 : 400}
+          >
+            {params.value}
+          </Typography>
+        </Box>
       ),
     },
     // Gold columns
@@ -258,13 +279,15 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
       align: 'right',
       headerAlign: 'right',
       renderCell: (params: GridRenderCellParams) => (
-        <Typography
-          variant="body2"
-          color={params.value > 0 ? 'error' : 'text.secondary'}
-          fontWeight={params.value > 0 ? 600 : 400}
-        >
-          {params.value}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%', height: '100%' }}>
+          <Typography
+            variant="body2"
+            color={params.value > 0 ? 'error' : 'text.secondary'}
+            fontWeight={params.value > 0 ? 600 : 400}
+          >
+            {params.value}
+          </Typography>
+        </Box>
       ),
     },
     // Analytics columns
@@ -292,13 +315,15 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
       align: 'right',
       headerAlign: 'right',
       renderCell: (params: GridRenderCellParams) => (
-        <Typography
-          variant="body2"
-          color={params.value > 0 ? 'error' : 'text.secondary'}
-          fontWeight={params.value > 0 ? 600 : 400}
-        >
-          {params.value}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%', height: '100%' }}>
+          <Typography
+            variant="body2"
+            color={params.value > 0 ? 'error' : 'text.secondary'}
+            fontWeight={params.value > 0 ? 600 : 400}
+          >
+            {params.value}
+          </Typography>
+        </Box>
       ),
     },
     // Actions
@@ -309,7 +334,7 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
       sortable: false,
       filterable: false,
       renderCell: (params: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}>
           <Tooltip title="View Details">
             <IconButton
               size="small"
@@ -442,7 +467,7 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
         onPaginationModelChange={setPaginationModel}
         pageSizeOptions={[10, 25, 50]}
         rowCount={data?.total || 0}
-        paginationMode="client"
+        paginationMode="server"
         disableRowSelectionOnClick
         autoHeight
         sx={{

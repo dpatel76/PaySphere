@@ -16,7 +16,7 @@ Usage:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from gps_cdm.api.routes import exceptions, data_quality, reconciliation, reprocess, lineage, pipeline, auth, schema, graph
+from gps_cdm.api.routes import exceptions, data_quality, reconciliation, reprocess, lineage, pipeline, auth, schema, graph, errors, websocket
 
 # Create FastAPI app
 app = FastAPI(
@@ -46,6 +46,8 @@ app.include_router(pipeline.router, prefix="/api/v1/pipeline", tags=["Pipeline"]
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(schema.router, prefix="/api/v1/schema", tags=["Schema"])
 app.include_router(graph.router, prefix="/api/v1/graph", tags=["Graph"])
+app.include_router(errors.router, prefix="/api/v1/errors", tags=["Processing Errors"])
+app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
 
 
 @app.get("/health")
@@ -61,6 +63,7 @@ async def root():
         "name": "GPS CDM API",
         "version": "1.0.0",
         "endpoints": {
+            "errors": "/api/v1/errors",
             "exceptions": "/api/v1/exceptions",
             "data_quality": "/api/v1/dq",
             "reconciliation": "/api/v1/recon",
@@ -70,6 +73,7 @@ async def root():
             "schema": "/api/v1/schema",
             "graph": "/api/v1/graph",
             "auth": "/api/v1/auth",
+            "websocket": "/api/v1/ws/stream",
             "docs": "/docs",
         }
     }

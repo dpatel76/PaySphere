@@ -1,0 +1,312 @@
+{
+  "records": [
+    {
+      "messageId": "MT103-2025-001",
+      "senderReference": "REF001CHASE",
+      "bankOperationCode": "CRED",
+      "instructionCode": "SDVA",
+      "transactionReferenceNumber": "TRN2025001",
+      "relatedReference": "RELREF001",
+      "valueDate": "2025-12-26",
+      "currencyCode": "USD",
+      "amount": 25000.00,
+      "instructedAmount": 25000.00,
+      "instructedCurrency": "USD",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "ABC Trading Company",
+        "account": "123456789012",
+        "address": {
+          "streetName": "100 Wall Street",
+          "townName": "New York",
+          "country": "US"
+        },
+        "partyIdentifier": "ABCT001"
+      },
+      "orderingInstitution": {
+        "bic": "CHASUS33XXX",
+        "name": "JPMorgan Chase Bank NA",
+        "clearingCode": "021000021"
+      },
+      "sendersCorrespondent": {
+        "bic": "CHASUS33XXX",
+        "account": "001-1-000000"
+      },
+      "receiversCorrespondent": {
+        "bic": "BOFAUS3NXXX",
+        "account": "026-9-000000"
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "BOFAUS3NXXX",
+        "name": "Bank of America NA"
+      },
+      "beneficiaryCustomer": {
+        "name": "XYZ Import Export Ltd",
+        "account": "987654321098",
+        "address": {
+          "streetName": "200 Commerce Street",
+          "townName": "Los Angeles",
+          "country": "US"
+        },
+        "partyIdentifier": "XYZI001"
+      },
+      "remittanceInformation": "Payment for Invoice INV-2025-5001",
+      "detailsOfCharges": "SHA",
+      "senderToReceiverInformation": "URGENT PAYMENT",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "TRADE",
+        "amount": 25000.00,
+        "currency": "USD"
+      }
+    },
+    {
+      "messageId": "MT103-2025-002",
+      "senderReference": "REF002CITI",
+      "bankOperationCode": "CRED",
+      "instructionCode": "REPA",
+      "transactionReferenceNumber": "TRN2025002",
+      "relatedReference": "RELREF002",
+      "valueDate": "2025-12-27",
+      "currencyCode": "EUR",
+      "amount": 50000.00,
+      "instructedAmount": 50000.00,
+      "instructedCurrency": "EUR",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "European Goods Importer",
+        "account": "456789012345",
+        "address": {
+          "streetName": "50 Broadway",
+          "townName": "New York",
+          "country": "US"
+        },
+        "partyIdentifier": "EUGI001"
+      },
+      "orderingInstitution": {
+        "bic": "CITIUS33XXX",
+        "name": "Citibank NA",
+        "clearingCode": "021000089"
+      },
+      "sendersCorrespondent": {
+        "bic": "CITIUS33XXX",
+        "account": "021-0-000089"
+      },
+      "receiversCorrespondent": {
+        "bic": "DEUTDEFFXXX",
+        "account": ""
+      },
+      "intermediaryInstitution": {
+        "bic": "COBADEFFXXX",
+        "name": "Commerzbank AG"
+      },
+      "accountWithInstitution": {
+        "bic": "DEUTDEFFXXX",
+        "name": "Deutsche Bank AG"
+      },
+      "beneficiaryCustomer": {
+        "name": "German Machinery Exports GmbH",
+        "account": "DE89370400440532013001",
+        "address": {
+          "streetName": "Industriestrasse 100",
+          "townName": "Munich",
+          "country": "DE"
+        },
+        "partyIdentifier": "GMEX001"
+      },
+      "remittanceInformation": "Machinery parts order PO-2025-EU-001",
+      "detailsOfCharges": "OUR",
+      "senderToReceiverInformation": "PRIORITY PAYMENT FOR MACHINERY",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "TRADE",
+        "amount": 50000.00,
+        "currency": "EUR"
+      }
+    },
+    {
+      "messageId": "MT103-2025-003",
+      "senderReference": "REF003WELLS",
+      "bankOperationCode": "CRED",
+      "instructionCode": "SDVA",
+      "transactionReferenceNumber": "TRN2025003",
+      "relatedReference": "",
+      "valueDate": "2025-12-26",
+      "currencyCode": "GBP",
+      "amount": 15000.00,
+      "instructedAmount": 15000.00,
+      "instructedCurrency": "GBP",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "Pacific Rim Traders Inc",
+        "account": "789012345678",
+        "address": {
+          "streetName": "One Market Street",
+          "townName": "San Francisco",
+          "country": "US"
+        },
+        "partyIdentifier": "PRTI001"
+      },
+      "orderingInstitution": {
+        "bic": "WFBIUS6SXXX",
+        "name": "Wells Fargo Bank NA",
+        "clearingCode": "121000248"
+      },
+      "sendersCorrespondent": {
+        "bic": "WFBIUS6SXXX",
+        "account": "121-0-000248"
+      },
+      "receiversCorrespondent": {
+        "bic": "BABOROB2XXX",
+        "account": ""
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "BABOROB2XXX",
+        "name": "Barclays Bank PLC"
+      },
+      "beneficiaryCustomer": {
+        "name": "British Components Ltd",
+        "account": "GB82BARC20035312345678",
+        "address": {
+          "streetName": "100 Canary Wharf",
+          "townName": "London",
+          "country": "GB"
+        },
+        "partyIdentifier": "BRCO001"
+      },
+      "remittanceInformation": "Component order CO-2025-UK-123",
+      "detailsOfCharges": "SHA",
+      "senderToReceiverInformation": "",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "SERV",
+        "amount": 15000.00,
+        "currency": "GBP"
+      }
+    },
+    {
+      "messageId": "MT103-2025-004",
+      "senderReference": "REF004BOA",
+      "bankOperationCode": "CRED",
+      "instructionCode": "CHQB",
+      "transactionReferenceNumber": "TRN2025004",
+      "relatedReference": "RELREF004",
+      "valueDate": "2025-12-28",
+      "currencyCode": "JPY",
+      "amount": 5000000,
+      "instructedAmount": 5000000,
+      "instructedCurrency": "JPY",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "Asian Electronics Corp",
+        "account": "012345678901",
+        "address": {
+          "streetName": "500 Tech Park",
+          "townName": "Austin",
+          "country": "US"
+        },
+        "partyIdentifier": "ASEC001"
+      },
+      "orderingInstitution": {
+        "bic": "BOFAUS3NXXX",
+        "name": "Bank of America NA",
+        "clearingCode": "026009593"
+      },
+      "sendersCorrespondent": {
+        "bic": "BOFAUS3NXXX",
+        "account": "026-9-593000"
+      },
+      "receiversCorrespondent": {
+        "bic": "MABOROB2XXX",
+        "account": ""
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "MABOROB2XXX",
+        "name": "MUFG Bank Ltd"
+      },
+      "beneficiaryCustomer": {
+        "name": "Tokyo Electronics Manufacturing",
+        "account": "JP12345678901234567890",
+        "address": {
+          "streetName": "1-2-3 Shibuya",
+          "townName": "Tokyo",
+          "country": "JP"
+        },
+        "partyIdentifier": "TOEL001"
+      },
+      "remittanceInformation": "Electronics shipment ES-2025-JP-456",
+      "detailsOfCharges": "BEN",
+      "senderToReceiverInformation": "ELECTRONIC COMPONENTS PAYMENT",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "GDDS",
+        "amount": 5000000,
+        "currency": "JPY"
+      }
+    },
+    {
+      "messageId": "MT103-2025-005",
+      "senderReference": "REF005HSBC",
+      "bankOperationCode": "CRED",
+      "instructionCode": "SDVA",
+      "transactionReferenceNumber": "TRN2025005",
+      "relatedReference": "",
+      "valueDate": "2025-12-29",
+      "currencyCode": "CHF",
+      "amount": 100000.00,
+      "instructedAmount": 100000.00,
+      "instructedCurrency": "CHF",
+      "exchangeRate": 1.0,
+      "orderingCustomer": {
+        "name": "Swiss Watch Importers LLC",
+        "account": "345678901234",
+        "address": {
+          "streetName": "Fifth Avenue 700",
+          "townName": "New York",
+          "country": "US"
+        },
+        "partyIdentifier": "SWIL001"
+      },
+      "orderingInstitution": {
+        "bic": "HABOROB2XXX",
+        "name": "HSBC Bank USA NA",
+        "clearingCode": "021001088"
+      },
+      "sendersCorrespondent": {
+        "bic": "HABOROB2XXX",
+        "account": "021-1-001088"
+      },
+      "receiversCorrespondent": {
+        "bic": "UBSWCHZHXXX",
+        "account": ""
+      },
+      "intermediaryInstitution": null,
+      "accountWithInstitution": {
+        "bic": "UBSWCHZHXXX",
+        "name": "UBS Switzerland AG"
+      },
+      "beneficiaryCustomer": {
+        "name": "Precision Timepieces SA",
+        "account": "CH9300762011623852957",
+        "address": {
+          "streetName": "Bahnhofstrasse 45",
+          "townName": "Zurich",
+          "country": "CH"
+        },
+        "partyIdentifier": "PRTS001"
+      },
+      "remittanceInformation": "Watch collection order WC-2025-CH-789",
+      "detailsOfCharges": "SHA",
+      "senderToReceiverInformation": "LUXURY GOODS PAYMENT",
+      "regulatoryReporting": {
+        "reportingSource": "ORDERINGCUST",
+        "code": "GDDS",
+        "amount": 100000.00,
+        "currency": "CHF"
+      }
+    }
+  ]
+}

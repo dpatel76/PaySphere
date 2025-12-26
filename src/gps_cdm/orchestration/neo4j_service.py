@@ -86,6 +86,28 @@ class Neo4jService:
         """Check if Neo4j is available."""
         return self._driver is not None
 
+    def run_query(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Execute a raw Cypher query and return results as list of dicts.
+
+        Args:
+            query: Cypher query string
+            parameters: Optional query parameters
+
+        Returns:
+            List of result records as dictionaries
+        """
+        if not self._driver:
+            return []
+
+        try:
+            with self.session() as session:
+                result = session.run(query, parameters or {})
+                return [dict(record) for record in result]
+        except Exception as e:
+            logger.error(f"Neo4j query error: {e}")
+            return []
+
     # =========================================================================
     # Batch Metadata Operations
     # =========================================================================
@@ -105,15 +127,20 @@ class Neo4jService:
 
         query = """
         MERGE (b:Batch {batch_id: $batch_id})
-        SET b.message_type = $message_type,
+        ON CREATE SET
+            b.message_type = $message_type,
             b.source_system = $source_system,
             b.source_file = $source_file,
             b.status = $status,
             b.created_at = datetime($created_at),
             b.updated_at = datetime(),
+            b.record_count = COALESCE($total_records, 1)
+        ON MATCH SET
+            b.status = $status,
+            b.updated_at = datetime(),
             b.completed_at = CASE WHEN $completed_at IS NOT NULL
-                             THEN datetime($completed_at) ELSE NULL END,
-            b.total_records = $total_records,
+                             THEN datetime($completed_at) ELSE b.completed_at END,
+            b.record_count = COALESCE(b.record_count, 0) + COALESCE($total_records, 1),
             b.duration_ms = $duration_ms
         RETURN b.batch_id
         """
@@ -164,20 +191,30 @@ class Neo4jService:
         query = """
         MATCH (b:Batch {batch_id: $batch_id})
         MERGE (bl:BatchLayer {batch_layer_id: $batch_layer_id})
-        SET bl.batch_id = $batch_id,
+        ON CREATE SET
+            bl.batch_id = $batch_id,
             bl.layer = $layer,
             bl.input_count = $input_count,
             bl.processed_count = $processed_count,
             bl.failed_count = $failed_count,
             bl.pending_count = $pending_count,
-            bl.dq_passed_count = $dq_passed_count,
-            bl.dq_failed_count = $dq_failed_count,
+            bl.dq_passed_count = COALESCE($dq_passed_count, 0),
+            bl.dq_failed_count = COALESCE($dq_failed_count, 0),
             bl.avg_dq_score = $avg_dq_score,
             bl.started_at = CASE WHEN $started_at IS NOT NULL
                             THEN datetime($started_at) ELSE NULL END,
             bl.completed_at = CASE WHEN $completed_at IS NOT NULL
                               THEN datetime($completed_at) ELSE NULL END,
             bl.duration_ms = $duration_ms
+        ON MATCH SET
+            bl.input_count = COALESCE(bl.input_count, 0) + $input_count,
+            bl.processed_count = COALESCE(bl.processed_count, 0) + $processed_count,
+            bl.failed_count = COALESCE(bl.failed_count, 0) + $failed_count,
+            bl.pending_count = COALESCE(bl.pending_count, 0) + $pending_count,
+            bl.dq_passed_count = COALESCE(bl.dq_passed_count, 0) + COALESCE($dq_passed_count, 0),
+            bl.dq_failed_count = COALESCE(bl.dq_failed_count, 0) + COALESCE($dq_failed_count, 0),
+            bl.completed_at = CASE WHEN $completed_at IS NOT NULL
+                              THEN datetime($completed_at) ELSE bl.completed_at END
         MERGE (b)-[:AT_LAYER {sequence: $sequence}]->(bl)
         RETURN bl.batch_layer_id
         """
@@ -586,14 +623,18 @@ class Neo4jService:
         if not self._driver:
             return None
 
-        # Query entities and transforms separately to avoid nested aggregates
+        # Query entities produced by this message type and transforms between them
+        # Only include transforms where BOTH source and target are produced by this message type
         query = """
         MATCH (mt:MessageType {type: $message_type})
         OPTIONAL MATCH (mt)-[:PRODUCES]->(e:CDMEntity)
-        OPTIONAL MATCH (e)-[t:TRANSFORMS_TO]->(e2:CDMEntity)
-        WITH mt, collect(DISTINCT e) as entities,
-             collect(DISTINCT {source: e, target: e2, transform: properties(t)}) as transforms
-        RETURN mt, entities, transforms
+        WITH mt, collect(DISTINCT e) as producedEntities
+        UNWIND producedEntities as e1
+        OPTIONAL MATCH (e1)-[t:TRANSFORMS_TO]->(e2:CDMEntity)
+        WHERE e2 IN producedEntities
+        WITH mt, producedEntities,
+             collect(DISTINCT CASE WHEN t IS NOT NULL THEN {source: e1, target: e2, transform: properties(t)} END) as transforms
+        RETURN mt, producedEntities as entities, [t IN transforms WHERE t IS NOT NULL] as transforms
         """
 
         try:
@@ -611,7 +652,7 @@ class Neo4jService:
                         entities.append(entity_data)
 
                 # Filter out null transforms
-                transforms = [t for t in record["transforms"] if t.get("source") and t.get("target")]
+                transforms = [t for t in record["transforms"] if t and t.get("source") and t.get("target")]
 
                 return {
                     "message_type": dict(record["mt"]),
@@ -758,6 +799,344 @@ class Neo4jService:
                 return [dict(record) for record in result]
         except Exception as e:
             logger.error(f"Failed to get DQ trends: {e}")
+            return []
+
+    # =========================================================================
+    # Dynamic Mapping Sync Operations
+    # =========================================================================
+
+    def sync_message_format_from_db(self, format_data: Dict[str, Any]) -> bool:
+        """
+        Sync a message format from PostgreSQL mapping.message_formats to Neo4j.
+
+        Args:
+            format_data: Message format record from database
+
+        Returns:
+            True if successful
+        """
+        if not self._driver:
+            return False
+
+        query = """
+        MERGE (mt:MessageType {type: $format_id})
+        SET mt.format_name = $format_name,
+            mt.format_family = $format_family,
+            mt.version = $version,
+            mt.description = $description,
+            mt.bronze_table = $bronze_table,
+            mt.silver_table = $silver_table,
+            mt.is_active = $is_active,
+            mt.synced_at = datetime()
+        RETURN mt.type
+        """
+
+        try:
+            with self.session() as session:
+                result = session.run(
+                    query,
+                    format_id=format_data.get("format_id"),
+                    format_name=format_data.get("format_name"),
+                    format_family=format_data.get("format_family"),
+                    version=format_data.get("version"),
+                    description=format_data.get("description"),
+                    bronze_table=format_data.get("bronze_table"),
+                    silver_table=format_data.get("silver_table"),
+                    is_active=format_data.get("is_active", True),
+                )
+                result.consume()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to sync message format: {e}")
+            return False
+
+    def sync_silver_field_mapping(
+        self,
+        format_id: str,
+        mapping: Dict[str, Any],
+    ) -> bool:
+        """
+        Sync a silver field mapping from PostgreSQL to Neo4j.
+
+        Creates a lineage relationship: Bronze -> Silver field mapping.
+
+        Args:
+            format_id: Message format ID
+            mapping: Field mapping record
+
+        Returns:
+            True if successful
+        """
+        if not self._driver:
+            return False
+
+        source_id = f"bronze.raw_content.{mapping.get('source_json_path', '').replace('.', '_')}"
+        target_id = f"silver.{mapping.get('format_id', format_id)}.{mapping.get('target_column')}"
+
+        query = """
+        // Ensure message type exists
+        MERGE (mt:MessageType {type: $format_id})
+
+        // Create source field (bronze raw content)
+        MERGE (source:CDMField {field_id: $source_id})
+        SET source.zone = 'bronze',
+            source.table_name = 'raw_payment_messages',
+            source.field_name = $source_json_path,
+            source.json_path = $source_json_path,
+            source.data_type = 'json'
+
+        // Create target field (silver column)
+        MERGE (target:CDMField {field_id: $target_id})
+        SET target.zone = 'silver',
+            target.table_name = $silver_table,
+            target.field_name = $target_column,
+            target.display_name = $display_name,
+            target.data_type = $target_data_type,
+            target.is_required = $is_required,
+            target.is_primary_key = $is_primary_key
+
+        // Create derived from relationship with transform info
+        MERGE (target)-[r:DERIVED_FROM]->(source)
+        SET r.format_id = $format_id,
+            r.transform_type = $transform_type,
+            r.transform_function = $transform_function,
+            r.default_value = $default_value,
+            r.max_length = $max_length,
+            r.validation_regex = $validation_regex,
+            r.synced_at = datetime()
+
+        // Link target to message type
+        MERGE (mt)-[:PRODUCES]->(target)
+
+        RETURN r
+        """
+
+        try:
+            with self.session() as session:
+                result = session.run(
+                    query,
+                    format_id=format_id,
+                    source_id=source_id,
+                    target_id=target_id,
+                    source_json_path=mapping.get("source_json_path", ""),
+                    silver_table=mapping.get("silver_table", f"stg_{format_id.replace('.', '_')}"),
+                    target_column=mapping.get("target_column"),
+                    display_name=mapping.get("display_name", mapping.get("target_column")),
+                    target_data_type=mapping.get("target_data_type", "VARCHAR"),
+                    is_required=mapping.get("is_required", False),
+                    is_primary_key=mapping.get("is_primary_key", False),
+                    transform_type=mapping.get("transform_type", "direct"),
+                    transform_function=mapping.get("transform_function"),
+                    default_value=mapping.get("default_value"),
+                    max_length=mapping.get("max_length"),
+                    validation_regex=mapping.get("validation_regex"),
+                )
+                result.consume()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to sync silver field mapping: {e}")
+            return False
+
+    def sync_gold_field_mapping(
+        self,
+        format_id: str,
+        mapping: Dict[str, Any],
+    ) -> bool:
+        """
+        Sync a gold field mapping from PostgreSQL to Neo4j.
+
+        Creates a lineage relationship: Silver -> Gold field mapping.
+
+        Args:
+            format_id: Message format ID
+            mapping: Field mapping record
+
+        Returns:
+            True if successful
+        """
+        if not self._driver:
+            return False
+
+        source_id = f"silver.{format_id}.{mapping.get('source_silver_column')}"
+        target_id = f"gold.{mapping.get('target_gold_table')}.{mapping.get('target_gold_column')}"
+
+        query = """
+        // Ensure message type exists
+        MERGE (mt:MessageType {type: $format_id})
+
+        // Create source field (silver column)
+        MERGE (source:CDMField {field_id: $source_id})
+        SET source.zone = 'silver',
+            source.field_name = $source_silver_column
+
+        // Create target field (gold column)
+        MERGE (target:CDMField {field_id: $target_id})
+        SET target.zone = 'gold',
+            target.table_name = $target_gold_table,
+            target.entity_type = $entity_type,
+            target.field_name = $target_gold_column,
+            target.display_name = $display_name,
+            target.data_type = $target_data_type,
+            target.is_required = $is_required
+
+        // Create derived from relationship
+        MERGE (target)-[r:DERIVED_FROM]->(source)
+        SET r.format_id = $format_id,
+            r.transform_type = $transform_type,
+            r.transform_function = $transform_function,
+            r.synced_at = datetime()
+
+        // Link gold entity to message type
+        MERGE (e:CDMEntity {entity_id: $entity_id})
+        SET e.entity_type = $entity_type,
+            e.table_name = $target_gold_table,
+            e.layer = 'gold'
+        MERGE (mt)-[:PRODUCES]->(e)
+        MERGE (e)-[:HAS_FIELD]->(target)
+
+        RETURN r
+        """
+
+        entity_id = f"gold.{mapping.get('target_gold_table')}"
+
+        try:
+            with self.session() as session:
+                result = session.run(
+                    query,
+                    format_id=format_id,
+                    source_id=source_id,
+                    target_id=target_id,
+                    entity_id=entity_id,
+                    source_silver_column=mapping.get("source_silver_column"),
+                    target_gold_table=mapping.get("target_gold_table"),
+                    target_gold_column=mapping.get("target_gold_column"),
+                    entity_type=mapping.get("entity_type"),
+                    display_name=mapping.get("display_name", mapping.get("target_gold_column")),
+                    target_data_type=mapping.get("target_data_type", "VARCHAR"),
+                    is_required=mapping.get("is_required", False),
+                    transform_type=mapping.get("transform_type", "direct"),
+                    transform_function=mapping.get("transform_function"),
+                )
+                result.consume()
+                return True
+        except Exception as e:
+            logger.error(f"Failed to sync gold field mapping: {e}")
+            return False
+
+    def sync_all_mappings_from_postgres(self) -> Dict[str, int]:
+        """
+        Sync all dynamic field mappings from PostgreSQL to Neo4j.
+
+        Reads from mapping.message_formats, mapping.silver_field_mappings,
+        and mapping.gold_field_mappings tables.
+
+        Returns:
+            Dict with counts of synced records
+        """
+        import psycopg2
+
+        stats = {
+            "message_formats": 0,
+            "silver_mappings": 0,
+            "gold_mappings": 0,
+            "errors": 0,
+        }
+
+        try:
+            # Connect to PostgreSQL
+            conn = psycopg2.connect(
+                host=os.getenv("POSTGRES_HOST", "localhost"),
+                port=int(os.getenv("POSTGRES_PORT", 5433)),
+                database=os.getenv("POSTGRES_DB", "gps_cdm"),
+                user=os.getenv("POSTGRES_USER", "gps_cdm_svc"),
+                password=os.getenv("POSTGRES_PASSWORD", "gps_cdm_password"),
+            )
+            cursor = conn.cursor()
+
+            # Sync message formats
+            cursor.execute("SELECT * FROM mapping.message_formats WHERE is_active = true")
+            columns = [desc[0] for desc in cursor.description]
+            for row in cursor.fetchall():
+                format_data = dict(zip(columns, row))
+                if self.sync_message_format_from_db(format_data):
+                    stats["message_formats"] += 1
+                else:
+                    stats["errors"] += 1
+
+            # Sync silver field mappings
+            cursor.execute("SELECT * FROM mapping.silver_field_mappings WHERE is_active = true")
+            columns = [desc[0] for desc in cursor.description]
+            for row in cursor.fetchall():
+                mapping = dict(zip(columns, row))
+                if self.sync_silver_field_mapping(mapping.get("format_id"), mapping):
+                    stats["silver_mappings"] += 1
+                else:
+                    stats["errors"] += 1
+
+            # Sync gold field mappings
+            cursor.execute("SELECT * FROM mapping.gold_field_mappings WHERE is_active = true")
+            columns = [desc[0] for desc in cursor.description]
+            for row in cursor.fetchall():
+                mapping = dict(zip(columns, row))
+                if self.sync_gold_field_mapping(mapping.get("format_id"), mapping):
+                    stats["gold_mappings"] += 1
+                else:
+                    stats["errors"] += 1
+
+            conn.close()
+            logger.info(f"Synced mappings to Neo4j: {stats}")
+
+        except Exception as e:
+            logger.error(f"Failed to sync mappings from PostgreSQL: {e}")
+            stats["errors"] += 1
+
+        return stats
+
+    def get_dynamic_field_lineage(
+        self,
+        format_id: str,
+        target_zone: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get field lineage for a message format from dynamic mappings.
+
+        Args:
+            format_id: Message format ID (e.g., 'pain.001')
+            target_zone: Optional filter for 'silver' or 'gold'
+
+        Returns:
+            List of field lineage records
+        """
+        if not self._driver:
+            return []
+
+        zone_filter = ""
+        if target_zone:
+            zone_filter = f"AND target.zone = '{target_zone}'"
+
+        query = f"""
+        MATCH (mt:MessageType {{type: $format_id}})
+        MATCH (target:CDMField)-[r:DERIVED_FROM]->(source:CDMField)
+        WHERE r.format_id = $format_id {zone_filter}
+        RETURN source.field_id as source_field,
+               source.json_path as source_path,
+               source.zone as source_zone,
+               target.field_id as target_field,
+               target.field_name as target_column,
+               target.zone as target_zone,
+               target.table_name as target_table,
+               target.data_type as data_type,
+               r.transform_type as transform_type,
+               r.transform_function as transform_function
+        ORDER BY target.zone, target.table_name, target.field_name
+        """
+
+        try:
+            with self.session() as session:
+                result = session.run(query, format_id=format_id)
+                return [dict(record) for record in result]
+        except Exception as e:
+            logger.error(f"Failed to get dynamic field lineage: {e}")
             return []
 
 
