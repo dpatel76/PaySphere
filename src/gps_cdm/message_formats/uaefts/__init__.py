@@ -1,0 +1,179 @@
+"""UAE UAEFTS (UAE Funds Transfer System) Extractor - JSON based."""
+
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+import json
+import logging
+
+from ..base import (
+    BaseExtractor,
+    ExtractorRegistry,
+    GoldEntities,
+    PartyData,
+    AccountData,
+    FinancialInstitutionData,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class UaeftsExtractor(BaseExtractor):
+    """Extractor for UAE Funds Transfer System payment messages."""
+
+    MESSAGE_TYPE = "UAEFTS"
+    SILVER_TABLE = "stg_uaefts"
+
+    # =========================================================================
+    # BRONZE EXTRACTION
+    # =========================================================================
+
+    def extract_bronze(self, raw_content: Dict[str, Any], batch_id: str) -> Dict[str, Any]:
+        """Extract Bronze layer record from raw UAEFTS content."""
+        msg_id = raw_content.get('messageId', '') or raw_content.get('transactionReference', '')
+        return {
+            'raw_id': self.generate_raw_id(msg_id),
+            'message_type': self.MESSAGE_TYPE,
+            'raw_content': json.dumps(raw_content) if isinstance(raw_content, dict) else raw_content,
+            'batch_id': batch_id,
+        }
+
+    # =========================================================================
+    # SILVER EXTRACTION
+    # =========================================================================
+
+    def extract_silver(
+        self,
+        msg_content: Dict[str, Any],
+        raw_id: str,
+        stg_id: str,
+        batch_id: str
+    ) -> Dict[str, Any]:
+        """Extract all Silver layer fields from UAEFTS message."""
+        trunc = self.trunc
+
+        return {
+            'stg_id': stg_id,
+            'raw_id': raw_id,
+            '_batch_id': batch_id,
+
+            # Message Type
+            'message_type': 'UAEFTS',
+            'message_id': trunc(msg_content.get('messageId'), 35),
+            'creation_date_time': msg_content.get('creationDateTime'),
+            'settlement_date': msg_content.get('settlementDate'),
+
+            # Amount
+            'amount': msg_content.get('amount'),
+            'currency': msg_content.get('currency') or 'AED',
+
+            # Bank Codes
+            'sending_bank_code': trunc(msg_content.get('sendingBankCode'), 11),
+            'receiving_bank_code': trunc(msg_content.get('receivingBankCode'), 11),
+
+            # Transaction Details
+            'transaction_reference': trunc(msg_content.get('transactionReference'), 35),
+
+            # Originator (Debtor)
+            'originator_name': trunc(msg_content.get('originatorName'), 140),
+            'originator_account': trunc(msg_content.get('originatorAccount'), 34),
+            'originator_address': msg_content.get('originatorAddress'),
+
+            # Beneficiary (Creditor)
+            'beneficiary_name': trunc(msg_content.get('beneficiaryName'), 140),
+            'beneficiary_account': trunc(msg_content.get('beneficiaryAccount'), 34),
+            'beneficiary_address': msg_content.get('beneficiaryAddress'),
+
+            # Purpose
+            'purpose': msg_content.get('purpose'),
+        }
+
+    def get_silver_columns(self) -> List[str]:
+        """Return ordered list of Silver table columns for INSERT."""
+        return [
+            'stg_id', 'raw_id', '_batch_id',
+            'message_type', 'message_id', 'creation_date_time',
+            'settlement_date', 'amount', 'currency',
+            'sending_bank_code', 'receiving_bank_code', 'transaction_reference',
+            'originator_name', 'originator_account', 'originator_address',
+            'beneficiary_name', 'beneficiary_account', 'beneficiary_address',
+            'purpose',
+        ]
+
+    def get_silver_values(self, silver_record: Dict[str, Any]) -> tuple:
+        """Return ordered tuple of values for Silver table INSERT."""
+        columns = self.get_silver_columns()
+        return tuple(silver_record.get(col) for col in columns)
+
+    # =========================================================================
+    # GOLD ENTITY EXTRACTION
+    # =========================================================================
+
+    def extract_gold_entities(
+        self,
+        msg_content: Dict[str, Any],
+        stg_id: str,
+        batch_id: str
+    ) -> GoldEntities:
+        """Extract Gold layer entities from UAEFTS message."""
+        entities = GoldEntities()
+
+        # Originator Party (Debtor)
+        if msg_content.get('originatorName'):
+            entities.parties.append(PartyData(
+                name=msg_content.get('originatorName'),
+                role="DEBTOR",
+                party_type='UNKNOWN',
+                country='AE',
+            ))
+
+        # Beneficiary Party (Creditor)
+        if msg_content.get('beneficiaryName'):
+            entities.parties.append(PartyData(
+                name=msg_content.get('beneficiaryName'),
+                role="CREDITOR",
+                party_type='UNKNOWN',
+                country='AE',
+            ))
+
+        # Originator Account
+        if msg_content.get('originatorAccount'):
+            entities.accounts.append(AccountData(
+                account_number=msg_content.get('originatorAccount'),
+                role="DEBTOR",
+                account_type='CACC',
+                currency=msg_content.get('currency') or 'AED',
+            ))
+
+        # Beneficiary Account
+        if msg_content.get('beneficiaryAccount'):
+            entities.accounts.append(AccountData(
+                account_number=msg_content.get('beneficiaryAccount'),
+                role="CREDITOR",
+                account_type='CACC',
+                currency=msg_content.get('currency') or 'AED',
+            ))
+
+        # Sending Bank
+        if msg_content.get('sendingBankCode'):
+            entities.financial_institutions.append(FinancialInstitutionData(
+                role="DEBTOR_AGENT",
+                clearing_code=msg_content.get('sendingBankCode'),
+                clearing_system='AEUAEFTS',  # UAEFTS
+                country='AE',
+            ))
+
+        # Receiving Bank
+        if msg_content.get('receivingBankCode'):
+            entities.financial_institutions.append(FinancialInstitutionData(
+                role="CREDITOR_AGENT",
+                clearing_code=msg_content.get('receivingBankCode'),
+                clearing_system='AEUAEFTS',
+                country='AE',
+            ))
+
+        return entities
+
+
+# Register the extractor
+ExtractorRegistry.register('UAEFTS', UaeftsExtractor())
+ExtractorRegistry.register('uaefts', UaeftsExtractor())

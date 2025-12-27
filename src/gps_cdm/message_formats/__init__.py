@@ -11,10 +11,35 @@ Folder Structure:
     message_formats/
     ├── base/           # Base classes and registry
     ├── pain001/        # ISO 20022 pain.001 (Customer Credit Transfer Initiation)
-    ├── mt103/          # SWIFT MT103 (Single Customer Credit Transfer)
     ├── pacs008/        # ISO 20022 pacs.008 (FI to FI Credit Transfer)
+    ├── camt053/        # ISO 20022 camt.053 (Bank to Customer Statement)
+    ├── mt103/          # SWIFT MT103 (Single Customer Credit Transfer)
+    ├── mt202/          # SWIFT MT202 (General FI Transfer)
+    ├── mt940/          # SWIFT MT940 (Customer Statement Message)
     ├── fedwire/        # Fedwire (US RTGS)
-    └── ... (60+ additional formats)
+    ├── fednow/         # FedNow (US Instant)
+    ├── ach/            # NACHA ACH
+    ├── chips/          # CHIPS (US Large Value)
+    ├── sepa/           # SEPA Credit Transfer
+    ├── rtp/            # TCH RTP (US Real-Time Payments)
+    ├── chaps/          # UK CHAPS
+    ├── bacs/           # UK BACS
+    ├── fps/            # UK Faster Payments Service
+    ├── target2/        # Eurozone TARGET2
+    ├── npp/            # Australia NPP
+    ├── upi/            # India UPI
+    ├── pix/            # Brazil PIX
+    ├── rtgs_hk/        # Hong Kong RTGS (CHATS)
+    ├── meps_plus/      # Singapore MEPS+
+    ├── bojnet/         # Japan BOJ-NET
+    ├── kftc/           # Korea KFTC
+    ├── cnaps/          # China CNAPS
+    ├── sarie/          # Saudi Arabia SARIE
+    ├── uaefts/         # UAE Funds Transfer System
+    ├── promptpay/      # Thailand PromptPay
+    ├── paynow/         # Singapore PayNow
+    ├── instapay/       # Philippines InstaPay
+    └── ... (additional formats)
 
 Usage:
     from gps_cdm.message_formats import get_extractor
@@ -25,6 +50,56 @@ Usage:
 """
 
 from .base import BaseExtractor, ExtractorRegistry
+
+# Import all extractors to trigger registration
+# ISO 20022 Payment Messages
+from . import pain001
+from . import pacs008
+
+# ISO 20022 Statement Messages
+from . import camt053
+
+# SWIFT MT Payment Messages
+from . import mt103
+from . import mt202
+
+# SWIFT MT Statement Messages
+from . import mt940
+
+# US Payment Schemes
+from . import fedwire
+from . import fednow
+from . import ach
+from . import chips
+from . import rtp
+
+# EU/UK Payment Schemes
+from . import sepa
+from . import chaps
+from . import bacs
+from . import fps
+from . import target2
+
+# APAC Payment Schemes
+from . import npp
+from . import upi
+from . import rtgs_hk
+from . import meps_plus
+from . import bojnet
+from . import kftc
+from . import cnaps
+
+# Middle East Payment Schemes
+from . import sarie
+from . import uaefts
+
+# LatAm Payment Schemes
+from . import pix
+
+# Southeast Asia Payment Schemes
+from . import promptpay
+from . import paynow
+from . import instapay
 
 __all__ = [
     'BaseExtractor',
