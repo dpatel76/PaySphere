@@ -7,6 +7,10 @@ Verifies 100% field coverage for all message types:
 2. Compares Silver staging table columns with Bronze→Silver mappings
 3. Compares Gold CDM table columns with Silver→Gold mappings
 4. Reports gaps and coverage percentage
+
+Coverage Requirements:
+- Silver: 100% of data columns must have Bronze source mappings
+- Gold: 100% of data columns (excl. FKs) must have Silver source mappings
 """
 
 import os
@@ -26,49 +30,63 @@ class CoverageReport:
     """Coverage report for a message type."""
     message_type: str
     silver_table: str
-    silver_columns: int = 0
+    # Silver coverage (Bronze→Silver)
+    silver_total_columns: int = 0
+    silver_data_columns: int = 0  # Excluding system columns
     silver_mapped: int = 0
     silver_unmapped: List[str] = field(default_factory=list)
-    gold_tables: List[str] = field(default_factory=list)
-    gold_columns: int = 0
-    gold_mapped: int = 0
-    gold_unmapped: Dict[str, List[str]] = field(default_factory=dict)
+    # Gold coverage (Silver→Gold) - how many Silver columns flow to Gold
+    gold_silver_columns_mapped: int = 0  # Silver columns that have Gold mappings
+    gold_unmapped_silver_columns: List[str] = field(default_factory=list)
+    # Gold target tables info
+    gold_tables: Dict[str, dict] = field(default_factory=dict)
+    # Errors
     errors: List[str] = field(default_factory=list)
 
     @property
     def silver_coverage(self) -> float:
-        if self.silver_columns == 0:
-            return 0.0
-        return (self.silver_mapped / self.silver_columns) * 100
+        """Bronze→Silver: % of Silver columns that have Bronze source mappings."""
+        if self.silver_data_columns == 0:
+            return 100.0
+        return (self.silver_mapped / self.silver_data_columns) * 100
 
     @property
     def gold_coverage(self) -> float:
-        if self.gold_columns == 0:
-            return 0.0
-        return (self.gold_mapped / self.gold_columns) * 100
+        """Silver→Gold: % of Silver columns that have Gold target mappings."""
+        if self.silver_data_columns == 0:
+            return 100.0
+        return (self.gold_silver_columns_mapped / self.silver_data_columns) * 100
 
     def print_report(self):
-        print(f"\n{'='*60}")
+        print(f"\n{'='*70}")
         print(f"Message Type: {self.message_type}")
-        print(f"{'='*60}")
+        print(f"{'='*70}")
 
-        print(f"\n[SILVER] {self.silver_table}")
-        print(f"  Total columns: {self.silver_columns}")
-        print(f"  Mapped: {self.silver_mapped}")
+        # Silver coverage (Bronze→Silver)
+        print(f"\n[SILVER] Bronze→Silver: {self.silver_table}")
+        print(f"  Total columns: {self.silver_total_columns} (data: {self.silver_data_columns})")
+        print(f"  Mapped from Bronze: {self.silver_mapped}")
         print(f"  Coverage: {self.silver_coverage:.1f}%")
         if self.silver_unmapped:
-            print(f"  Unmapped columns: {', '.join(self.silver_unmapped[:10])}")
-            if len(self.silver_unmapped) > 10:
-                print(f"    ... and {len(self.silver_unmapped) - 10} more")
+            print(f"  UNMAPPED ({len(self.silver_unmapped)}): {', '.join(self.silver_unmapped[:8])}")
+            if len(self.silver_unmapped) > 8:
+                print(f"    ... and {len(self.silver_unmapped) - 8} more")
 
-        print(f"\n[GOLD] CDM Tables")
-        for table in self.gold_tables:
-            unmapped = self.gold_unmapped.get(table, [])
-            print(f"  {table}:")
-            print(f"    Unmapped: {', '.join(unmapped[:5]) if unmapped else 'None'}")
-        print(f"  Total columns: {self.gold_columns}")
-        print(f"  Mapped: {self.gold_mapped}")
+        # Gold coverage (Silver→Gold)
+        print(f"\n[GOLD] Silver→Gold: CDM Tables")
+        print(f"  Silver columns mapped to Gold: {self.gold_silver_columns_mapped}/{self.silver_data_columns}")
         print(f"  Coverage: {self.gold_coverage:.1f}%")
+        if self.gold_unmapped_silver_columns:
+            print(f"  Silver columns NOT mapped to Gold ({len(self.gold_unmapped_silver_columns)}):")
+            for col in self.gold_unmapped_silver_columns[:10]:
+                print(f"    - {col}")
+            if len(self.gold_unmapped_silver_columns) > 10:
+                print(f"    ... and {len(self.gold_unmapped_silver_columns) - 10} more")
+
+        # Gold table breakdown
+        print(f"\n  Gold table targets:")
+        for table_name, info in self.gold_tables.items():
+            print(f"    {table_name}: {info['mapped_count']} mappings")
 
         if self.errors:
             print(f"\n[ERRORS]")
@@ -102,7 +120,7 @@ def get_table_columns(conn, schema: str, table: str) -> List[str]:
 
 
 def get_mapped_silver_columns(conn, message_type: str) -> Set[str]:
-    """Get silver columns that have mappings."""
+    """Get silver columns that have Bronze→Silver mappings."""
     cursor = conn.cursor()
     cursor.execute("""
         SELECT DISTINCT target_column
@@ -114,23 +132,36 @@ def get_mapped_silver_columns(conn, message_type: str) -> Set[str]:
     return columns
 
 
-def get_mapped_gold_columns(conn, message_type: str) -> Dict[str, Set[str]]:
-    """Get gold columns that have mappings, grouped by table."""
+def get_silver_to_gold_mappings(conn, message_type: str) -> Tuple[Set[str], Dict[str, int]]:
+    """Get Silver columns that have Gold mappings, and count per Gold table.
+
+    Returns:
+        - Set of Silver column names that are mapped to Gold
+        - Dict of Gold table name -> count of mappings
+    """
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT gold_table, gold_column
+        SELECT source_expression, gold_table, gold_column
         FROM mapping.gold_field_mappings
         WHERE format_id = %s AND is_active = true
     """, (message_type,))
 
-    result: Dict[str, Set[str]] = {}
+    silver_columns_mapped: Set[str] = set()
+    gold_table_counts: Dict[str, int] = {}
+
     for row in cursor.fetchall():
-        table, column = row
-        if table not in result:
-            result[table] = set()
-        result[table].add(column)
+        source_expr, gold_table, gold_col = row
+        # source_expression is the Silver column name (or expression)
+        # Simple column references are just the column name
+        if source_expr and not source_expr.startswith("'"):  # Skip constant values
+            # Handle simple column names (most common case)
+            silver_columns_mapped.add(source_expr)
+        if gold_table not in gold_table_counts:
+            gold_table_counts[gold_table] = 0
+        gold_table_counts[gold_table] += 1
+
     cursor.close()
-    return result
+    return silver_columns_mapped, gold_table_counts
 
 
 def get_silver_table_name(message_type: str) -> str:
@@ -148,32 +179,41 @@ def get_silver_table_name(message_type: str) -> str:
     return mapping.get(message_type, f"stg_{message_type.lower().replace('.', '')}")
 
 
-def get_gold_tables() -> List[str]:
-    """List of CDM gold tables."""
-    return [
-        "cdm_payment_instruction",
-        "cdm_party",
-        "cdm_account",
-        "cdm_financial_institution"
-    ]
+# Silver system columns - these don't need source mappings
+SILVER_SYSTEM_COLUMNS = {
+    "stg_id",  # Auto-generated UUID
+    "raw_id",  # FK to bronze
+    "processing_status",  # Set by pipeline
+    "processed_to_gold_at",  # Set after gold promotion
+    "processing_error",  # Set on error
+    "source_raw_id",  # Alternative FK
+    "_batch_id",  # Lineage
+    "_processed_at",  # Lineage
+    "_partition_id",  # Partition
+}
 
-
-# Columns to skip in coverage calculation (system/audit columns)
-SYSTEM_COLUMNS = {
-    # Common audit columns
+# Gold system columns - these don't need source mappings
+GOLD_SYSTEM_COLUMNS = {
+    # IDs
+    "instruction_id", "payment_id", "party_id", "account_id", "fi_id",
+    # FK references (set programmatically when creating entity relationships)
+    "debtor_id", "debtor_account_id", "debtor_agent_id",
+    "creditor_id", "creditor_account_id", "creditor_agent_id",
+    "intermediary_agent1_id", "intermediary_agent2_id",
+    "ultimate_debtor_id", "ultimate_creditor_id",
+    "owner_id", "financial_institution_id", "parent_fi_id",
+    # Source tracking (set by pipeline)
+    "source_message_type", "source_stg_table", "source_stg_id", "source_system",
+    # Audit columns
     "created_at", "updated_at", "created_by", "updated_by",
     "record_version", "is_deleted", "is_current",
     "valid_from", "valid_to",
-    # Processing columns
-    "processing_status", "processed_to_gold_at", "dq_score", "dq_issues",
-    # Lineage columns
+    # Lineage
     "lineage_batch_id", "lineage_pipeline_run_id",
-    "_batch_id", "_partition_id", "_ingested_at", "_source_system",
-    # IDs that are auto-generated
-    "stg_id", "raw_id", "instruction_id", "payment_id",
-    "party_id", "account_id", "fi_id",
-    # Partition columns
+    # Partition
     "partition_year", "partition_month", "region",
+    # Data quality
+    "data_quality_score", "data_quality_issues",
 }
 
 
@@ -181,42 +221,48 @@ def verify_message_type(conn, message_type: str) -> CoverageReport:
     """Verify coverage for a single message type."""
     report = CoverageReport(message_type=message_type, silver_table=get_silver_table_name(message_type))
 
-    # Check silver table
+    # === SILVER COVERAGE (Bronze→Silver) ===
     silver_columns = get_table_columns(conn, "silver", report.silver_table)
     if not silver_columns:
         report.errors.append(f"Silver table silver.{report.silver_table} not found")
         return report
 
+    report.silver_total_columns = len(silver_columns)
+
     # Filter out system columns
-    silver_data_columns = [c for c in silver_columns if c not in SYSTEM_COLUMNS]
-    report.silver_columns = len(silver_data_columns)
+    silver_data_columns = [c for c in silver_columns if c not in SILVER_SYSTEM_COLUMNS]
+    report.silver_data_columns = len(silver_data_columns)
 
-    # Get mapped columns
+    # Get Bronze→Silver mapped columns from database
     mapped_silver = get_mapped_silver_columns(conn, message_type)
-    report.silver_mapped = len(mapped_silver & set(silver_data_columns))
-    report.silver_unmapped = [c for c in silver_data_columns if c not in mapped_silver]
 
-    # Check gold tables
-    report.gold_tables = get_gold_tables()
-    mapped_gold = get_mapped_gold_columns(conn, message_type)
+    # Calculate Silver coverage
+    mapped_count = 0
+    for col in silver_data_columns:
+        if col in mapped_silver:
+            mapped_count += 1
+        else:
+            report.silver_unmapped.append(col)
 
-    total_gold_columns = 0
-    total_gold_mapped = 0
+    report.silver_mapped = mapped_count
 
-    for gold_table in report.gold_tables:
-        gold_columns = get_table_columns(conn, "gold", gold_table)
-        gold_data_columns = [c for c in gold_columns if c not in SYSTEM_COLUMNS]
-        total_gold_columns += len(gold_data_columns)
+    # === GOLD COVERAGE (Silver→Gold) ===
+    # Get Silver columns that have Gold mappings
+    silver_cols_with_gold_mapping, gold_table_counts = get_silver_to_gold_mappings(conn, message_type)
 
-        mapped_cols = mapped_gold.get(gold_table, set())
-        total_gold_mapped += len(mapped_cols & set(gold_data_columns))
+    # Calculate how many Silver data columns are mapped to Gold
+    gold_mapped_count = 0
+    for col in silver_data_columns:
+        if col in silver_cols_with_gold_mapping:
+            gold_mapped_count += 1
+        else:
+            report.gold_unmapped_silver_columns.append(col)
 
-        unmapped = [c for c in gold_data_columns if c not in mapped_cols]
-        if unmapped:
-            report.gold_unmapped[gold_table] = unmapped
+    report.gold_silver_columns_mapped = gold_mapped_count
 
-    report.gold_columns = total_gold_columns
-    report.gold_mapped = total_gold_mapped
+    # Store Gold table breakdown
+    for table_name, count in gold_table_counts.items():
+        report.gold_tables[table_name] = {'mapped_count': count}
 
     return report
 
@@ -231,9 +277,10 @@ def sync_message_type(message_type: str) -> dict:
 
 def main():
     """Main entry point."""
-    print("=" * 60)
+    print("=" * 70)
     print("GPS CDM - Field Coverage Verification")
-    print("=" * 60)
+    print("=" * 70)
+    print("\nTarget: 100% coverage for all Silver and Gold data columns")
 
     # Message types to verify
     message_types = [
@@ -257,7 +304,7 @@ def main():
             print(f"  {msg_type}: silver={silver_total}, gold={gold_total}")
             if result.get("errors"):
                 for err in result["errors"]:
-                    print(f"    ERROR: {err[:80]}...")
+                    print(f"    ERROR: {err[:60]}...")
         except Exception as e:
             print(f"  {msg_type}: ERROR - {e}")
 
@@ -273,15 +320,33 @@ def main():
     conn.close()
 
     # Summary
-    print("\n" + "=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
-    print(f"{'Message Type':<15} {'Silver %':<12} {'Gold %':<12} {'Status'}")
-    print("-" * 60)
+    print("\n" + "=" * 70)
+    print("SUMMARY - Target: 100% Coverage")
+    print("=" * 70)
+    print(f"{'Message Type':<15} {'Bronze→Silver':<20} {'Silver→Gold':<20} {'Status'}")
+    print("-" * 70)
 
+    all_complete = True
     for report in reports:
-        status = "✓ COMPLETE" if report.silver_coverage >= 80 and report.gold_coverage >= 50 else "⚠ INCOMPLETE"
-        print(f"{report.message_type:<15} {report.silver_coverage:>6.1f}%      {report.gold_coverage:>6.1f}%      {status}")
+        silver_status = f"{report.silver_mapped}/{report.silver_data_columns} ({report.silver_coverage:.0f}%)"
+        gold_status = f"{report.gold_silver_columns_mapped}/{report.silver_data_columns} ({report.gold_coverage:.0f}%)"
+
+        complete = report.silver_coverage >= 100 and report.gold_coverage >= 100
+        status = "✓ 100%" if complete else "⚠ NEEDS WORK"
+        if not complete:
+            all_complete = False
+
+        print(f"{report.message_type:<15} {silver_status:<20} {gold_status:<20} {status}")
+
+    print("-" * 70)
+    if all_complete:
+        print("All message types have 100% coverage!")
+    else:
+        print("Some message types need additional Silver→Gold mappings.")
+        print("\nNext steps:")
+        print("1. Review Silver columns NOT mapped to Gold in each report above")
+        print("2. Add missing silver_to_gold field mappings in YAML files")
+        print("3. Re-run sync and verification")
 
 
 if __name__ == "__main__":

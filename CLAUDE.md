@@ -275,3 +275,239 @@ Before marking reprocessing as complete, verify:
 - [ ] Records appear in Bronze → Silver → Gold with proper lineage
 - [ ] Neo4j graph is updated
 - [ ] No Databricks warnings when `GPS_CDM_DATA_SOURCE=postgresql`
+
+---
+
+## Message Format Extractor Blueprint
+
+### Learnings from First 6 Message Types (pain.001, MT103, FEDWIRE, ACH, SEPA, RTP)
+
+The following patterns and fixes were applied to achieve 100% Bronze→Silver→Gold coverage:
+
+#### 1. Python `.get()` Behavior with None Values
+
+**Problem**: `.get('key', 'default')` returns `None` when the key exists with a `None` value, causing NOT NULL constraint violations.
+
+**Solution**: Always use `or` pattern for defaults:
+```python
+# WRONG - returns None if key exists with None value
+account_type = data.get('accountType', 'CACC')
+
+# CORRECT - falls back to default even if key exists with None
+account_type = data.get('accountType') or 'CACC'
+```
+
+**Apply to**: All extractors for `account_type`, `currency`, `country`, `party_type` fields.
+
+#### 2. Silver Column Names Must Match Database Schema Exactly
+
+**Problem**: Extractor column names didn't match actual PostgreSQL table columns.
+
+**Examples of fixes needed**:
+| Extractor Field | DB Column | Message Type |
+|-----------------|-----------|--------------|
+| sender_reference | senders_reference | MT103 |
+| currency_code | currency | MT103 |
+| instruction_code | instruction_codes | MT103 |
+| sender_routing_number | sender_aba | FEDWIRE |
+| receiver_routing_number | receiver_aba | FEDWIRE |
+| standard_entry_class_code | standard_entry_class | ACH |
+| debtor_account_iban | debtor_iban | SEPA |
+
+**How to verify**: Query `information_schema.columns` for actual column names:
+```sql
+SELECT column_name FROM information_schema.columns
+WHERE table_schema = 'silver' AND table_name = 'stg_XXXX'
+ORDER BY ordinal_position;
+```
+
+#### 3. Remove Non-Existent Columns
+
+**Problem**: Extractors included columns that don't exist in DB tables.
+
+**Common issues**:
+- `_ingested_at` - Not in Silver tables (auto-set by DB)
+- Extra fields from spec that weren't added to schema
+
+**Solution**: `get_silver_columns()` must return ONLY columns that exist in the DB table.
+
+#### 4. Format-Specific Parsers Required
+
+**DO NOT** rely on pre-parsed JSON. Each format needs its own parser:
+
+| Format | Parser Type | Key Considerations |
+|--------|-------------|-------------------|
+| ISO 20022 (pain.001, pacs.008, SEPA) | XML with namespaces | Strip namespaces, handle optional elements |
+| SWIFT MT (MT103, MT202) | Block format `{1:...}{2:...}{4:...}` | Regex for blocks, tag:value in block 4 |
+| FEDWIRE | Tag-value `{NNNN}value` | 4-digit tags, handle multi-line values |
+| ACH/NACHA | Fixed-width 94 chars | Pad lines to 94 chars, parse by position |
+| RTP | XML (pacs.008 variant) | Similar to ISO 20022 |
+
+#### 5. Test Data Format Compliance
+
+**Problem**: Test data format didn't match actual standard format.
+
+**Solutions by format**:
+- **ACH**: Lines MUST be exactly 94 characters (pad with spaces)
+- **FEDWIRE**: Subtype code is 2 chars max (e.g., "00" not "CORE")
+- **SWIFT MT**: Must have block structure `{1:...}{2:...}{4:\n:20:...\n-}`
+- **XML**: Must have proper namespace declarations
+
+#### 6. Gold Entity Extraction Pattern
+
+Each extractor must implement `extract_gold_entities()` returning `GoldEntities` with:
+- `parties`: List of `PartyData` (DEBTOR, CREDITOR, ULTIMATE_*)
+- `accounts`: List of `AccountData` with role
+- `financial_institutions`: List of `FinancialInstitutionData` (DEBTOR_AGENT, CREDITOR_AGENT)
+
+**Key defaults**:
+```python
+PartyData(name=..., party_type='UNKNOWN', role='DEBTOR')
+AccountData(account_number=..., account_type='CACC', currency='USD')
+FinancialInstitutionData(role='DEBTOR_AGENT', country='XX')
+```
+
+#### 7. Extension Tables for Scheme-Specific Data
+
+Each payment scheme has an extension table in Gold for non-CDM fields:
+- `gold.cdm_payment_extension_fedwire`
+- `gold.cdm_payment_extension_ach`
+- `gold.cdm_payment_extension_sepa`
+- `gold.cdm_payment_extension_swift`
+- `gold.cdm_payment_extension_rtp`
+- `gold.cdm_payment_extension_iso20022`
+
+Extension data classes are in `src/gps_cdm/message_formats/base/__init__.py`.
+
+#### 8. YAML Mapping Sync Issues
+
+**Problem**: `MappingSync` inserts duplicate rows on each sync instead of upserting.
+
+**Impact**: Inflated mapping counts (e.g., 449 instead of 49).
+
+**Workaround**: Use DISTINCT when querying mappings:
+```sql
+SELECT DISTINCT gold_column, source_expression
+FROM mapping.gold_field_mappings
+WHERE format_id = 'XXX' AND is_active = true
+```
+
+#### 9. Extractor Registration
+
+Register each extractor with multiple aliases:
+```python
+ExtractorRegistry.register('MT103', Mt103Extractor())
+ExtractorRegistry.register('mt103', Mt103Extractor())
+ExtractorRegistry.register('MT103STP', Mt103Extractor())  # Variant
+```
+
+#### 10. Currency Field Fallbacks
+
+ISO 20022 messages may have currency in different locations:
+```python
+currency = (
+    msg_content.get('instructedCurrency') or
+    msg_content.get('interbankSettlementCurrency') or
+    msg_content.get('currency') or
+    'USD'
+)
+```
+
+---
+
+## Extractor Implementation Checklist
+
+For each new message type, complete these steps:
+
+### Phase 1: Schema & Mapping
+- [ ] Create Silver table DDL (`ddl/postgresql/silver/stg_XXX.sql`)
+- [ ] Create YAML mapping file (`mappings/message_types/XXX.yaml`)
+- [ ] Sync mappings to database (`POST /api/lineage/sync/XXX`)
+- [ ] Create extension table if needed (`ddl/postgresql/gold/extension_XXX.sql`)
+
+### Phase 2: Extractor Implementation
+- [ ] Create extractor module (`src/gps_cdm/message_formats/XXX/__init__.py`)
+- [ ] Implement format-specific parser class
+- [ ] Implement `extract_bronze()` method
+- [ ] Implement `extract_silver()` method
+- [ ] Implement `get_silver_columns()` - MUST match DB exactly
+- [ ] Implement `get_silver_values()` method
+- [ ] Implement `extract_gold_entities()` method
+- [ ] Register extractor with all aliases
+
+### Phase 3: Testing
+- [ ] Create compliant test data file
+- [ ] Run E2E test via Celery
+- [ ] Verify Bronze record created
+- [ ] Verify Silver record created (check all columns)
+- [ ] Verify Gold entities created (party, account, FI)
+- [ ] Verify extension data if applicable
+- [ ] Run field coverage verification script
+
+### Phase 4: Reconciliation
+- [ ] Verify Bronze→Silver coverage = 100%
+- [ ] Verify Silver→Gold coverage = 100%
+- [ ] Update mapping sync to fix any gaps
+
+---
+
+## Remaining Message Types to Implement
+
+### ISO 20022 Family
+| Type | Description | Base Pattern |
+|------|-------------|--------------|
+| pacs.002 | Payment Status Report | Similar to pacs.008 |
+| pacs.003 | FI Direct Debit | Similar to pain.008 |
+| pacs.004 | Payment Return | Similar to pacs.008 |
+| pacs.009 | FI Credit Transfer | Similar to pacs.008 |
+| pain.002 | Payment Status Report | Similar to pain.001 |
+| pain.008 | Direct Debit Initiation | Similar to pain.001 |
+| camt.052 | Account Report | Statement format |
+| camt.053 | Account Statement | Statement format |
+| camt.054 | Credit/Debit Notification | Statement format |
+
+### SWIFT MT Family
+| Type | Description | Base Pattern |
+|------|-------------|--------------|
+| MT101 | Request for Transfer | Similar to MT103 |
+| MT199 | Free Format | Text-based |
+| MT202 | General FI Transfer | Similar to MT103 |
+| MT202COV | Cover Payment | MT202 + cover |
+| MT900 | Confirmation of Debit | Notification |
+| MT910 | Confirmation of Credit | Notification |
+| MT940 | Customer Statement | Statement format |
+| MT950 | Statement Message | Statement format |
+
+### Regional Payment Schemes
+| Type | Description | Format |
+|------|-------------|--------|
+| BACS | UK Batch Payments | Fixed-width |
+| CHAPS | UK Real-Time | ISO 20022 |
+| FPS | UK Faster Payments | ISO 20022 |
+| CHIPS | US Large Value | Proprietary |
+| FEDNOW | US Instant | ISO 20022 |
+| NPP | Australia Instant | ISO 20022 |
+| SEPA_INST | SEPA Instant | ISO 20022 |
+| SEPA_SCT | SEPA Credit Transfer | ISO 20022 |
+| SEPA_SDD | SEPA Direct Debit | ISO 20022 |
+| RTGS | Real-Time Gross | Varies |
+
+### Asia-Pacific & Middle East
+| Type | Description | Format |
+|------|-------------|--------|
+| CNAPS | China Payments | Proprietary |
+| BOJNET | Japan BOJ Net | Proprietary |
+| KFTC | Korea Payments | Proprietary |
+| MEPS+ | Singapore | ISO 20022 |
+| UPI | India Unified Payments | JSON |
+| RTGS_HK | Hong Kong RTGS | ISO 20022 |
+| SARIE | Saudi Arabia | SWIFT-like |
+| UAEFTS | UAE Payments | ISO 20022 |
+
+### Latin America & Others
+| Type | Description | Format |
+|------|-------------|--------|
+| PIX | Brazil Instant | JSON |
+| PromptPay | Thailand | ISO 20022 |
+| PayNow | Singapore | ISO 20022 |
+| InstaPay | Philippines | ISO 20022 |

@@ -43,7 +43,7 @@ mapping:
             key_field: trace_number
 
     fields:
-      # --- File Header (Record Type 1) ---
+      # === FILE HEADER (Record Type 1) ===
       - source: file_header.immediate_destination
         target: immediate_destination
         type: string
@@ -69,32 +69,12 @@ mapping:
         type: string
         max_length: 1
 
-      - source: file_header.immediate_destination_name
-        target: immediate_destination_name
-        type: string
-        max_length: 23
-
-      - source: file_header.immediate_origin_name
-        target: immediate_origin_name
-        type: string
-        max_length: 23
-
-      # --- Batch Header (Record Type 5) ---
-      - source: batch.service_class_code
-        target: service_class_code
-        type: string
-        max_length: 3
-
+      # === BATCH HEADER (Record Type 5) ===
       - source: batch.company_name
         target: company_name
         type: string
         required: true
         max_length: 16
-
-      - source: batch.company_discretionary_data
-        target: company_discretionary_data
-        type: string
-        max_length: 20
 
       - source: batch.company_identification
         target: company_identification
@@ -103,7 +83,7 @@ mapping:
         max_length: 10
 
       - source: batch.standard_entry_class_code
-        target: standard_entry_class_code
+        target: standard_entry_class
         type: string
         required: true
         max_length: 3
@@ -113,18 +93,23 @@ mapping:
         type: string
         max_length: 10
 
-      - source: batch.company_descriptive_date
-        target: company_descriptive_date
-        type: string
-        max_length: 6
-
       - source: batch.effective_entry_date
         target: effective_entry_date
         type: date
         date_format: "YYMMDD"
 
+      - source: batch.settlement_date
+        target: settlement_date
+        type: date
+        notes: "Julian date from batch control"
+
+      - source: batch.originator_status_code
+        target: originator_status_code
+        type: string
+        max_length: 1
+
       - source: batch.originating_dfi_identification
-        target: originating_dfi_identification
+        target: originating_dfi_id
         type: string
         required: true
         max_length: 8
@@ -133,7 +118,7 @@ mapping:
         target: batch_number
         type: integer
 
-      # --- Entry Detail (Record Type 6) ---
+      # === ENTRY DETAIL (Record Type 6) ===
       - source: entry.transaction_code
         target: transaction_code
         type: string
@@ -141,18 +126,13 @@ mapping:
         max_length: 2
 
       - source: entry.receiving_dfi_identification
-        target: receiving_dfi_identification
+        target: receiving_dfi_id
         type: string
         required: true
         max_length: 8
 
-      - source: entry.check_digit
-        target: check_digit
-        type: string
-        max_length: 1
-
       - source: entry.dfi_account_number
-        target: dfi_account_number
+        target: receiving_dfi_account
         type: string
         required: true
         max_length: 17
@@ -165,7 +145,7 @@ mapping:
         required: true
 
       - source: entry.individual_identification_number
-        target: individual_identification_number
+        target: individual_id
         type: string
         max_length: 15
 
@@ -181,7 +161,7 @@ mapping:
         max_length: 2
 
       - source: entry.addenda_record_indicator
-        target: addenda_record_indicator
+        target: addenda_indicator
         type: string
         max_length: 1
 
@@ -191,25 +171,37 @@ mapping:
         required: true
         max_length: 15
 
-      # --- Addenda (Record Type 7) ---
+      # === ADDENDA (Record Type 7) ===
       - source: entry.addenda.type_code
-        target: addenda_type_code
+        target: addenda_type
         type: string
         max_length: 2
 
       - source: entry.addenda.payment_related_info
-        target: payment_related_info
+        target: addenda_info
         type: string
         max_length: 80
 
-      - source: entry.addenda.sequence_number
-        target: addenda_sequence_number
-        type: integer
-
-      - source: entry.addenda.entry_detail_sequence
-        target: entry_detail_sequence
+      # === RETURN ADDENDA (Type 99) ===
+      - source: entry.addenda.return_reason_code
+        target: return_reason_code
         type: string
-        max_length: 7
+        max_length: 3
+
+      - source: entry.addenda.original_entry_trace
+        target: original_entry_trace
+        type: string
+        max_length: 15
+
+      - source: entry.addenda.date_of_death
+        target: date_of_death
+        type: date
+        notes: "For return reason R14/R15"
+
+      - source: entry.addenda.original_receiving_dfi
+        target: original_receiving_dfi
+        type: string
+        max_length: 8
 
   # ============================================================================
   # STAGE 2: SILVER → GOLD
@@ -238,6 +230,115 @@ mapping:
         type: string
         required: true
 
+      - source: trace_number
+        target: transaction_id
+        type: string
+
+      # --- File Header Info ---
+      - source: immediate_destination
+        target: immediate_destination
+        type: string
+
+      - source: immediate_origin
+        target: immediate_origin
+        type: string
+
+      - source: file_creation_date
+        target: file_creation_date
+        type: date
+
+      - source: file_creation_time
+        target: file_creation_time
+        type: string
+
+      - source: file_id_modifier
+        target: file_id_modifier
+        type: string
+
+      # --- Batch Header Info ---
+      - source: company_name
+        target: originator_name
+        type: string
+
+      - source: company_identification
+        target: originator_id
+        type: string
+
+      - source: company_entry_description
+        target: payment_description
+        type: string
+
+      - source: batch_number
+        target: batch_number
+        type: integer
+
+      - source: settlement_date
+        target: settlement_date
+        type: date
+
+      - source: originator_status_code
+        target: originator_status_code
+        type: string
+
+      - source: originating_dfi_id
+        target: originating_dfi_id
+        type: string
+
+      # --- Entry Detail ---
+      - source: transaction_code
+        target: ach_transaction_code
+        type: string
+
+      - source: receiving_dfi_id
+        target: receiving_dfi_id
+        type: string
+
+      - source: receiving_dfi_account
+        target: beneficiary_account_number
+        type: string
+
+      - source: individual_id
+        target: individual_id
+        type: string
+
+      - source: individual_name
+        target: beneficiary_name
+        type: string
+
+      - source: discretionary_data
+        target: discretionary_data
+        type: string
+
+      - source: addenda_indicator
+        target: addenda_indicator
+        type: string
+
+      # --- Addenda Info ---
+      - source: addenda_type
+        target: addenda_type
+        type: string
+
+      - source: addenda_info
+        target: addenda_info
+        type: string
+
+      # --- Return Info ---
+      - source: return_reason_code
+        target: return_reason_code
+        type: string
+
+      - source: original_entry_trace
+        target: original_entry_trace
+        type: string
+
+      - source: date_of_death
+        target: date_of_death
+        type: date
+
+      - source: original_receiving_dfi
+        target: original_receiving_dfi
+        type: string
+
       - target: payment_type
         type: string
         transform:
@@ -249,12 +350,16 @@ mapping:
               ELSE 'CREDIT_TRANSFER'
             END
 
-      - source: standard_entry_class_code
+      - source: standard_entry_class
         target: scheme_code
         type: string
         transform:
           type: expression
-          expr: "'ACH_' || standard_entry_class_code"
+          expr: "'ACH_' || standard_entry_class"
+
+      - source: standard_entry_class
+        target: standard_entry_class
+        type: string
 
       - source: transaction_code
         target: direction
@@ -288,6 +393,10 @@ mapping:
         target: instructed_amount
         type: decimal
         required: true
+
+      - source: amount
+        target: interbank_settlement_amount
+        type: decimal
 
       - target: instructed_currency
         type: string

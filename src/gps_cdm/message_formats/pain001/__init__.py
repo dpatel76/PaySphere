@@ -3,6 +3,9 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
+import xml.etree.ElementTree as ET
+import re
+import logging
 
 from ..base import (
     BaseExtractor,
@@ -12,6 +15,306 @@ from ..base import (
     AccountData,
     FinancialInstitutionData,
 )
+
+logger = logging.getLogger(__name__)
+
+
+class Pain001XmlParser:
+    """Parser for ISO 20022 pain.001 XML messages."""
+
+    # Namespace patterns for pain.001
+    NS_PATTERN = re.compile(r'\{[^}]+\}')
+    PAIN001_NAMESPACES = {
+        'pain001': 'urn:iso:std:iso:20022:tech:xsd:pain.001.001.09',
+        'pain001_08': 'urn:iso:std:iso:20022:tech:xsd:pain.001.001.08',
+        'pain001_03': 'urn:iso:std:iso:20022:tech:xsd:pain.001.001.03',
+    }
+
+    def __init__(self):
+        self.ns = {}
+
+    def _strip_ns(self, tag: str) -> str:
+        """Remove namespace from XML tag."""
+        return self.NS_PATTERN.sub('', tag)
+
+    def _find(self, element: ET.Element, path: str) -> Optional[ET.Element]:
+        """Find element using local names (ignoring namespaces)."""
+        if element is None:
+            return None
+
+        parts = path.split('/')
+        current = element
+
+        for part in parts:
+            found = None
+            for child in current:
+                if self._strip_ns(child.tag) == part:
+                    found = child
+                    break
+            if found is None:
+                return None
+            current = found
+        return current
+
+    def _find_text(self, element: ET.Element, path: str) -> Optional[str]:
+        """Find element text using local names."""
+        elem = self._find(element, path)
+        return elem.text if elem is not None else None
+
+    def _find_attr(self, element: ET.Element, path: str, attr: str) -> Optional[str]:
+        """Find element attribute."""
+        elem = self._find(element, path)
+        return elem.get(attr) if elem is not None else None
+
+    def parse(self, xml_content: str) -> Dict[str, Any]:
+        """Parse pain.001 XML content into structured dict."""
+        try:
+            # Remove BOM if present
+            if xml_content.startswith('\ufeff'):
+                xml_content = xml_content[1:]
+
+            root = ET.fromstring(xml_content)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse pain.001 XML: {e}")
+            raise ValueError(f"Invalid XML: {e}")
+
+        # Find the main content element (CstmrCdtTrfInitn)
+        initn = self._find(root, 'CstmrCdtTrfInitn')
+        if initn is None:
+            # Try direct if root is the initiation
+            if self._strip_ns(root.tag) == 'CstmrCdtTrfInitn':
+                initn = root
+            else:
+                raise ValueError("Cannot find CstmrCdtTrfInitn element in pain.001")
+
+        return self._parse_initiation(initn)
+
+    def _parse_initiation(self, initn: ET.Element) -> Dict[str, Any]:
+        """Parse CstmrCdtTrfInitn element."""
+        result = {}
+
+        # Group Header
+        grp_hdr = self._find(initn, 'GrpHdr')
+        if grp_hdr is not None:
+            result['messageId'] = self._find_text(grp_hdr, 'MsgId')
+            result['creationDateTime'] = self._find_text(grp_hdr, 'CreDtTm')
+            result['numberOfTransactions'] = self._safe_int(self._find_text(grp_hdr, 'NbOfTxs'))
+            result['controlSum'] = self._safe_decimal(self._find_text(grp_hdr, 'CtrlSum'))
+
+            # Initiating Party
+            initg_pty = self._find(grp_hdr, 'InitgPty')
+            if initg_pty is not None:
+                result['initiatingParty'] = self._parse_party(initg_pty)
+
+        # Payment Information
+        pmt_inf = self._find(initn, 'PmtInf')
+        if pmt_inf is not None:
+            result.update(self._parse_payment_info(pmt_inf))
+
+        return result
+
+    def _parse_payment_info(self, pmt_inf: ET.Element) -> Dict[str, Any]:
+        """Parse PmtInf element."""
+        result = {
+            'paymentInformation': {}
+        }
+        pmt_info = result['paymentInformation']
+
+        pmt_info['paymentInfoId'] = self._find_text(pmt_inf, 'PmtInfId')
+        pmt_info['paymentMethod'] = self._find_text(pmt_inf, 'PmtMtd')
+        pmt_info['batchBooking'] = self._find_text(pmt_inf, 'BtchBookg') == 'true'
+
+        # Requested Execution Date
+        req_exctn_dt = self._find(pmt_inf, 'ReqdExctnDt')
+        if req_exctn_dt is not None:
+            pmt_info['requestedExecutionDate'] = self._find_text(req_exctn_dt, 'Dt')
+
+        # Payment Type Information
+        pmt_tp_inf = self._find(pmt_inf, 'PmtTpInf')
+        if pmt_tp_inf is not None:
+            pmt_info['serviceLevel'] = self._find_text(pmt_tp_inf, 'SvcLvl/Cd')
+            pmt_info['localInstrument'] = self._find_text(pmt_tp_inf, 'LclInstrm/Cd')
+            pmt_info['categoryPurpose'] = self._find_text(pmt_tp_inf, 'CtgyPurp/Cd')
+            pmt_info['instructionPriority'] = self._find_text(pmt_tp_inf, 'InstrPrty')
+
+        # Debtor
+        dbtr = self._find(pmt_inf, 'Dbtr')
+        if dbtr is not None:
+            result['debtor'] = self._parse_party(dbtr)
+
+        # Debtor Account
+        dbtr_acct = self._find(pmt_inf, 'DbtrAcct')
+        if dbtr_acct is not None:
+            result['debtorAccount'] = self._parse_account(dbtr_acct)
+
+        # Debtor Agent
+        dbtr_agt = self._find(pmt_inf, 'DbtrAgt')
+        if dbtr_agt is not None:
+            result['debtorAgent'] = self._parse_agent(dbtr_agt)
+
+        # Charge Bearer
+        result['chargeBearer'] = self._find_text(pmt_inf, 'ChrgBr')
+
+        # Credit Transfer Transaction Information
+        cdt_trf_tx_inf = self._find(pmt_inf, 'CdtTrfTxInf')
+        if cdt_trf_tx_inf is not None:
+            result.update(self._parse_transaction(cdt_trf_tx_inf))
+
+        return result
+
+    def _parse_transaction(self, tx_inf: ET.Element) -> Dict[str, Any]:
+        """Parse CdtTrfTxInf element."""
+        result = {}
+
+        # Payment ID
+        pmt_id = self._find(tx_inf, 'PmtId')
+        if pmt_id is not None:
+            result['instructionId'] = self._find_text(pmt_id, 'InstrId')
+            result['endToEndId'] = self._find_text(pmt_id, 'EndToEndId')
+            result['uetr'] = self._find_text(pmt_id, 'UETR')
+
+        # Amount
+        amt = self._find(tx_inf, 'Amt')
+        if amt is not None:
+            instd_amt = self._find(amt, 'InstdAmt')
+            if instd_amt is not None:
+                result['instructedAmount'] = self._safe_decimal(instd_amt.text)
+                result['instructedCurrency'] = instd_amt.get('Ccy')
+
+        # Creditor Agent
+        cdtr_agt = self._find(tx_inf, 'CdtrAgt')
+        if cdtr_agt is not None:
+            result['creditorAgent'] = self._parse_agent(cdtr_agt)
+
+        # Creditor
+        cdtr = self._find(tx_inf, 'Cdtr')
+        if cdtr is not None:
+            result['creditor'] = self._parse_party(cdtr)
+
+        # Creditor Account
+        cdtr_acct = self._find(tx_inf, 'CdtrAcct')
+        if cdtr_acct is not None:
+            result['creditorAccount'] = self._parse_account(cdtr_acct)
+
+        # Purpose
+        purp = self._find(tx_inf, 'Purp')
+        if purp is not None:
+            result['purposeCode'] = self._find_text(purp, 'Cd')
+            result['purposeProprietary'] = self._find_text(purp, 'Prtry')
+
+        # Remittance Information
+        rmt_inf = self._find(tx_inf, 'RmtInf')
+        if rmt_inf is not None:
+            result['remittanceInformation'] = {
+                'unstructured': self._find_text(rmt_inf, 'Ustrd')
+            }
+            # Structured remittance
+            strd = self._find(rmt_inf, 'Strd')
+            if strd is not None:
+                result['remittanceInformation']['structured'] = {
+                    'referenceNumber': self._find_text(strd, 'RfrdDocInf/Nb'),
+                    'referenceType': self._find_text(strd, 'RfrdDocInf/Tp/CdOrPrtry/Cd'),
+                    'referenceDate': self._find_text(strd, 'RfrdDocInf/RltdDt'),
+                }
+
+        return result
+
+    def _parse_party(self, party_elem: ET.Element) -> Dict[str, Any]:
+        """Parse a party element (Dbtr, Cdtr, InitgPty, etc.)."""
+        result = {
+            'name': self._find_text(party_elem, 'Nm')
+        }
+
+        # Postal Address
+        pstl_adr = self._find(party_elem, 'PstlAdr')
+        if pstl_adr is not None:
+            result['streetName'] = self._find_text(pstl_adr, 'StrtNm')
+            result['buildingNumber'] = self._find_text(pstl_adr, 'BldgNb')
+            result['postalCode'] = self._find_text(pstl_adr, 'PstCd')
+            result['townName'] = self._find_text(pstl_adr, 'TwnNm')
+            result['countrySubDivision'] = self._find_text(pstl_adr, 'CtrySubDvsn')
+            result['country'] = self._find_text(pstl_adr, 'Ctry')
+            # Address lines
+            adr_line = self._find_text(pstl_adr, 'AdrLine')
+            if adr_line:
+                result['addressLine'] = adr_line
+
+        # ID - Organization
+        org_id = self._find(party_elem, 'Id/OrgId')
+        if org_id is not None:
+            result['id'] = (
+                self._find_text(org_id, 'AnyBIC') or
+                self._find_text(org_id, 'LEI') or
+                self._find_text(org_id, 'Othr/Id')
+            )
+            result['idType'] = 'ORG'
+
+        # ID - Private
+        prvt_id = self._find(party_elem, 'Id/PrvtId')
+        if prvt_id is not None:
+            result['id'] = (
+                self._find_text(prvt_id, 'DtAndPlcOfBirth/BirthDt') or
+                self._find_text(prvt_id, 'Othr/Id')
+            )
+            result['idType'] = 'PRVT'
+
+        return result
+
+    def _parse_account(self, acct_elem: ET.Element) -> Dict[str, Any]:
+        """Parse an account element (DbtrAcct, CdtrAcct)."""
+        result = {}
+
+        acct_id = self._find(acct_elem, 'Id')
+        if acct_id is not None:
+            result['iban'] = self._find_text(acct_id, 'IBAN')
+            result['other'] = self._find_text(acct_id, 'Othr/Id')
+            result['accountNumber'] = result['iban'] or result['other']
+
+        result['currency'] = self._find_text(acct_elem, 'Ccy')
+        result['accountType'] = self._find_text(acct_elem, 'Tp/Cd')
+
+        return result
+
+    def _parse_agent(self, agt_elem: ET.Element) -> Dict[str, Any]:
+        """Parse an agent element (DbtrAgt, CdtrAgt)."""
+        result = {}
+
+        fin_instn_id = self._find(agt_elem, 'FinInstnId')
+        if fin_instn_id is not None:
+            result['bic'] = self._find_text(fin_instn_id, 'BICFI')
+            result['lei'] = self._find_text(fin_instn_id, 'LEI')
+            result['name'] = self._find_text(fin_instn_id, 'Nm')
+
+            # Clearing System
+            clr_sys = self._find(fin_instn_id, 'ClrSysMmbId')
+            if clr_sys is not None:
+                result['clearingSystem'] = self._find_text(clr_sys, 'ClrSysId/Cd')
+                result['memberId'] = self._find_text(clr_sys, 'MmbId')
+
+            # Postal Address
+            pstl_adr = self._find(fin_instn_id, 'PstlAdr')
+            if pstl_adr is not None:
+                result['country'] = self._find_text(pstl_adr, 'Ctry')
+
+        return result
+
+    def _safe_int(self, value: Optional[str]) -> Optional[int]:
+        """Safely convert string to int."""
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+
+    def _safe_decimal(self, value: Optional[str]) -> Optional[float]:
+        """Safely convert string to decimal."""
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
 
 
 class Pain001Extractor(BaseExtractor):
@@ -306,8 +609,8 @@ class Pain001Extractor(BaseExtractor):
                 account_number=debtor_account.get('iban') or debtor_account.get('accountNumber'),
                 role="DEBTOR",
                 iban=debtor_account.get('iban'),
-                account_type=debtor_account.get('accountType', 'CACC'),
-                currency=debtor_account.get('currency', 'XXX'),
+                account_type=debtor_account.get('accountType') or 'CACC',
+                currency=debtor_account.get('currency') or 'XXX',
             ))
 
         # Creditor Account
@@ -316,8 +619,8 @@ class Pain001Extractor(BaseExtractor):
                 account_number=creditor_account.get('iban') or creditor_account.get('accountNumber'),
                 role="CREDITOR",
                 iban=creditor_account.get('iban'),
-                account_type=creditor_account.get('accountType', 'CACC'),
-                currency=creditor_account.get('currency', 'XXX'),
+                account_type=creditor_account.get('accountType') or 'CACC',
+                currency=creditor_account.get('currency') or 'XXX',
             ))
 
         # Debtor Agent
@@ -329,7 +632,7 @@ class Pain001Extractor(BaseExtractor):
                 lei=debtor_agent.get('lei'),
                 clearing_code=debtor_agent.get('memberId'),
                 clearing_system=debtor_agent.get('clearingSystem'),
-                country=debtor_agent.get('country', 'XX'),
+                country=debtor_agent.get('country') or 'XX',
             ))
 
         # Creditor Agent
@@ -341,7 +644,7 @@ class Pain001Extractor(BaseExtractor):
                 lei=creditor_agent.get('lei'),
                 clearing_code=creditor_agent.get('memberId'),
                 clearing_system=creditor_agent.get('clearingSystem'),
-                country=creditor_agent.get('country', 'XX'),
+                country=creditor_agent.get('country') or 'XX',
             ))
 
         # Payment instruction fields

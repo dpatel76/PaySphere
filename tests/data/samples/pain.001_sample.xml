@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM Test Data - ISO 20022 pain.001.001.09 Customer Credit Transfer Initiation
+  Standard: ISO 20022 Financial Services - Payments Initiation
+  Format: XML
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CstmrCdtTrfInitn>
+    <!-- Group Header -->
+    <GrpHdr>
+      <MsgId>MSGID-GPS-CDM-20251226-001</MsgId>
+      <CreDtTm>2025-12-26T10:00:00Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>1500.00</CtrlSum>
+      <InitgPty>
+        <Nm>Acme Corporation</Nm>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>ACME123456</Id>
+              <SchmeNm>
+                <Cd>CUST</Cd>
+              </SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </InitgPty>
+    </GrpHdr>
+
+    <!-- Payment Information -->
+    <PmtInf>
+      <PmtInfId>PMTINF-20251226-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <BtchBookg>false</BtchBookg>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>1500.00</CtrlSum>
+
+      <!-- Payment Type Information -->
+      <PmtTpInf>
+        <InstrPrty>NORM</InstrPrty>
+        <SvcLvl>
+          <Cd>SEPA</Cd>
+        </SvcLvl>
+        <CtgyPurp>
+          <Cd>SUPP</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+
+      <ReqdExctnDt>
+        <Dt>2025-12-27</Dt>
+      </ReqdExctnDt>
+
+      <!-- Debtor (Payer) -->
+      <Dbtr>
+        <Nm>John Doe</Nm>
+        <PstlAdr>
+          <StrtNm>123 Main Street</StrtNm>
+          <BldgNb>Suite 100</BldgNb>
+          <PstCd>10001</PstCd>
+          <TwnNm>New York</TwnNm>
+          <CtrySubDvsn>NY</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+        <Id>
+          <PrvtId>
+            <Othr>
+              <Id>SSN123456789</Id>
+              <SchmeNm>
+                <Cd>NIDN</Cd>
+              </SchmeNm>
+            </Othr>
+          </PrvtId>
+        </Id>
+      </Dbtr>
+
+      <!-- Debtor Account -->
+      <DbtrAcct>
+        <Id>
+          <IBAN>US12345678901234567890123456</IBAN>
+        </Id>
+        <Ccy>USD</Ccy>
+      </DbtrAcct>
+
+      <!-- Debtor Agent (Debtor's Bank) -->
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>CHASUS33XXX</BICFI>
+          <Nm>JPMorgan Chase Bank</Nm>
+          <PstlAdr>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <!-- Credit Transfer Transaction Information -->
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>INSTRID-20251226-001</InstrId>
+          <EndToEndId>E2EREF-GPS-CDM-001</EndToEndId>
+          <UETR>eb6305c9-1f7a-4c75-bb4d-8b18b7a4c1d2</UETR>
+        </PmtId>
+
+        <Amt>
+          <InstdAmt Ccy="USD">1500.00</InstdAmt>
+        </Amt>
+
+        <ChrgBr>SHAR</ChrgBr>
+
+        <!-- Creditor Agent (Beneficiary's Bank) -->
+        <CdtrAgt>
+          <FinInstnId>
+            <BICFI>BOFAUS3NXXX</BICFI>
+            <Nm>Bank of America</Nm>
+            <PstlAdr>
+              <Ctry>US</Ctry>
+            </PstlAdr>
+          </FinInstnId>
+        </CdtrAgt>
+
+        <!-- Creditor (Beneficiary) -->
+        <Cdtr>
+          <Nm>Supplier Inc</Nm>
+          <PstlAdr>
+            <StrtNm>456 Oak Avenue</StrtNm>
+            <PstCd>90001</PstCd>
+            <TwnNm>Los Angeles</TwnNm>
+            <CtrySubDvsn>CA</CtrySubDvsn>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+          <Id>
+            <OrgId>
+              <Othr>
+                <Id>SUPPLIER789</Id>
+                <SchmeNm>
+                  <Cd>CUST</Cd>
+                </SchmeNm>
+              </Othr>
+            </OrgId>
+          </Id>
+        </Cdtr>
+
+        <!-- Creditor Account -->
+        <CdtrAcct>
+          <Id>
+            <IBAN>US98765432109876543210987654</IBAN>
+          </Id>
+        </CdtrAcct>
+
+        <!-- Purpose -->
+        <Purp>
+          <Cd>SUPP</Cd>
+        </Purp>
+
+        <!-- Remittance Information -->
+        <RmtInf>
+          <Ustrd>Payment for Invoice INV-2025-001</Ustrd>
+          <Strd>
+            <RfrdDocInf>
+              <Tp>
+                <CdOrPrtry>
+                  <Cd>CINV</Cd>
+                </CdOrPrtry>
+              </Tp>
+              <Nb>INV-2025-001</Nb>
+              <RltdDt>2025-12-20</RltdDt>
+            </RfrdDocInf>
+          </Strd>
+        </RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

@@ -36,104 +36,65 @@ mapping:
       table: stg_mt103
 
     fields:
-      # --- Block 1: Basic Header ---
-      - source: "block1.application_id"
-        target: application_id
-        type: string
-        max_length: 1
-
-      - source: "block1.service_id"
-        target: service_id
-        type: string
-        max_length: 2
-
+      # === HEADER FIELDS (derived from SWIFT block structure) ===
       - source: "block1.logical_terminal"
-        target: sender_logical_terminal
+        target: sender_bic
         type: string
-        max_length: 12
-
-      - source: "block1.session_number"
-        target: session_number
-        type: string
-        max_length: 4
-
-      - source: "block1.sequence_number"
-        target: sequence_number
-        type: string
-        max_length: 6
-
-      # --- Block 2: Application Header ---
-      - source: "block2.message_type"
-        target: message_type_code
-        type: string
-        max_length: 3
+        max_length: 11
+        notes: "Sender BIC extracted from Block 1 logical terminal"
 
       - source: "block2.receiver_address"
-        target: receiver_logical_terminal
+        target: receiver_bic
         type: string
-        max_length: 12
+        max_length: 11
+        notes: "Receiver BIC extracted from Block 2"
 
-      - source: "block2.priority"
-        target: priority
-        type: string
-        max_length: 1
-
-      - source: "block2.delivery_monitoring"
-        target: delivery_monitoring
-        type: string
-        max_length: 1
-
-      - source: "block2.obsolescence_period"
-        target: obsolescence_period
+      - source: "block2.message_type"
+        target: message_type
         type: string
         max_length: 3
+        notes: "Message type code (103)"
 
-      # --- Field 20: Sender's Reference ---
+      # === Field 20: Sender's Reference ===
       - source: "20"
         target: senders_reference
         type: string
         required: true
         max_length: 16
 
-      # --- Field 21: Related Reference ---
+      - source: "20"
+        target: transaction_reference_number
+        type: string
+        max_length: 16
+        notes: "Alternative mapping for transaction ref"
+
+      # === Field 21: Related Reference ===
       - source: "21"
         target: related_reference
         type: string
         max_length: 16
 
-      # --- Field 13C: Time Indication ---
-      - source: "13C"
-        target: time_indication
-        type: string
-        max_length: 30
-
-      # --- Field 23B: Bank Operation Code ---
+      # === Field 23B: Bank Operation Code ===
       - source: "23B"
         target: bank_operation_code
         type: string
         required: true
         max_length: 4
 
-      # --- Field 23E: Instruction Code ---
+      # === Field 23E: Instruction Codes ===
       - source: "23E"
-        target: instruction_code
+        target: instruction_codes
         type: string
-        max_length: 30
-        notes: "May be repeated up to 6 times"
+        max_length: 200
+        notes: "May contain multiple instruction codes"
 
-      # --- Field 26T: Transaction Type Code ---
+      # === Field 26T: Transaction Type Code ===
       - source: "26T"
         target: transaction_type_code
         type: string
         max_length: 3
 
-      # --- Field 32A: Value Date/Currency/Amount ---
-      - source: "32A"
-        target: field_32a_raw
-        type: string
-        required: true
-        max_length: 24
-
+      # === Field 32A: Value Date/Currency/Amount ===
       - source: "32A"
         target: value_date
         type: date
@@ -165,7 +126,7 @@ mapping:
           function: parse_swift_amount
           input_pattern: "^\\d{6}[A-Z]{3}(.+)$"
 
-      # --- Field 33B: Currency/Instructed Amount ---
+      # === Field 33B: Currency/Instructed Amount ===
       - source: "33B"
         target: instructed_currency
         type: string
@@ -184,21 +145,14 @@ mapping:
           type: custom
           function: parse_swift_amount
 
-      # --- Field 36: Exchange Rate ---
+      # === Field 36: Exchange Rate ===
       - source: "36"
         target: exchange_rate
         type: decimal
         precision: 12
         scale: 6
 
-      # --- Field 50a: Ordering Customer ---
-      - source: "50A"
-        target: ordering_customer_option
-        type: string
-        transform:
-          type: constant
-          value: "A"
-
+      # === Field 50a: Ordering Customer ===
       - source: "50A"
         target: ordering_customer_account
         type: string
@@ -209,20 +163,14 @@ mapping:
           group: 1
 
       - source: "50A"
-        target: ordering_customer_bic
+        target: ordering_customer_id
         type: string
-        max_length: 11
+        max_length: 35
+        notes: "BIC identifier from option A"
         transform:
           type: regex
           pattern: "\\n?([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}[A-Z0-9]{3}?)$"
           group: 1
-
-      - source: "50F"
-        target: ordering_customer_option
-        type: string
-        transform:
-          type: constant
-          value: "F"
 
       - source: "50F"
         target: ordering_customer_party_id
@@ -231,6 +179,16 @@ mapping:
         transform:
           type: regex
           pattern: "^/?([^\\n]+)"
+          group: 1
+
+      - source: "50F"
+        target: ordering_customer_national_id
+        type: string
+        max_length: 35
+        notes: "National ID from 50F party identifier line"
+        transform:
+          type: regex
+          pattern: "\\n4/(.+?)(?:\\n|$)"
           group: 1
 
       - source: "50F"
@@ -243,9 +201,9 @@ mapping:
           group: 1
 
       - source: "50F"
-        target: ordering_customer_address_line1
+        target: ordering_customer_address
         type: string
-        max_length: 35
+        max_length: 140
         transform:
           type: regex
           pattern: "\\n2/(.+?)(?:\\n|$)"
@@ -259,13 +217,6 @@ mapping:
           type: regex
           pattern: "\\n3/([A-Z]{2})"
           group: 1
-
-      - source: "50K"
-        target: ordering_customer_option
-        type: string
-        transform:
-          type: constant
-          value: "K"
 
       - source: "50K"
         target: ordering_customer_account
@@ -294,14 +245,13 @@ mapping:
           function: extract_address_lines
           skip_first: 2
 
-      # --- Field 52a: Ordering Institution ---
-      - source: "52A"
-        target: ordering_institution_option
+      # === Field 51A: Sending Institution ===
+      - source: "51A"
+        target: sending_institution_bic
         type: string
-        transform:
-          type: constant
-          value: "A"
+        max_length: 11
 
+      # === Field 52a: Ordering Institution ===
       - source: "52A"
         target: ordering_institution_bic
         type: string
@@ -311,37 +261,50 @@ mapping:
           pattern: "([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}[A-Z0-9]{3}?)"
           group: 1
 
-      - source: "52D"
-        target: ordering_institution_option
+      - source: "52A"
+        target: ordering_institution_account
         type: string
+        max_length: 34
         transform:
-          type: constant
-          value: "D"
+          type: regex
+          pattern: "^/?([^\\n]+)"
+          group: 1
+
+      - source: "52A"
+        target: ordering_institution_clearing_code
+        type: string
+        max_length: 14
+        notes: "Clearing code if present in 52A"
+
+      - source: "52A"
+        target: ordering_institution_country
+        type: string
+        max_length: 2
+        notes: "Derived from BIC country code"
+        transform:
+          type: regex
+          pattern: "[A-Z]{4}([A-Z]{2})"
+          group: 1
 
       - source: "52D"
         target: ordering_institution_name
         type: string
         max_length: 140
 
-      # --- Field 53a: Sender's Correspondent ---
-      - source: "53A"
-        target: senders_correspondent_option
-        type: string
-        transform:
-          type: constant
-          value: "A"
-
+      # === Field 53a: Sender's Correspondent ===
       - source: "53A"
         target: senders_correspondent_bic
         type: string
         max_length: 11
 
-      - source: "53B"
-        target: senders_correspondent_option
+      - source: "53A"
+        target: senders_correspondent_account
         type: string
+        max_length: 34
         transform:
-          type: constant
-          value: "B"
+          type: regex
+          pattern: "^/?([^\\n]+)"
+          group: 1
 
       - source: "53B"
         target: senders_correspondent_location
@@ -353,49 +316,80 @@ mapping:
         type: string
         max_length: 140
 
-      # --- Field 54a: Receiver's Correspondent ---
+      # === Field 54a: Receiver's Correspondent ===
       - source: "54A"
         target: receivers_correspondent_bic
         type: string
         max_length: 11
+
+      - source: "54A"
+        target: receivers_correspondent_account
+        type: string
+        max_length: 34
+        transform:
+          type: regex
+          pattern: "^/?([^\\n]+)"
+          group: 1
+
+      - source: "54B"
+        target: receivers_correspondent_location
+        type: string
+        max_length: 35
 
       - source: "54D"
         target: receivers_correspondent_name
         type: string
         max_length: 140
 
-      # --- Field 55a: Third Reimbursement Institution ---
+      # === Field 55a: Third Reimbursement Institution ===
       - source: "55A"
         target: third_reimbursement_bic
         type: string
         max_length: 11
 
-      # --- Field 56a: Intermediary Institution ---
+      # === Field 56a: Intermediary Institution ===
+      - source: "56A"
+        target: intermediary_bic
+        type: string
+        max_length: 11
+
       - source: "56A"
         target: intermediary_institution_bic
         type: string
         max_length: 11
+        notes: "Alternative column for intermediary BIC"
 
       - source: "56C"
-        target: intermediary_institution_account
+        target: intermediary_account
         type: string
         max_length: 34
+
+      - source: "56D"
+        target: intermediary_name
+        type: string
+        max_length: 140
 
       - source: "56D"
         target: intermediary_institution_name
         type: string
         max_length: 140
+        notes: "Alternative column for intermediary name"
 
-      # --- Field 57a: Account With Institution ---
+      - source: "56D"
+        target: intermediary_institution_country
+        type: string
+        max_length: 2
+        notes: "Derived from address or BIC"
+        transform:
+          type: regex
+          pattern: "\\n([A-Z]{2})$"
+          group: 1
+
+      # === Field 57a: Account With Institution ===
       - source: "57A"
         target: account_with_institution_bic
         type: string
         max_length: 11
-
-      - source: "57B"
-        target: account_with_institution_location
-        type: string
-        max_length: 35
 
       - source: "57C"
         target: account_with_institution_account
@@ -407,14 +401,17 @@ mapping:
         type: string
         max_length: 140
 
-      # --- Field 59a: Beneficiary Customer ---
-      - source: "59"
-        target: beneficiary_option
+      - source: "57D"
+        target: account_with_institution_country
         type: string
+        max_length: 2
+        notes: "Derived from address"
         transform:
-          type: constant
-          value: "NO_LETTER"
+          type: regex
+          pattern: "\\n([A-Z]{2})$"
+          group: 1
 
+      # === Field 59a: Beneficiary Customer ===
       - source: "59"
         target: beneficiary_account
         type: string
@@ -443,27 +440,14 @@ mapping:
           skip_first: 2
 
       - source: "59A"
-        target: beneficiary_option
+        target: beneficiary_id
         type: string
-        transform:
-          type: constant
-          value: "A"
-
-      - source: "59A"
-        target: beneficiary_bic
-        type: string
-        max_length: 11
+        max_length: 35
+        notes: "BIC from option A"
         transform:
           type: regex
           pattern: "([A-Z]{4}[A-Z]{2}[A-Z0-9]{2}[A-Z0-9]{3}?)"
           group: 1
-
-      - source: "59F"
-        target: beneficiary_option
-        type: string
-        transform:
-          type: constant
-          value: "F"
 
       - source: "59F"
         target: beneficiary_party_id
@@ -484,9 +468,9 @@ mapping:
           group: 1
 
       - source: "59F"
-        target: beneficiary_address_line1
+        target: beneficiary_address
         type: string
-        max_length: 35
+        max_length: 140
         transform:
           type: regex
           pattern: "\\n2/(.+?)(?:\\n|$)"
@@ -501,39 +485,27 @@ mapping:
           pattern: "\\n3/([A-Z]{2})"
           group: 1
 
-      # --- Field 70: Remittance Information ---
+      # === Field 70: Remittance Information ===
       - source: "70"
         target: remittance_information
         type: string
         max_length: 140
 
-      # --- Field 71A: Details of Charges ---
+      # === Field 71A: Details of Charges ===
       - source: "71A"
         target: details_of_charges
         type: string
         required: true
         max_length: 3
 
-      # --- Field 71F: Sender's Charges ---
+      # === Field 71F: Sender's Charges ===
       - source: "71F"
-        target: senders_charges_currency
+        target: senders_charges
         type: string
-        max_length: 3
-        transform:
-          type: regex
-          pattern: "^([A-Z]{3})"
-          group: 1
+        max_length: 50
+        notes: "Full charges field (currency + amount)"
 
-      - source: "71F"
-        target: senders_charges_amount
-        type: decimal
-        precision: 18
-        scale: 2
-        transform:
-          type: custom
-          function: parse_swift_amount
-
-      # --- Field 71G: Receiver's Charges ---
+      # === Field 71G: Receiver's Charges ===
       - source: "71G"
         target: receivers_charges_currency
         type: string
@@ -552,45 +524,35 @@ mapping:
           type: custom
           function: parse_swift_amount
 
-      # --- Field 72: Sender to Receiver Information ---
+      # === Field 72: Sender to Receiver Information ===
       - source: "72"
         target: sender_to_receiver_info
         type: string
         max_length: 420
 
-      # --- Field 77B: Regulatory Reporting ---
+      - source: "72"
+        target: sender_to_receiver_information
+        type: string
+        max_length: 420
+        notes: "Alternative column name"
+
+      # === Field 77B: Regulatory Reporting ===
       - source: "77B"
         target: regulatory_reporting
         type: string
         max_length: 105
 
-      # --- Field 77T: Envelope Contents ---
+      # === Field 77T: Envelope Contents ===
       - source: "77T"
         target: envelope_contents
         type: string
 
-      # --- Block 5: Trailer ---
-      - source: "block5.CHK"
-        target: checksum
+      # === Block 3: User Header - UETR ===
+      - source: "block3.121"
+        target: uetr
         type: string
-        max_length: 12
-
-      - source: "block5.TNG"
-        target: training_flag
-        type: boolean
-        transform:
-          type: expression
-          expr: "source IS NOT NULL"
-
-      - source: "block5.PDE"
-        target: possible_duplicate_emission
-        type: string
-        max_length: 40
-
-      - source: "block5.PDM"
-        target: possible_duplicate_message
-        type: string
-        max_length: 40
+        max_length: 36
+        notes: "Unique End-to-End Transaction Reference from gpi"
 
   # ============================================================================
   # STAGE 2: SILVER → GOLD (Structured staging to unified CDM)
@@ -733,6 +695,107 @@ mapping:
           type: split
           delimiter: "\\n"
 
+      # --- Message Header Info ---
+      - source: sender_bic
+        target: sender_bic
+        type: string
+
+      - source: receiver_bic
+        target: receiver_bic
+        type: string
+
+      - source: message_type
+        target: swift_message_type
+        type: string
+
+      - source: transaction_reference_number
+        target: transaction_reference
+        type: string
+
+      - source: instruction_codes
+        target: instruction_codes
+        type: string
+
+      - source: transaction_type_code
+        target: transaction_type_code
+        type: string
+
+      - source: uetr
+        target: uetr
+        type: string
+
+      # --- Correspondent & Intermediary ---
+      - source: senders_correspondent_account
+        target: sender_correspondent_account
+        type: string
+
+      - source: senders_correspondent_location
+        target: sender_correspondent_location
+        type: string
+
+      - source: receivers_correspondent_account
+        target: receiver_correspondent_account
+        type: string
+
+      - source: receivers_correspondent_location
+        target: receiver_correspondent_location
+        type: string
+
+      - source: third_reimbursement_bic
+        target: third_reimbursement_bic
+        type: string
+
+      - source: intermediary_bic
+        target: intermediary_bic
+        type: string
+
+      - source: intermediary_account
+        target: intermediary_account
+        type: string
+
+      - source: intermediary_name
+        target: intermediary_name
+        type: string
+
+      - source: account_with_institution_account
+        target: account_with_institution_account
+        type: string
+
+      # --- Charges ---
+      - source: senders_charges
+        target: sender_charges
+        type: string
+
+      - source: receivers_charges_currency
+        target: receiver_charges_currency
+        type: string
+
+      - source: receivers_charges_amount
+        target: receiver_charges_amount
+        type: decimal
+
+      # --- Additional Info ---
+      - source: sender_to_receiver_info
+        target: sender_to_receiver_info
+        type: string
+
+      - source: sender_to_receiver_information
+        target: sender_to_receiver_information
+        type: string
+
+      - source: envelope_contents
+        target: envelope_contents
+        type: string
+
+      # --- Address Fields (for completeness) ---
+      - source: ordering_customer_address
+        target: ordering_customer_address
+        type: string
+
+      - source: beneficiary_address
+        target: beneficiary_address
+        type: string
+
       # --- Status ---
       - target: current_status
         type: string
@@ -791,6 +854,10 @@ mapping:
             target: bic
           - source: ordering_customer_party_id
             target: identification_number
+          - source: ordering_customer_id
+            target: lei
+          - source: ordering_customer_national_id
+            target: national_id
           - source: ordering_customer_address
             target: address_line1
           - source: ordering_customer_address_line1
@@ -807,6 +874,8 @@ mapping:
             target: bic
           - source: beneficiary_party_id
             target: identification_number
+          - source: beneficiary_id
+            target: lei
           - source: beneficiary_account
             target: account_reference
           - source: beneficiary_address
@@ -832,6 +901,12 @@ mapping:
 
     # --- Financial Institution Entities ---
     fi_mappings:
+      - role: sending_institution
+        target_table: cdm_financial_institution
+        fields:
+          - source: sending_institution_bic
+            target: bic
+
       - role: debtor_agent
         target_table: cdm_financial_institution
         fields:
@@ -839,6 +914,12 @@ mapping:
             target: bic
           - source: ordering_institution_name
             target: institution_name
+          - source: ordering_institution_account
+            target: account_number
+          - source: ordering_institution_clearing_code
+            target: national_clearing_code
+          - source: ordering_institution_country
+            target: country
 
       - role: senders_correspondent
         target_table: cdm_financial_institution
@@ -863,6 +944,8 @@ mapping:
             target: bic
           - source: intermediary_institution_name
             target: institution_name
+          - source: intermediary_institution_country
+            target: country
 
       - role: creditor_agent
         target_table: cdm_financial_institution
@@ -871,6 +954,8 @@ mapping:
             target: bic
           - source: account_with_institution_name
             target: institution_name
+          - source: account_with_institution_country
+            target: country
 
   # ============================================================================
   # VALIDATION RULES

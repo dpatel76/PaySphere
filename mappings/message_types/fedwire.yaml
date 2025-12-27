@@ -33,12 +33,23 @@ mapping:
       table: stg_fedwire
 
     fields:
-      # --- Mandatory Wire Data ---
+      # === MANDATORY WIRE DATA ===
       - source: "{1510}"
-        target: type_subtype_code
+        target: type_code
         type: string
         required: true
-        max_length: 4
+        max_length: 2
+        notes: "Type code from tag 1510"
+
+      - source: "{1510}"
+        target: subtype_code
+        type: string
+        max_length: 2
+        notes: "Subtype code from tag 1510"
+        transform:
+          type: regex
+          pattern: "^.{2}(.{2})"
+          group: 1
 
       - source: "{1520}"
         target: imad
@@ -47,6 +58,12 @@ mapping:
         max_length: 22
         notes: "Input Message Accountability Data"
 
+      - source: "{1530}"
+        target: omad
+        type: string
+        max_length: 22
+        notes: "Output Message Accountability Data"
+
       - source: "{2000}"
         target: amount
         type: decimal
@@ -54,16 +71,69 @@ mapping:
         scale: 2
         required: true
 
+      - source: "{2000}"
+        target: currency
+        type: string
+        max_length: 3
+        transform:
+          type: constant
+          value: "USD"
+
       - source: "{3100}"
         target: sender_aba
         type: string
         required: true
         max_length: 9
 
+      - source: "{3100}.short_name"
+        target: sender_short_name
+        type: string
+        max_length: 18
+
       - source: "{3100}.name"
         target: sender_name
         type: string
         max_length: 35
+
+      - source: "{3100}.bic"
+        target: sender_bic
+        type: string
+        max_length: 11
+
+      - source: "{3100}.lei"
+        target: sender_lei
+        type: string
+        max_length: 20
+
+      - source: "{3100}.address_line1"
+        target: sender_address_line1
+        type: string
+        max_length: 35
+
+      - source: "{3100}.address_line2"
+        target: sender_address_line2
+        type: string
+        max_length: 35
+
+      - source: "{3100}.city"
+        target: sender_city
+        type: string
+        max_length: 35
+
+      - source: "{3100}.state"
+        target: sender_state
+        type: string
+        max_length: 2
+
+      - source: "{3100}.zip_code"
+        target: sender_zip_code
+        type: string
+        max_length: 10
+
+      - source: "{3100}.country"
+        target: sender_country
+        type: string
+        max_length: 2
 
       - source: "{3400}"
         target: receiver_aba
@@ -71,15 +141,65 @@ mapping:
         required: true
         max_length: 9
 
+      - source: "{3400}.short_name"
+        target: receiver_short_name
+        type: string
+        max_length: 18
+
       - source: "{3400}.name"
         target: receiver_name
         type: string
         max_length: 35
 
+      - source: "{3400}.bic"
+        target: receiver_bic
+        type: string
+        max_length: 11
+
+      - source: "{3400}.lei"
+        target: receiver_lei
+        type: string
+        max_length: 20
+
+      - source: "{3400}.address_line1"
+        target: receiver_address_line1
+        type: string
+        max_length: 35
+
+      - source: "{3400}.address_line2"
+        target: receiver_address_line2
+        type: string
+        max_length: 35
+
+      - source: "{3400}.city"
+        target: receiver_city
+        type: string
+        max_length: 35
+
+      - source: "{3400}.state"
+        target: receiver_state
+        type: string
+        max_length: 2
+
+      - source: "{3400}.zip_code"
+        target: receiver_zip_code
+        type: string
+        max_length: 10
+
+      - source: "{3400}.country"
+        target: receiver_country
+        type: string
+        max_length: 2
+
       - source: "{3320}"
         target: sender_reference
         type: string
         max_length: 16
+
+      - source: "{3500}"
+        target: previous_imad
+        type: string
+        max_length: 22
 
       - source: "{3600}"
         target: business_function_code
@@ -87,55 +207,70 @@ mapping:
         required: true
         max_length: 3
 
-      # --- Beneficiary Information ---
-      - source: "{4200}"
-        target: beneficiary_fi_aba
-        type: string
-        max_length: 9
-
-      - source: "{4200}.name"
-        target: beneficiary_fi_name
-        type: string
-        max_length: 35
-
-      - source: "{4100}"
-        target: intermediary_fi_aba
-        type: string
-        max_length: 9
-
-      - source: "{4000}"
-        target: beneficiary_account
+      # === ORIGINATOR INFORMATION ===
+      - source: "{5000}.id"
+        target: originator_id
         type: string
         max_length: 34
 
-      - source: "{4000}.name"
-        target: beneficiary_name
+      - source: "{5000}.id_type"
+        target: originator_id_type
         type: string
-        max_length: 35
-
-      - source: "{4000}.address"
-        target: beneficiary_address
-        type: string
-        max_length: 140
-
-      # --- Originator Information ---
-      - source: "{5000}"
-        target: originator_account
-        type: string
-        max_length: 34
+        max_length: 2
 
       - source: "{5000}.name"
         target: originator_name
         type: string
         max_length: 35
 
-      - source: "{5000}.address"
-        target: originator_address
+      - source: "{5000}.address_line1"
+        target: originator_address_line1
         type: string
-        max_length: 140
+        max_length: 35
+
+      - source: "{5000}.address_line2"
+        target: originator_address_line2
+        type: string
+        max_length: 35
+
+      - source: "{5000}.address_line3"
+        target: originator_address_line3
+        type: string
+        max_length: 35
+
+      - source: "{5000}.city"
+        target: originator_city
+        type: string
+        max_length: 35
+
+      - source: "{5000}.state"
+        target: originator_state
+        type: string
+        max_length: 2
+
+      - source: "{5000}.zip_code"
+        target: originator_zip_code
+        type: string
+        max_length: 10
+
+      - source: "{5000}.country"
+        target: originator_country
+        type: string
+        max_length: 2
+
+      - source: "{5000}.option_f"
+        target: originator_option_f
+        type: string
+        max_length: 350
+        notes: "Structured address option F"
+
+      - source: "{5000}.account"
+        target: originator_account_number
+        type: string
+        max_length: 34
 
       - source: "{5100}"
-        target: originator_fi_aba
+        target: originator_fi_id
         type: string
         max_length: 9
 
@@ -144,71 +279,176 @@ mapping:
         type: string
         max_length: 35
 
-      - source: "{5200}"
-        target: instructing_fi_aba
+      - source: "{5100}.address"
+        target: originator_fi_address
+        type: string
+        max_length: 105
+
+      # === BENEFICIARY INFORMATION ===
+      - source: "{4000}.id"
+        target: beneficiary_id
+        type: string
+        max_length: 34
+
+      - source: "{4000}.id_type"
+        target: beneficiary_id_type
+        type: string
+        max_length: 2
+
+      - source: "{4000}.name"
+        target: beneficiary_name
+        type: string
+        max_length: 35
+
+      - source: "{4000}.address_line1"
+        target: beneficiary_address_line1
+        type: string
+        max_length: 35
+
+      - source: "{4000}.address_line2"
+        target: beneficiary_address_line2
+        type: string
+        max_length: 35
+
+      - source: "{4000}.address_line3"
+        target: beneficiary_address_line3
+        type: string
+        max_length: 35
+
+      - source: "{4000}.city"
+        target: beneficiary_city
+        type: string
+        max_length: 35
+
+      - source: "{4000}.state"
+        target: beneficiary_state
+        type: string
+        max_length: 2
+
+      - source: "{4000}.zip_code"
+        target: beneficiary_zip_code
+        type: string
+        max_length: 10
+
+      - source: "{4000}.country"
+        target: beneficiary_country
+        type: string
+        max_length: 2
+
+      - source: "{4000}.account"
+        target: beneficiary_account_number
+        type: string
+        max_length: 34
+
+      - source: "{4000}.reference"
+        target: beneficiary_reference
+        type: string
+        max_length: 16
+
+      - source: "{4200}"
+        target: beneficiary_fi_id
         type: string
         max_length: 9
 
-      # --- Additional Wire Data ---
+      - source: "{4200}.name"
+        target: beneficiary_fi_name
+        type: string
+        max_length: 35
+
+      - source: "{4200}.address"
+        target: beneficiary_fi_address
+        type: string
+        max_length: 105
+
+      - source: "{4200}.bic"
+        target: beneficiary_fi_bic
+        type: string
+        max_length: 11
+
+      # === INTERMEDIARY INFORMATION ===
+      - source: "{4100}"
+        target: intermediary_fi_id
+        type: string
+        max_length: 9
+
+      - source: "{4100}.name"
+        target: intermediary_fi_name
+        type: string
+        max_length: 35
+
+      - source: "{4100}.address"
+        target: intermediary_fi_address
+        type: string
+        max_length: 105
+
+      # === INSTRUCTING FI ===
+      - source: "{5200}"
+        target: instructing_fi_id
+        type: string
+        max_length: 9
+
+      - source: "{5200}.name"
+        target: instructing_fi_name
+        type: string
+        max_length: 35
+
+      # === CHARGES ===
+      - source: "{3700}"
+        target: charges
+        type: string
+        max_length: 6
+
+      # === AMOUNTS ===
+      - source: "{3710}"
+        target: instructed_amount
+        type: decimal
+        precision: 18
+        scale: 2
+
+      - source: "{3710}"
+        target: instructed_currency
+        type: string
+        max_length: 3
+        notes: "Currency from instructed amount tag"
+        transform:
+          type: regex
+          pattern: "^([A-Z]{3})"
+          group: 1
+
+      # === ADDITIONAL DATA ===
       - source: "{6000}"
         target: originator_to_beneficiary_info
         type: string
-        max_length: 140
-
-      - source: "{6100}"
-        target: receiver_fi_info
-        type: string
-        max_length: 140
-
-      - source: "{6110}"
-        target: drawdown_debit_account
-        type: string
-        max_length: 34
+        max_length: 560
+        notes: "Up to 4 lines of 140 chars"
 
       - source: "{6200}"
         target: fi_to_fi_info
         type: string
-        max_length: 140
+        max_length: 420
+        notes: "Up to 6 lines of 70 chars"
 
-      - source: "{6210}"
-        target: sender_to_receiver_info
+      # === INPUT CYCLE DATA ===
+      - source: "{1100}"
+        target: input_cycle_date
+        type: date
+        notes: "Input cycle date"
+
+      - source: "{1110}"
+        target: input_sequence_number
         type: string
-        max_length: 140
+        max_length: 6
 
-      # --- Charges ---
-      - source: "{3700}"
-        target: charges_details
+      - source: "{1120}"
+        target: input_source
         type: string
-        max_length: 3
+        max_length: 8
 
-      - source: "{3710}"
-        target: sender_charges_amount
-        type: decimal
-        precision: 18
-        scale: 2
-
-      - source: "{3720}"
-        target: receiver_charges_amount
-        type: decimal
-        precision: 18
-        scale: 2
-
-      # --- Exchange Rate ---
-      - source: "{3800}"
-        target: exchange_rate
-        type: decimal
-        precision: 12
-        scale: 6
-
-      # --- Related References ---
+      # === PREVIOUS MESSAGE ===
       - source: "{3500}"
         target: previous_message_id
         type: string
         max_length: 22
-
-      - source: "{9000}"
-        target: unstructured_addenda
-        type: string
 
   # ============================================================================
   # STAGE 2: SILVER → GOLD
@@ -304,6 +544,76 @@ mapping:
         transform:
           type: wrap_array
 
+      # --- Wire-specific fields ---
+      - source: type_code
+        target: wire_type_code
+        type: string
+
+      - source: subtype_code
+        target: wire_subtype_code
+        type: string
+
+      - source: omad
+        target: omad
+        type: string
+
+      - source: previous_imad
+        target: previous_imad
+        type: string
+
+      - source: previous_message_id
+        target: related_reference
+        type: string
+
+      - source: fi_to_fi_info
+        target: fi_to_fi_info
+        type: string
+
+      - source: charges
+        target: charges_info
+        type: string
+
+      - source: currency
+        target: settlement_currency
+        type: string
+
+      - source: instructed_amount
+        target: original_instructed_amount
+        type: decimal
+
+      - source: instructed_currency
+        target: original_instructed_currency
+        type: string
+
+      - source: input_cycle_date
+        target: input_cycle_date
+        type: date
+
+      - source: input_sequence_number
+        target: input_sequence_number
+        type: string
+
+      - source: input_source
+        target: input_source
+        type: string
+
+      - source: beneficiary_reference
+        target: beneficiary_reference
+        type: string
+
+      # --- ID Type fields ---
+      - source: originator_id_type
+        target: originator_id_type
+        type: string
+
+      - source: originator_option_f
+        target: originator_option_f
+        type: string
+
+      - source: beneficiary_id_type
+        target: beneficiary_id_type
+        type: string
+
       - target: current_status
         type: string
         transform:
@@ -340,50 +650,140 @@ mapping:
         fields:
           - source: originator_name
             target: name
-          - source: originator_address
+          - source: originator_id
+            target: identification_number
+          - source: originator_address_line1
             target: address_line1
+          - source: originator_address_line2
+            target: address_line2
+          - source: originator_address_line3
+            target: address_line3
+          - source: originator_city
+            target: town_name
+          - source: originator_state
+            target: country_sub_division
+          - source: originator_zip_code
+            target: post_code
+          - source: originator_country
+            target: country
 
       - role: creditor
         target_table: cdm_party
         fields:
           - source: beneficiary_name
             target: name
-          - source: beneficiary_address
+          - source: beneficiary_id
+            target: identification_number
+          - source: beneficiary_address_line1
             target: address_line1
+          - source: beneficiary_address_line2
+            target: address_line2
+          - source: beneficiary_address_line3
+            target: address_line3
+          - source: beneficiary_city
+            target: town_name
+          - source: beneficiary_state
+            target: country_sub_division
+          - source: beneficiary_zip_code
+            target: post_code
+          - source: beneficiary_country
+            target: country
 
     account_mappings:
       - role: debtor_account
         target_table: cdm_account
         fields:
-          - source: originator_account
+          - source: originator_account_number
             target: account_number
 
       - role: creditor_account
         target_table: cdm_account
         fields:
-          - source: beneficiary_account
+          - source: beneficiary_account_number
             target: account_number
 
     fi_mappings:
-      - role: debtor_agent
+      - role: sender
         target_table: cdm_financial_institution
         fields:
           - source: sender_aba
             target: national_clearing_code
           - source: sender_name
             target: institution_name
+          - source: sender_short_name
+            target: short_name
+          - source: sender_bic
+            target: bic
+          - source: sender_lei
+            target: lei
+          - source: sender_address_line1
+            target: address_line1
+          - source: sender_address_line2
+            target: address_line2
+          - source: sender_city
+            target: town_name
+          - source: sender_state
+            target: country_sub_division
+          - source: sender_zip_code
+            target: post_code
+          - source: sender_country
+            target: country
           - target: national_clearing_system
             transform:
               type: constant
               value: "USABA"
 
+      - role: receiver
+        target_table: cdm_financial_institution
+        fields:
+          - source: receiver_aba
+            target: national_clearing_code
+          - source: receiver_name
+            target: institution_name
+          - source: receiver_short_name
+            target: short_name
+          - source: receiver_bic
+            target: bic
+          - source: receiver_lei
+            target: lei
+          - source: receiver_address_line1
+            target: address_line1
+          - source: receiver_address_line2
+            target: address_line2
+          - source: receiver_city
+            target: town_name
+          - source: receiver_state
+            target: country_sub_division
+          - source: receiver_zip_code
+            target: post_code
+          - source: receiver_country
+            target: country
+          - target: national_clearing_system
+            transform:
+              type: constant
+              value: "USABA"
+
+      - role: originator_fi
+        target_table: cdm_financial_institution
+        fields:
+          - source: originator_fi_id
+            target: national_clearing_code
+          - source: originator_fi_name
+            target: institution_name
+          - source: originator_fi_address
+            target: address_line1
+
       - role: creditor_agent
         target_table: cdm_financial_institution
         fields:
-          - source: beneficiary_fi_aba
+          - source: beneficiary_fi_id
             target: national_clearing_code
           - source: beneficiary_fi_name
             target: institution_name
+          - source: beneficiary_fi_address
+            target: address_line1
+          - source: beneficiary_fi_bic
+            target: bic
           - target: national_clearing_system
             transform:
               type: constant
@@ -392,8 +792,20 @@ mapping:
       - role: intermediary_agent
         target_table: cdm_financial_institution
         fields:
-          - source: intermediary_fi_aba
+          - source: intermediary_fi_id
             target: national_clearing_code
+          - source: intermediary_fi_name
+            target: institution_name
+          - source: intermediary_fi_address
+            target: address_line1
+
+      - role: instructing_fi
+        target_table: cdm_financial_institution
+        fields:
+          - source: instructing_fi_id
+            target: national_clearing_code
+          - source: instructing_fi_name
+            target: institution_name
 
   # ============================================================================
   # VALIDATION RULES

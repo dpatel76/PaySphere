@@ -73,7 +73,6 @@ class Pacs008Extractor(BaseExtractor):
             'stg_id': stg_id,
             'raw_id': raw_id,
             '_batch_id': batch_id,
-            '_ingested_at': datetime.utcnow(),
 
             # Message Header
             'message_id': trunc(msg_content.get('messageId'), 35),
@@ -193,7 +192,7 @@ class Pacs008Extractor(BaseExtractor):
     def get_silver_columns(self) -> List[str]:
         """Return ordered list of Silver table columns for INSERT."""
         return [
-            'stg_id', 'raw_id', '_batch_id', '_ingested_at',
+            'stg_id', 'raw_id', '_batch_id',
             'message_id', 'creation_date_time', 'number_of_transactions',
             'total_interbank_settlement_amount', 'interbank_settlement_currency',
             'interbank_settlement_date', 'settlement_method', 'clearing_system',
@@ -310,8 +309,8 @@ class Pacs008Extractor(BaseExtractor):
                 account_number=debtor_account.get('iban') or debtor_account.get('accountNumber'),
                 role="DEBTOR",
                 iban=debtor_account.get('iban'),
-                account_type=debtor_account.get('accountType', 'CACC'),
-                currency=debtor_account.get('currency', 'XXX'),
+                account_type=debtor_account.get('accountType') or 'CACC',
+                currency=debtor_account.get('currency') or 'XXX',
             ))
 
         # Creditor Account
@@ -320,8 +319,8 @@ class Pacs008Extractor(BaseExtractor):
                 account_number=creditor_account.get('iban') or creditor_account.get('accountNumber'),
                 role="CREDITOR",
                 iban=creditor_account.get('iban'),
-                account_type=creditor_account.get('accountType', 'CACC'),
-                currency=creditor_account.get('currency', 'XXX'),
+                account_type=creditor_account.get('accountType') or 'CACC',
+                currency=creditor_account.get('currency') or 'XXX',
             ))
 
         # Instructing Agent (Debtor Agent)
@@ -332,7 +331,7 @@ class Pacs008Extractor(BaseExtractor):
                 bic=instructing_agent.get('bic') or debtor_agent.get('bic'),
                 lei=instructing_agent.get('lei') or debtor_agent.get('lei'),
                 clearing_code=debtor_agent.get('clearingSystemMemberId'),
-                country=instructing_agent.get('country', 'XX'),
+                country=instructing_agent.get('country') or 'XX',
             ))
 
         # Instructed Agent (Creditor Agent)
@@ -343,7 +342,7 @@ class Pacs008Extractor(BaseExtractor):
                 bic=instructed_agent.get('bic') or creditor_agent.get('bic'),
                 lei=instructed_agent.get('lei') or creditor_agent.get('lei'),
                 clearing_code=creditor_agent.get('clearingSystemMemberId'),
-                country=instructed_agent.get('country', 'XX'),
+                country=instructed_agent.get('country') or 'XX',
             ))
 
         # Payment instruction fields

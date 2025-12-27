@@ -3,6 +3,8 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
+import re
+import logging
 
 from ..base import (
     BaseExtractor,
@@ -12,6 +14,204 @@ from ..base import (
     AccountData,
     FinancialInstitutionData,
 )
+
+logger = logging.getLogger(__name__)
+
+
+class FedwireTagValueParser:
+    """Parser for Fedwire tag-value format messages."""
+
+    # Fedwire tag definitions
+    TAG_DEFS = {
+        '1500': 'typeCode',
+        '1510': 'subtypeCode',
+        '1520': 'imad',
+        '2000': 'amount',
+        '3100': 'senderFi',
+        '3320': 'senderReference',
+        '3400': 'businessFunctionCode',
+        '3600': 'localInstrumentCode',
+        '4000': 'originator',
+        '4100': 'receiverFiRoutingNumber',
+        '4200': 'receiverFiName',
+        '5000': 'beneficiary',
+        '5100': 'beneficiaryBankRoutingNumber',
+        '5200': 'beneficiaryBankName',
+        '6000': 'originatorToBeneficiaryInfo',
+        '6100': 'omad',
+        '6210': 'beneficiaryReference',
+        '6300': 'instructingBankInfo',
+        '6400': 'fiToFiInfo',
+    }
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse Fedwire tag-value message into structured dict."""
+        result = {}
+        lines = raw_content.strip().split('\n')
+        current_tag = None
+        current_value = []
+
+        for line in lines:
+            line = line.rstrip()
+
+            # Check for tag at start of line: {NNNN}
+            tag_match = re.match(r'^\{(\d{4})\}(.*)$', line)
+            if tag_match:
+                # Save previous tag value
+                if current_tag:
+                    self._set_field(result, current_tag, '\n'.join(current_value))
+                # Start new tag
+                current_tag = tag_match.group(1)
+                current_value = [tag_match.group(2)] if tag_match.group(2) else []
+            elif current_tag:
+                # Continuation line
+                current_value.append(line)
+
+        # Save last tag
+        if current_tag:
+            self._set_field(result, current_tag, '\n'.join(current_value))
+
+        return result
+
+    def _set_field(self, result: Dict[str, Any], tag: str, value: str) -> None:
+        """Set field value based on Fedwire tag."""
+        value = value.strip()
+
+        if tag == '1500':
+            result['typeCode'] = value
+        elif tag == '1510':
+            result['subtypeCode'] = value
+        elif tag == '1520':
+            result['imad'] = value
+            # Parse IMAD: YYYYMMDDSSSSSSSSNNNNNN
+            if len(value) >= 8:
+                result['inputCycleDate'] = f"{value[:4]}-{value[4:6]}-{value[6:8]}"
+            if len(value) >= 16:
+                result['inputSource'] = value[8:16]
+            if len(value) >= 22:
+                result['inputSequenceNumber'] = value[16:22]
+        elif tag == '2000':
+            # Amount: 12 digits with implied 2 decimals
+            clean = value.replace(',', '').replace('.', '').lstrip('0')
+            if clean:
+                result['amount'] = float(clean) / 100
+            else:
+                result['amount'] = 0.0
+            result['currency'] = 'USD'  # Fedwire is always USD
+        elif tag == '3100':
+            # Sender FI: RoutingNumber + Name
+            self._parse_fi(result, 'sender', value)
+        elif tag == '3320':
+            result['senderReference'] = value
+        elif tag == '3400':
+            result['businessFunctionCode'] = value
+        elif tag == '3600':
+            result['localInstrumentCode'] = value
+        elif tag == '4000':
+            # Originator (multi-line)
+            self._parse_party(result, 'originator', value)
+        elif tag == '4100':
+            # Receiver FI Routing Number
+            if 'receiver' not in result:
+                result['receiver'] = {}
+            result['receiver']['routingNumber'] = value[:9] if len(value) >= 9 else value
+        elif tag == '4200':
+            # Receiver FI Name
+            if 'receiver' not in result:
+                result['receiver'] = {}
+            result['receiver']['name'] = value
+        elif tag == '5000':
+            # Beneficiary (multi-line)
+            self._parse_party(result, 'beneficiary', value)
+        elif tag == '5100':
+            # Beneficiary Bank Routing Number
+            if 'beneficiaryBank' not in result:
+                result['beneficiaryBank'] = {}
+            result['beneficiaryBank']['routingNumber'] = value[:9] if len(value) >= 9 else value
+        elif tag == '5200':
+            # Beneficiary Bank Name
+            if 'beneficiaryBank' not in result:
+                result['beneficiaryBank'] = {}
+            result['beneficiaryBank']['name'] = value
+        elif tag == '6000':
+            result['originatorToBeneficiaryInfo'] = value.replace('\n', ' ')
+        elif tag == '6100':
+            result['omad'] = value
+        elif tag == '6210':
+            result['beneficiaryReference'] = value
+        elif tag == '6300':
+            # Instructing bank charges: CCCAMOUNT format
+            if len(value) >= 4:
+                result['chargesCurrency'] = value[:3]
+                result['chargesAmount'] = self._parse_amount(value[3:])
+            result['chargeDetails'] = value
+        elif tag == '6400':
+            result['fiToFiInfo'] = value.replace('\n', ' ')
+
+    def _parse_fi(self, result: Dict[str, Any], prefix: str, value: str) -> None:
+        """Parse financial institution field."""
+        if prefix not in result:
+            result[prefix] = {}
+
+        lines = value.split('\n')
+        first_line = lines[0] if lines else ''
+
+        # First 9 chars are routing number
+        if len(first_line) >= 9:
+            result[prefix]['routingNumber'] = first_line[:9]
+            result[prefix]['name'] = first_line[9:].strip()
+        else:
+            result[prefix]['name'] = first_line
+
+    def _parse_party(self, result: Dict[str, Any], prefix: str, value: str) -> None:
+        """Parse party (originator/beneficiary) field."""
+        if prefix not in result:
+            result[prefix] = {'address': {}}
+
+        lines = value.split('\n')
+
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+
+            if i == 0:
+                # First line: may have identifier prefix like D/ or I/
+                if line.startswith('D/') or line.startswith('I/'):
+                    result[prefix]['identifierType'] = line[0]  # D or I
+                    result[prefix]['identifier'] = line[2:]  # Rest is account
+                else:
+                    result[prefix]['name'] = line
+            elif i == 1 and result[prefix].get('identifier'):
+                result[prefix]['name'] = line
+            elif 'name' not in result[prefix]:
+                result[prefix]['name'] = line
+            else:
+                # Address lines
+                addr = result[prefix]['address']
+                if 'line1' not in addr:
+                    addr['line1'] = line
+                elif 'city' not in addr:
+                    # Parse "CITY STATE ZIP" format
+                    parts = line.rsplit(' ', 2)
+                    if len(parts) >= 2:
+                        addr['city'] = parts[0]
+                        addr['state'] = parts[1] if len(parts) > 1 else None
+                        addr['zipCode'] = parts[2] if len(parts) > 2 else None
+                    else:
+                        addr['city'] = line
+                elif 'country' not in addr:
+                    addr['country'] = line[:2] if len(line) >= 2 else line
+
+    def _parse_amount(self, amount_str: str) -> float:
+        """Parse amount with comma as decimal separator."""
+        if not amount_str:
+            return 0.0
+        clean = amount_str.replace(',', '.').replace(' ', '')
+        try:
+            return float(clean)
+        except ValueError:
+            return 0.0
 
 
 class FedwireExtractor(BaseExtractor):
@@ -65,10 +265,8 @@ class FedwireExtractor(BaseExtractor):
             'stg_id': stg_id,
             'raw_id': raw_id,
             '_batch_id': batch_id,
-            '_ingested_at': datetime.utcnow(),
 
-            # Message Header
-            'message_id': trunc(msg_content.get('messageId'), 35),
+            # Message Header (matching actual DB schema)
             'type_code': trunc(msg_content.get('typeCode'), 4),
             'subtype_code': trunc(msg_content.get('subtypeCode'), 4),
             'imad': trunc(msg_content.get('imad'), 22),
@@ -79,18 +277,18 @@ class FedwireExtractor(BaseExtractor):
 
             # Amount & Currency
             'amount': msg_content.get('amount'),
-            'currency': msg_content.get('currency', 'USD'),
+            'currency': msg_content.get('currency') or 'USD',
             'instructed_amount': msg_content.get('instructedAmount'),
-            'instructed_currency': msg_content.get('instructedCurrency', 'USD'),
+            'instructed_currency': msg_content.get('instructedCurrency') or 'USD',
 
             # References
             'sender_reference': trunc(msg_content.get('senderReference'), 16),
-            'previous_message_id': trunc(msg_content.get('previousMessageId'), 22),
+            'previous_imad': trunc(msg_content.get('previousMessageId'), 22),
             'business_function_code': trunc(msg_content.get('businessFunctionCode'), 3),
             'beneficiary_reference': trunc(msg_content.get('beneficiaryReference'), 16),
 
-            # Sender FI
-            'sender_routing_number': trunc(sender.get('routingNumber'), 9),
+            # Sender FI (using DB column names)
+            'sender_aba': trunc(sender.get('routingNumber'), 9),
             'sender_name': trunc(sender.get('name'), 140),
             'sender_short_name': trunc(sender.get('shortName'), 35),
             'sender_bic': sender.get('bic'),
@@ -100,10 +298,10 @@ class FedwireExtractor(BaseExtractor):
             'sender_city': trunc(sender_addr.get('city'), 35),
             'sender_state': trunc(sender_addr.get('state'), 2),
             'sender_zip_code': trunc(sender_addr.get('zipCode'), 10),
-            'sender_country': sender_addr.get('country', 'US'),
+            'sender_country': sender_addr.get('country') or 'US',
 
             # Receiver FI
-            'receiver_routing_number': trunc(receiver.get('routingNumber'), 9),
+            'receiver_aba': trunc(receiver.get('routingNumber'), 9),
             'receiver_name': trunc(receiver.get('name'), 140),
             'receiver_short_name': trunc(receiver.get('shortName'), 35),
             'receiver_bic': receiver.get('bic'),
@@ -113,9 +311,9 @@ class FedwireExtractor(BaseExtractor):
             'receiver_city': trunc(receiver_addr.get('city'), 35),
             'receiver_state': trunc(receiver_addr.get('state'), 2),
             'receiver_zip_code': trunc(receiver_addr.get('zipCode'), 10),
-            'receiver_country': receiver_addr.get('country', 'US'),
+            'receiver_country': receiver_addr.get('country') or 'US',
 
-            # Originator
+            # Originator (using DB column names)
             'originator_name': trunc(originator.get('name'), 140),
             'originator_account_number': trunc(originator.get('accountNumber'), 35),
             'originator_address_line1': trunc(originator_addr.get('line1'), 140),
@@ -123,14 +321,14 @@ class FedwireExtractor(BaseExtractor):
             'originator_city': trunc(originator_addr.get('city'), 35),
             'originator_state': trunc(originator_addr.get('state'), 2),
             'originator_zip_code': trunc(originator_addr.get('zipCode'), 10),
-            'originator_country': originator_addr.get('country', 'US'),
-            'originator_identifier': trunc(originator.get('identifier'), 35),
-            'originator_identifier_type': trunc(originator.get('identifierType'), 10),
+            'originator_country': originator_addr.get('country') or 'US',
+            'originator_id': trunc(originator.get('identifier'), 35),
+            'originator_id_type': trunc(originator.get('identifierType'), 10),
 
             # Originator Option F (additional party info)
             'originator_option_f': trunc(msg_content.get('originatorOptionF'), 140),
 
-            # Beneficiary
+            # Beneficiary (using DB column names)
             'beneficiary_name': trunc(beneficiary.get('name'), 140),
             'beneficiary_account_number': trunc(beneficiary.get('accountNumber'), 35),
             'beneficiary_address_line1': trunc(beneficiary_addr.get('line1'), 140),
@@ -138,55 +336,55 @@ class FedwireExtractor(BaseExtractor):
             'beneficiary_city': trunc(beneficiary_addr.get('city'), 35),
             'beneficiary_state': trunc(beneficiary_addr.get('state'), 2),
             'beneficiary_zip_code': trunc(beneficiary_addr.get('zipCode'), 10),
-            'beneficiary_country': beneficiary_addr.get('country', 'US'),
-            'beneficiary_identifier': trunc(beneficiary.get('identifier'), 35),
-            'beneficiary_identifier_type': trunc(beneficiary.get('identifierType'), 10),
+            'beneficiary_country': beneficiary_addr.get('country') or 'US',
+            'beneficiary_id': trunc(beneficiary.get('identifier'), 35),
+            'beneficiary_id_type': trunc(beneficiary.get('identifierType'), 10),
 
-            # Beneficiary Bank
-            'beneficiary_bank_routing_number': trunc(beneficiary_bank.get('routingNumber'), 9),
-            'beneficiary_bank_name': trunc(beneficiary_bank.get('name'), 140),
-            'beneficiary_bank_bic': beneficiary_bank.get('bic'),
+            # Beneficiary Bank (using DB column names)
+            'beneficiary_fi_id': trunc(beneficiary_bank.get('routingNumber'), 9),
+            'beneficiary_fi_name': trunc(beneficiary_bank.get('name'), 140),
+            'beneficiary_fi_bic': beneficiary_bank.get('bic'),
 
             # Instructing Bank
-            'instructing_bank_routing_number': trunc(instructing_bank.get('routingNumber'), 9),
-            'instructing_bank_name': trunc(instructing_bank.get('name'), 140),
+            'instructing_fi_id': trunc(instructing_bank.get('routingNumber'), 9),
+            'instructing_fi_name': trunc(instructing_bank.get('name'), 140),
 
             # Intermediary Bank
-            'intermediary_bank_routing_number': trunc(intermediary_bank.get('routingNumber'), 9) if intermediary_bank else None,
-            'intermediary_bank_name': trunc(intermediary_bank.get('name'), 140) if intermediary_bank else None,
+            'intermediary_fi_id': trunc(intermediary_bank.get('routingNumber'), 9) if intermediary_bank else None,
+            'intermediary_fi_name': trunc(intermediary_bank.get('name'), 140) if intermediary_bank else None,
 
             # Info Fields
             'originator_to_beneficiary_info': trunc(msg_content.get('originatorToBeneficiaryInfo'), 140),
             'fi_to_fi_info': trunc(msg_content.get('fiToFiInfo'), 210),
-            'charge_details': trunc(msg_content.get('chargeDetails'), 3),
+            'charges': trunc(msg_content.get('chargeDetails'), 3),
         }
 
     def get_silver_columns(self) -> List[str]:
         """Return ordered list of Silver table columns for INSERT."""
         return [
-            'stg_id', 'raw_id', '_batch_id', '_ingested_at',
-            'message_id', 'type_code', 'subtype_code', 'imad', 'omad',
+            'stg_id', 'raw_id', '_batch_id',
+            'type_code', 'subtype_code', 'imad', 'omad',
             'input_cycle_date', 'input_source', 'input_sequence_number',
             'amount', 'currency', 'instructed_amount', 'instructed_currency',
-            'sender_reference', 'previous_message_id', 'business_function_code', 'beneficiary_reference',
-            'sender_routing_number', 'sender_name', 'sender_short_name', 'sender_bic', 'sender_lei',
+            'sender_reference', 'previous_imad', 'business_function_code', 'beneficiary_reference',
+            'sender_aba', 'sender_name', 'sender_short_name', 'sender_bic', 'sender_lei',
             'sender_address_line1', 'sender_address_line2', 'sender_city', 'sender_state',
             'sender_zip_code', 'sender_country',
-            'receiver_routing_number', 'receiver_name', 'receiver_short_name', 'receiver_bic', 'receiver_lei',
+            'receiver_aba', 'receiver_name', 'receiver_short_name', 'receiver_bic', 'receiver_lei',
             'receiver_address_line1', 'receiver_address_line2', 'receiver_city', 'receiver_state',
             'receiver_zip_code', 'receiver_country',
             'originator_name', 'originator_account_number',
             'originator_address_line1', 'originator_address_line2',
             'originator_city', 'originator_state', 'originator_zip_code', 'originator_country',
-            'originator_identifier', 'originator_identifier_type', 'originator_option_f',
+            'originator_id', 'originator_id_type', 'originator_option_f',
             'beneficiary_name', 'beneficiary_account_number',
             'beneficiary_address_line1', 'beneficiary_address_line2',
             'beneficiary_city', 'beneficiary_state', 'beneficiary_zip_code', 'beneficiary_country',
-            'beneficiary_identifier', 'beneficiary_identifier_type',
-            'beneficiary_bank_routing_number', 'beneficiary_bank_name', 'beneficiary_bank_bic',
-            'instructing_bank_routing_number', 'instructing_bank_name',
-            'intermediary_bank_routing_number', 'intermediary_bank_name',
-            'originator_to_beneficiary_info', 'fi_to_fi_info', 'charge_details',
+            'beneficiary_id', 'beneficiary_id_type',
+            'beneficiary_fi_id', 'beneficiary_fi_name', 'beneficiary_fi_bic',
+            'instructing_fi_id', 'instructing_fi_name',
+            'intermediary_fi_id', 'intermediary_fi_name',
+            'originator_to_beneficiary_info', 'fi_to_fi_info', 'charges',
         ]
 
     def get_silver_values(self, silver_record: Dict[str, Any]) -> tuple:
@@ -229,7 +427,7 @@ class FedwireExtractor(BaseExtractor):
                 town_name=originator_addr.get('city'),
                 post_code=originator_addr.get('zipCode'),
                 country_sub_division=originator_addr.get('state'),
-                country=originator_addr.get('country', 'US'),
+                country=originator_addr.get('country') or 'US',
                 identification_type=originator.get('identifierType'),
                 identification_number=originator.get('identifier'),
             ))
@@ -244,7 +442,7 @@ class FedwireExtractor(BaseExtractor):
                 town_name=beneficiary_addr.get('city'),
                 post_code=beneficiary_addr.get('zipCode'),
                 country_sub_division=beneficiary_addr.get('state'),
-                country=beneficiary_addr.get('country', 'US'),
+                country=beneficiary_addr.get('country') or 'US',
                 identification_type=beneficiary.get('identifierType'),
                 identification_number=beneficiary.get('identifier'),
             ))
@@ -255,7 +453,7 @@ class FedwireExtractor(BaseExtractor):
                 account_number=originator.get('accountNumber'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency=msg_content.get('currency', 'USD'),
+                currency=msg_content.get('currency') or 'USD',
             ))
 
         # Beneficiary Account (Creditor Account)
@@ -264,7 +462,7 @@ class FedwireExtractor(BaseExtractor):
                 account_number=beneficiary.get('accountNumber'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency=msg_content.get('currency', 'USD'),
+                currency=msg_content.get('currency') or 'USD',
             ))
 
         # Sender FI (Debtor Agent)
@@ -279,7 +477,7 @@ class FedwireExtractor(BaseExtractor):
                 clearing_system='USABA',
                 address_line1=sender_addr.get('line1'),
                 town_name=sender_addr.get('city'),
-                country=sender_addr.get('country', 'US'),
+                country=sender_addr.get('country') or 'US',
             ))
 
         # Receiver FI / Beneficiary Bank (Creditor Agent)
@@ -294,7 +492,7 @@ class FedwireExtractor(BaseExtractor):
                 clearing_system='USABA',
                 address_line1=receiver_addr.get('line1'),
                 town_name=receiver_addr.get('city'),
-                country=receiver_addr.get('country', 'US'),
+                country=receiver_addr.get('country') or 'US',
             ))
 
         # Intermediary Bank

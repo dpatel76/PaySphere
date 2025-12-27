@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM Test Data - TCH RTP Credit Transfer (pacs.008)
+  Standard: The Clearing House Real-Time Payments (based on ISO 20022)
+  Format: XML
+-->
+<Document xmlns="urn:tch:xsd:pacs.008.001.01"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <!-- Group Header -->
+    <GrpHdr>
+      <MsgId>RTP-GPS-CDM-20251226-001</MsgId>
+      <CreDtTm>2025-12-26T10:00:00.000Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Cd>RTP</Cd>
+        </ClrSys>
+      </SttlmInf>
+    </GrpHdr>
+
+    <!-- Credit Transfer Transaction Information -->
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>RTP-INSTRID-20251226-001</InstrId>
+        <EndToEndId>RTP-E2E-GPS-CDM-001</EndToEndId>
+        <TxId>RTP-TXID-20251226-001</TxId>
+        <UETR>4c6f8a2d-3e9b-41fc-8c5d-7a2e1f3b9d0c</UETR>
+      </PmtId>
+
+      <!-- Amounts -->
+      <IntrBkSttlmAmt Ccy="USD">500.00</IntrBkSttlmAmt>
+      <InstdAmt Ccy="USD">500.00</InstdAmt>
+
+      <!-- Settlement Date - Same day for RTP -->
+      <IntrBkSttlmDt>2025-12-26</IntrBkSttlmDt>
+
+      <!-- Charge Bearer -->
+      <ChrgBr>SLEV</ChrgBr>
+
+      <!-- Debtor Agent (Sender FI) - RTN -->
+      <DbtrAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <MmbId>021000021</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <!-- Debtor (Payer) -->
+      <Dbtr>
+        <Nm>Jane Smith</Nm>
+        <PstlAdr>
+          <StrtNm>789 Pine Road</StrtNm>
+          <PstCd>60601</PstCd>
+          <TwnNm>Chicago</TwnNm>
+          <CtrySubDvsn>IL</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <!-- Debtor Account -->
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>1234567890</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <!-- Creditor Agent (Receiver FI) - RTN -->
+      <CdtrAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <MmbId>021000089</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <!-- Creditor (Beneficiary) -->
+      <Cdtr>
+        <Nm>Local Store LLC</Nm>
+        <PstlAdr>
+          <StrtNm>456 Commerce Blvd</StrtNm>
+          <PstCd>60602</PstCd>
+          <TwnNm>Chicago</TwnNm>
+          <CtrySubDvsn>IL</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <!-- Creditor Account -->
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>9876543210</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <!-- Purpose -->
+      <Purp>
+        <Cd>CASH</Cd>
+      </Purp>
+
+      <!-- Remittance Information -->
+      <RmtInf>
+        <Ustrd>Payment for order ORD-2025-12345</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

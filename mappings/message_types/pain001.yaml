@@ -521,6 +521,15 @@ mapping:
         target: message_id
         type: string
 
+      - source: msg_id
+        target: original_message_id
+        type: string
+        notes: "ISO 20022 MsgId from group header"
+
+      - source: payment_info_id
+        target: payment_info_id
+        type: string
+
       # --- Classification ---
       - target: payment_type
         type: string
@@ -607,9 +616,31 @@ mapping:
         target: creation_datetime
         type: timestamp
 
+      - source: creation_date_time
+        target: message_creation_datetime
+        type: timestamp
+        notes: "Alternative column name for creation timestamp"
+
       - source: requested_execution_date
         target: requested_execution_date
         type: date
+
+      # --- Batch/Group Info ---
+      - source: number_of_transactions
+        target: number_of_transactions
+        type: integer
+
+      - source: control_sum
+        target: control_sum
+        type: decimal
+
+      - source: batch_booking
+        target: batch_booking
+        type: boolean
+
+      - source: payment_method
+        target: payment_method
+        type: string
 
       # --- Purpose & Remittance ---
       - source: purpose_code
@@ -646,6 +677,41 @@ mapping:
       - source: remittance_structured
         target: remittance_structured
         type: json
+
+      - source: structured_remittance
+        target: structured_remittance_data
+        type: json
+        notes: "Alternative column for structured remittance"
+
+      - source: remittance_information
+        target: remittance_information
+        type: string
+        notes: "Full remittance info text"
+
+      - source: regulatory_reporting
+        target: regulatory_reporting
+        type: string
+
+      - source: service_level
+        target: service_level_description
+        type: string
+        notes: "Service level full description"
+
+      - source: local_instrument
+        target: local_instrument_description
+        type: string
+
+      - source: category_purpose
+        target: category_purpose_description
+        type: string
+
+      - source: creditor_agent_clearing_system
+        target: creditor_clearing_system
+        type: string
+
+      - source: creditor_account_currency
+        target: creditor_currency
+        type: string
 
       # --- Status ---
       - target: current_status
@@ -688,6 +754,18 @@ mapping:
 
     # --- Party Entities (separate CDM tables) ---
     party_mappings:
+      - role: initiating_party
+        target_table: cdm_party
+        fields:
+          - source: initiating_party_name
+            target: name
+          - source: initiating_party_id
+            target: lei
+          - source: initiating_party_id_type
+            target: identification_type
+          - source: initiating_party_country
+            target: country
+
       - role: debtor
         target_table: cdm_party
         fields:
@@ -736,6 +814,26 @@ mapping:
           - source: creditor_country
             target: country
 
+      - role: ultimate_debtor
+        target_table: cdm_party
+        fields:
+          - source: ultimate_debtor_name
+            target: name
+          - source: ultimate_debtor_id
+            target: lei
+          - source: ultimate_debtor_id_type
+            target: identification_type
+
+      - role: ultimate_creditor
+        target_table: cdm_party
+        fields:
+          - source: ultimate_creditor_name
+            target: name
+          - source: ultimate_creditor_id
+            target: lei
+          - source: ultimate_creditor_id_type
+            target: identification_type
+
     # --- Account Entities ---
     account_mappings:
       - role: debtor_account
@@ -773,6 +871,8 @@ mapping:
             target: national_clearing_system
           - source: debtor_agent_member_id
             target: national_clearing_code
+          - source: debtor_agent_country
+            target: country
 
       - role: creditor_agent
         target_table: cdm_financial_institution
@@ -783,6 +883,8 @@ mapping:
             target: institution_name
           - source: creditor_agent_member_id
             target: national_clearing_code
+          - source: creditor_agent_country
+            target: country
 
       - role: intermediary_agent1
         target_table: cdm_financial_institution

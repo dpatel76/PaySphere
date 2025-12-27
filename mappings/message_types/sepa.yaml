@@ -44,15 +44,28 @@ mapping:
             key_field: PmtId/EndToEndId
 
     fields:
-      # --- Group Header ---
+      # === MESSAGE TYPE ===
+      - source: namespace
+        target: sepa_message_type
+        type: string
+        max_length: 35
+        notes: "pain.001 for credit transfer initiation"
+
+      - source: PmtInf/PmtTpInf/SvcLvl/Cd
+        target: sepa_scheme
+        type: string
+        max_length: 4
+        notes: "SEPA scheme code"
+
+      # === GROUP HEADER ===
       - source: GrpHdr/MsgId
-        target: message_id
+        target: msg_id
         type: string
         required: true
         max_length: 35
 
       - source: GrpHdr/CreDtTm
-        target: creation_datetime
+        target: creation_date_time
         type: timestamp
         required: true
 
@@ -62,100 +75,27 @@ mapping:
         required: true
 
       - source: GrpHdr/CtrlSum
-        target: control_sum
+        target: total_interbank_settlement_amount
         type: decimal
         precision: 18
         scale: 2
 
-      - source: GrpHdr/InitgPty/Nm
-        target: initiating_party_name
-        type: string
-        max_length: 70
-
-      # --- Payment Information ---
-      - source: PmtInf/PmtInfId
-        target: payment_information_id
-        type: string
-        required: true
-        max_length: 35
-
-      - source: PmtInf/PmtMtd
-        target: payment_method
-        type: string
-        max_length: 3
-
-      - source: PmtInf/BtchBookg
-        target: batch_booking
-        type: boolean
-
       - source: PmtInf/ReqdExctnDt/Dt
-        target: requested_execution_date
+        target: interbank_settlement_date
         type: date
         required: true
 
-      - source: PmtInf/PmtTpInf/SvcLvl/Cd
-        target: service_level_code
-        type: string
-        max_length: 4
-        notes: "Must be SEPA for SEPA CT"
-
-      - source: PmtInf/PmtTpInf/LclInstrm/Cd
-        target: local_instrument_code
-        type: string
-        max_length: 35
-
-      - source: PmtInf/PmtTpInf/CtgyPurp/Cd
-        target: category_purpose_code
+      - source: GrpHdr/SttlmInf/SttlmMtd
+        target: settlement_method
         type: string
         max_length: 4
 
-      # --- Debtor ---
-      - source: PmtInf/Dbtr/Nm
-        target: debtor_name
+      - source: GrpHdr/SttlmInf/ClrSys/Cd
+        target: clearing_system
         type: string
-        required: true
-        max_length: 70
+        max_length: 5
 
-      - source: PmtInf/Dbtr/PstlAdr/Ctry
-        target: debtor_country
-        type: string
-        max_length: 2
-
-      - source: PmtInf/Dbtr/PstlAdr/AdrLine
-        target: debtor_address_lines
-        type: array
-        array_type: string
-
-      - source: PmtInf/Dbtr/Id/OrgId/Othr/Id
-        target: debtor_org_id
-        type: string
-        max_length: 35
-
-      - source: PmtInf/Dbtr/Id/PrvtId/Othr/Id
-        target: debtor_private_id
-        type: string
-        max_length: 35
-
-      # --- Debtor Account ---
-      - source: PmtInf/DbtrAcct/Id/IBAN
-        target: debtor_iban
-        type: string
-        required: true
-        max_length: 34
-
-      - source: PmtInf/DbtrAcct/Ccy
-        target: debtor_account_currency
-        type: string
-        max_length: 3
-
-      # --- Debtor Agent ---
-      - source: PmtInf/DbtrAgt/FinInstnId/BICFI
-        target: debtor_agent_bic
-        type: string
-        required: true
-        max_length: 11
-
-      # --- Transaction ---
+      # === TRANSACTION IDENTIFICATION ===
       - source: PmtInf/CdtTrfTxInf/PmtId/InstrId
         target: instruction_id
         type: string
@@ -167,9 +107,19 @@ mapping:
         required: true
         max_length: 35
 
-      # --- Amount ---
+      - source: PmtInf/CdtTrfTxInf/PmtId/UETR
+        target: uetr
+        type: string
+        max_length: 36
+
+      - source: PmtInf/CdtTrfTxInf/PmtId/TxId
+        target: transaction_id
+        type: string
+        max_length: 35
+
+      # === AMOUNTS ===
       - source: PmtInf/CdtTrfTxInf/Amt/InstdAmt
-        target: amount
+        target: instructed_amount
         type: decimal
         precision: 18
         scale: 2
@@ -177,75 +127,119 @@ mapping:
         extract: text_content
 
       - source: PmtInf/CdtTrfTxInf/Amt/InstdAmt/@Ccy
-        target: currency
+        target: instructed_currency
         type: string
         required: true
         max_length: 3
         extract: attribute
         notes: "Must be EUR for SEPA"
 
-      - source: PmtInf/CdtTrfTxInf/ChrgBr
-        target: charge_bearer
-        type: string
-        max_length: 4
-        notes: "Must be SLEV for SEPA"
+      - source: PmtInf/CdtTrfTxInf/IntrBkSttlmAmt
+        target: interbank_settlement_amount
+        type: decimal
+        precision: 18
+        scale: 2
 
-      # --- Creditor Agent ---
-      - source: PmtInf/CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI
-        target: creditor_agent_bic
+      # === DEBTOR ===
+      - source: PmtInf/Dbtr/Nm
+        target: debtor_name
+        type: string
+        required: true
+        max_length: 70
+
+      - source: PmtInf/DbtrAcct/Id/IBAN
+        target: debtor_iban
+        type: string
+        required: true
+        max_length: 34
+
+      - source: PmtInf/DbtrAgt/FinInstnId/BICFI
+        target: debtor_bic
         type: string
         max_length: 11
 
-      # --- Creditor ---
+      - source: PmtInf/Dbtr/PstlAdr/AdrLine
+        target: debtor_address
+        type: string
+        max_length: 140
+
+      - source: PmtInf/DbtrAgt/FinInstnId/BICFI
+        target: debtor_agent_bic
+        type: string
+        required: true
+        max_length: 11
+
+      # === CREDITOR ===
       - source: PmtInf/CdtTrfTxInf/Cdtr/Nm
         target: creditor_name
         type: string
         required: true
         max_length: 70
 
-      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/Ctry
-        target: creditor_country
-        type: string
-        max_length: 2
-
-      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine
-        target: creditor_address_lines
-        type: array
-        array_type: string
-
-      # --- Creditor Account ---
       - source: PmtInf/CdtTrfTxInf/CdtrAcct/Id/IBAN
         target: creditor_iban
         type: string
         required: true
         max_length: 34
 
-      # --- Ultimate Parties ---
-      - source: PmtInf/UltmtDbtr/Nm
-        target: ultimate_debtor_name
+      - source: PmtInf/CdtTrfTxInf/Cdtr/Id/OrgId/Othr/Id
+        target: creditor_bic
         type: string
-        max_length: 70
+        max_length: 11
 
-      - source: PmtInf/CdtTrfTxInf/UltmtCdtr/Nm
-        target: ultimate_creditor_name
+      - source: PmtInf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine
+        target: creditor_address
         type: string
-        max_length: 70
+        max_length: 140
 
-      # --- Purpose & Remittance ---
+      - source: PmtInf/CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI
+        target: creditor_agent_bic
+        type: string
+        max_length: 11
+
+      # === PURPOSE & REMITTANCE ===
       - source: PmtInf/CdtTrfTxInf/Purp/Cd
         target: purpose_code
         type: string
         max_length: 4
 
+      - source: PmtInf/PmtTpInf/CtgyPurp/Cd
+        target: category_purpose
+        type: string
+        max_length: 4
+
       - source: PmtInf/CdtTrfTxInf/RmtInf/Ustrd
-        target: remittance_unstructured
+        target: remittance_info
         type: string
         max_length: 140
 
-      - source: PmtInf/CdtTrfTxInf/RmtInf/Strd/CdtrRefInf/Ref
-        target: creditor_reference
+      # === DIRECT DEBIT SPECIFIC ===
+      - source: PmtInf/DrctDbtTxInf/MndtRltdInf/MndtId
+        target: mandate_id
         type: string
         max_length: 35
+
+      - source: PmtInf/DrctDbtTxInf/MndtRltdInf/DtOfSgntr
+        target: mandate_date
+        type: date
+
+      - source: PmtInf/PmtTpInf/SeqTp
+        target: sequence_type
+        type: string
+        max_length: 4
+        notes: "FRST, RCUR, FNAL, OOFF"
+
+      - source: PmtInf/CdtTrfTxInf/Cdtr/Id/PrvtId/Othr/Id
+        target: creditor_id
+        type: string
+        max_length: 35
+
+      # === CHARGES ===
+      - source: PmtInf/CdtTrfTxInf/ChrgBr
+        target: charge_bearer
+        type: string
+        max_length: 4
+        notes: "Must be SLEV for SEPA"
 
   # ============================================================================
   # STAGE 2: SILVER → GOLD
@@ -278,8 +272,147 @@ mapping:
         target: instruction_id_ext
         type: string
 
-      - source: message_id
+      - source: msg_id
         target: message_id
+        type: string
+
+      - source: transaction_id
+        target: transaction_id
+        type: string
+
+      - source: uetr
+        target: uetr
+        type: string
+
+      # --- SEPA-specific fields ---
+      - source: sepa_message_type
+        target: sepa_message_type
+        type: string
+
+      - source: sepa_scheme
+        target: sepa_scheme
+        type: string
+
+      # --- Group Header Info ---
+      - source: creation_date_time
+        target: creation_datetime
+        type: timestamp
+
+      - source: number_of_transactions
+        target: number_of_transactions
+        type: integer
+
+      - source: total_interbank_settlement_amount
+        target: control_sum
+        type: decimal
+
+      - source: interbank_settlement_date
+        target: value_date
+        type: date
+
+      - source: interbank_settlement_date
+        target: settlement_date
+        type: date
+
+      - source: settlement_method
+        target: settlement_method
+        type: string
+
+      - source: clearing_system
+        target: clearing_system
+        type: string
+
+      # --- Amounts (use actual silver column names) ---
+      - source: instructed_amount
+        target: instructed_amount
+        type: decimal
+        required: true
+
+      - source: instructed_currency
+        target: instructed_currency
+        type: string
+        required: true
+
+      - source: interbank_settlement_amount
+        target: interbank_settlement_amount
+        type: decimal
+
+      # --- Debtor Info ---
+      - source: debtor_name
+        target: debtor_name
+        type: string
+
+      - source: debtor_iban
+        target: debtor_iban
+        type: string
+
+      - source: debtor_bic
+        target: debtor_bic
+        type: string
+
+      - source: debtor_address
+        target: debtor_address
+        type: string
+
+      - source: debtor_agent_bic
+        target: debtor_agent_bic
+        type: string
+
+      # --- Creditor Info ---
+      - source: creditor_name
+        target: creditor_name
+        type: string
+
+      - source: creditor_iban
+        target: creditor_iban
+        type: string
+
+      - source: creditor_bic
+        target: creditor_bic
+        type: string
+
+      - source: creditor_address
+        target: creditor_address
+        type: string
+
+      - source: creditor_agent_bic
+        target: creditor_agent_bic
+        type: string
+
+      # --- Purpose & Remittance ---
+      - source: purpose_code
+        target: purpose
+        type: string
+
+      - source: category_purpose
+        target: category_purpose
+        type: string
+
+      - source: remittance_info
+        target: remittance_unstructured
+        type: array
+        transform:
+          type: wrap_array
+
+      - source: charge_bearer
+        target: charge_bearer
+        type: string
+
+      # --- Direct Debit Specific ---
+      - source: mandate_id
+        target: mandate_id
+        type: string
+
+      - source: mandate_date
+        target: mandate_date
+        type: date
+
+      - source: sequence_type
+        target: sequence_type
+        type: string
+
+      - source: creditor_id
+        target: creditor_scheme_id
         type: string
 
       - target: payment_type
@@ -300,12 +433,12 @@ mapping:
           type: constant
           value: "OUTBOUND"
 
-      - source: debtor_country
-        target: cross_border_flag
+      - target: cross_border_flag
         type: boolean
         transform:
-          type: expression
-          expr: "debtor_country != creditor_country"
+          type: constant
+          value: false
+        notes: "SEPA is intra-EU, not cross-border in SEPA context"
 
       - target: priority
         type: string
@@ -313,53 +446,9 @@ mapping:
           type: constant
           value: "NORM"
 
-      - source: service_level_code
-        target: service_level
-        type: string
-
-      - source: local_instrument_code
-        target: local_instrument
-        type: string
-
-      - source: category_purpose_code
-        target: category_purpose
-        type: string
-
-      - source: amount
-        target: instructed_amount
-        type: decimal
-        required: true
-
-      - source: currency
-        target: instructed_currency
-        type: string
-        required: true
-
-      - source: creation_datetime
-        target: creation_datetime
-        type: timestamp
-
-      - source: requested_execution_date
+      - source: interbank_settlement_date
         target: requested_execution_date
         type: date
-
-      - source: purpose_code
-        target: purpose
-        type: string
-
-      - source: charge_bearer
-        target: charge_bearer
-        type: string
-
-      - source: remittance_unstructured
-        target: remittance_unstructured
-        type: array
-        transform:
-          type: wrap_array
-
-      - source: creditor_reference
-        target: remittance_reference
-        type: string
 
       - target: current_status
         type: string

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM Test Data - SEPA Credit Transfer (pain.001.001.09)
+  Standard: EPC SEPA Credit Transfer Scheme Rulebook
+  Format: XML (ISO 20022)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CstmrCdtTrfInitn>
+    <!-- Group Header -->
+    <GrpHdr>
+      <MsgId>SEPA-GPS-CDM-20251226-001</MsgId>
+      <CreDtTm>2025-12-26T10:00:00Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>2500.00</CtrlSum>
+      <InitgPty>
+        <Nm>Eurotech GmbH</Nm>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>DE123456789</Id>
+              <SchmeNm>
+                <Cd>CUST</Cd>
+              </SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </InitgPty>
+    </GrpHdr>
+
+    <!-- Payment Information -->
+    <PmtInf>
+      <PmtInfId>SEPA-PMTINF-20251226-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <BtchBookg>true</BtchBookg>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>2500.00</CtrlSum>
+
+      <!-- Payment Type Information - SEPA Specific -->
+      <PmtTpInf>
+        <InstrPrty>NORM</InstrPrty>
+        <SvcLvl>
+          <Cd>SEPA</Cd>
+        </SvcLvl>
+        <LclInstrm>
+          <Cd>CORE</Cd>
+        </LclInstrm>
+        <CtgyPurp>
+          <Cd>SALA</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+
+      <ReqdExctnDt>
+        <Dt>2025-12-27</Dt>
+      </ReqdExctnDt>
+
+      <!-- Debtor (Payer) -->
+      <Dbtr>
+        <Nm>Hans Mueller</Nm>
+        <PstlAdr>
+          <StrtNm>Bahnhofstrasse 10</StrtNm>
+          <PstCd>80331</PstCd>
+          <TwnNm>Munich</TwnNm>
+          <Ctry>DE</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <!-- Debtor Account - IBAN Required for SEPA -->
+      <DbtrAcct>
+        <Id>
+          <IBAN>DE89370400440532013000</IBAN>
+        </Id>
+        <Ccy>EUR</Ccy>
+      </DbtrAcct>
+
+      <!-- Debtor Agent - BIC -->
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <!-- Charge Bearer - Must be SLEV for SEPA -->
+      <ChrgBr>SLEV</ChrgBr>
+
+      <!-- Credit Transfer Transaction Information -->
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>SEPA-INSTRID-001</InstrId>
+          <EndToEndId>SEPA-E2E-GPS-CDM-001</EndToEndId>
+        </PmtId>
+
+        <Amt>
+          <InstdAmt Ccy="EUR">2500.00</InstdAmt>
+        </Amt>
+
+        <!-- Creditor Agent -->
+        <CdtrAgt>
+          <FinInstnId>
+            <BICFI>BNPAFRPPXXX</BICFI>
+          </FinInstnId>
+        </CdtrAgt>
+
+        <!-- Creditor (Beneficiary) -->
+        <Cdtr>
+          <Nm>Supplier SARL</Nm>
+          <PstlAdr>
+            <StrtNm>Rue de la Paix 25</StrtNm>
+            <PstCd>75002</PstCd>
+            <TwnNm>Paris</TwnNm>
+            <Ctry>FR</Ctry>
+          </PstlAdr>
+        </Cdtr>
+
+        <!-- Creditor Account - IBAN Required for SEPA -->
+        <CdtrAcct>
+          <Id>
+            <IBAN>FR7630004000031234567890143</IBAN>
+          </Id>
+        </CdtrAcct>
+
+        <!-- Purpose -->
+        <Purp>
+          <Cd>SALA</Cd>
+        </Purp>
+
+        <!-- Remittance Information -->
+        <RmtInf>
+          <Ustrd>Salary payment December 2025</Ustrd>
+        </RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

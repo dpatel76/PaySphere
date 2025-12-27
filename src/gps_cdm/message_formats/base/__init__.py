@@ -71,6 +71,112 @@ class GoldEntities:
 
 
 # =============================================================================
+# EXTENSION DATA CLASSES (Scheme-specific)
+# =============================================================================
+
+@dataclass
+class FedwireExtension:
+    """FEDWIRE-specific payment attributes."""
+    wire_type_code: Optional[str] = None
+    wire_subtype_code: Optional[str] = None
+    imad: Optional[str] = None
+    omad: Optional[str] = None
+    previous_imad: Optional[str] = None
+    fi_to_fi_info: Optional[str] = None
+    beneficiary_reference: Optional[str] = None
+    input_cycle_date: Optional[str] = None
+    input_sequence_number: Optional[str] = None
+    input_source: Optional[str] = None
+    originator_id_type: Optional[str] = None
+    originator_option_f: Optional[str] = None
+    beneficiary_id_type: Optional[str] = None
+    charges: Optional[str] = None
+
+
+@dataclass
+class AchExtension:
+    """NACHA ACH-specific payment attributes."""
+    immediate_destination: Optional[str] = None
+    immediate_origin: Optional[str] = None
+    file_creation_date: Optional[str] = None
+    file_creation_time: Optional[str] = None
+    file_id_modifier: Optional[str] = None
+    standard_entry_class: Optional[str] = None
+    company_entry_description: Optional[str] = None
+    batch_number: Optional[int] = None
+    originator_status_code: Optional[str] = None
+    transaction_code: Optional[str] = None
+    originating_dfi_id: Optional[str] = None
+    receiving_dfi_id: Optional[str] = None
+    individual_id: Optional[str] = None
+    discretionary_data: Optional[str] = None
+    addenda_indicator: Optional[str] = None
+    addenda_type: Optional[str] = None
+    addenda_info: Optional[str] = None
+    return_reason_code: Optional[str] = None
+    original_entry_trace: Optional[str] = None
+    date_of_death: Optional[str] = None
+    original_receiving_dfi: Optional[str] = None
+
+
+@dataclass
+class SepaExtension:
+    """SEPA-specific payment attributes."""
+    sepa_message_type: Optional[str] = None
+    sepa_scheme: Optional[str] = None
+    settlement_method: Optional[str] = None
+    mandate_id: Optional[str] = None
+    mandate_date: Optional[str] = None
+    sequence_type: Optional[str] = None
+    creditor_scheme_id: Optional[str] = None
+    amendment_indicator: bool = False
+    original_mandate_id: Optional[str] = None
+
+
+@dataclass
+class SwiftExtension:
+    """SWIFT MT-specific payment attributes."""
+    swift_message_type: Optional[str] = None
+    sender_bic: Optional[str] = None
+    receiver_bic: Optional[str] = None
+    message_priority: Optional[str] = None
+    senders_correspondent_bic: Optional[str] = None
+    senders_correspondent_account: Optional[str] = None
+    receivers_correspondent_bic: Optional[str] = None
+    receivers_correspondent_account: Optional[str] = None
+    ordering_institution_bic: Optional[str] = None
+    account_with_institution_bic: Optional[str] = None
+    sender_charges_amount: Optional[float] = None
+    sender_charges_currency: Optional[str] = None
+    sender_to_receiver_information: Optional[str] = None
+    instruction_codes: Optional[str] = None
+
+
+@dataclass
+class RtpExtension:
+    """TCH RTP-specific payment attributes."""
+    rtp_message_type: Optional[str] = None
+    debtor_agent_rtn: Optional[str] = None
+    creditor_agent_rtn: Optional[str] = None
+    rfp_reference: Optional[str] = None
+    rfp_expiry_datetime: Optional[str] = None
+
+
+@dataclass
+class Iso20022Extension:
+    """ISO 20022-specific payment attributes."""
+    message_definition: Optional[str] = None
+    message_namespace: Optional[str] = None
+    payment_info_id: Optional[str] = None
+    initiating_party_name: Optional[str] = None
+    initiating_party_id: Optional[str] = None
+    instruction_priority: Optional[str] = None
+    clearing_channel: Optional[str] = None
+    regulatory_reporting_code: Optional[str] = None
+    creditor_reference: Optional[str] = None
+
+
+# =============================================================================
 # GOLD ENTITY PERSISTER (Common across all message formats)
 # =============================================================================
 
@@ -260,6 +366,293 @@ class GoldEntityPersister:
                     entity_ids['intermediary_agent1_id'] = fi_id
 
         return entity_ids
+
+    # =========================================================================
+    # EXTENSION TABLE PERSISTERS
+    # =========================================================================
+
+    @staticmethod
+    def persist_fedwire_extension(
+        cursor,
+        instruction_id: str,
+        ext: 'FedwireExtension'
+    ) -> str:
+        """Persist FEDWIRE extension data."""
+        extension_id = f"fwext_{uuid.uuid4().hex[:12]}"
+        cursor.execute("""
+            INSERT INTO gold.cdm_payment_extension_fedwire (
+                extension_id, instruction_id,
+                wire_type_code, wire_subtype_code, imad, omad, previous_imad,
+                fi_to_fi_info, beneficiary_reference,
+                input_cycle_date, input_sequence_number, input_source,
+                originator_id_type, originator_option_f, beneficiary_id_type, charges
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (instruction_id) DO UPDATE SET
+                wire_type_code = EXCLUDED.wire_type_code,
+                wire_subtype_code = EXCLUDED.wire_subtype_code
+        """, (
+            extension_id, instruction_id,
+            ext.wire_type_code, ext.wire_subtype_code, ext.imad, ext.omad, ext.previous_imad,
+            ext.fi_to_fi_info, ext.beneficiary_reference,
+            ext.input_cycle_date, ext.input_sequence_number, ext.input_source,
+            ext.originator_id_type, ext.originator_option_f, ext.beneficiary_id_type, ext.charges
+        ))
+        return extension_id
+
+    @staticmethod
+    def persist_ach_extension(
+        cursor,
+        instruction_id: str,
+        ext: 'AchExtension'
+    ) -> str:
+        """Persist ACH extension data."""
+        extension_id = f"achext_{uuid.uuid4().hex[:12]}"
+        cursor.execute("""
+            INSERT INTO gold.cdm_payment_extension_ach (
+                extension_id, instruction_id,
+                immediate_destination, immediate_origin, file_creation_date, file_creation_time, file_id_modifier,
+                standard_entry_class, company_entry_description, batch_number, originator_status_code,
+                transaction_code, originating_dfi_id, receiving_dfi_id, individual_id, discretionary_data,
+                addenda_indicator, addenda_type, addenda_info,
+                return_reason_code, original_entry_trace, date_of_death, original_receiving_dfi
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (instruction_id) DO UPDATE SET
+                standard_entry_class = EXCLUDED.standard_entry_class,
+                transaction_code = EXCLUDED.transaction_code
+        """, (
+            extension_id, instruction_id,
+            ext.immediate_destination, ext.immediate_origin, ext.file_creation_date, ext.file_creation_time, ext.file_id_modifier,
+            ext.standard_entry_class, ext.company_entry_description, ext.batch_number, ext.originator_status_code,
+            ext.transaction_code, ext.originating_dfi_id, ext.receiving_dfi_id, ext.individual_id, ext.discretionary_data,
+            ext.addenda_indicator, ext.addenda_type, ext.addenda_info,
+            ext.return_reason_code, ext.original_entry_trace, ext.date_of_death, ext.original_receiving_dfi
+        ))
+        return extension_id
+
+    @staticmethod
+    def persist_sepa_extension(
+        cursor,
+        instruction_id: str,
+        ext: 'SepaExtension'
+    ) -> str:
+        """Persist SEPA extension data."""
+        extension_id = f"sepaext_{uuid.uuid4().hex[:12]}"
+        cursor.execute("""
+            INSERT INTO gold.cdm_payment_extension_sepa (
+                extension_id, instruction_id,
+                sepa_message_type, sepa_scheme, settlement_method,
+                mandate_id, mandate_date, sequence_type, creditor_scheme_id,
+                amendment_indicator, original_mandate_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (instruction_id) DO UPDATE SET
+                sepa_scheme = EXCLUDED.sepa_scheme,
+                mandate_id = EXCLUDED.mandate_id
+        """, (
+            extension_id, instruction_id,
+            ext.sepa_message_type, ext.sepa_scheme, ext.settlement_method,
+            ext.mandate_id, ext.mandate_date, ext.sequence_type, ext.creditor_scheme_id,
+            ext.amendment_indicator, ext.original_mandate_id
+        ))
+        return extension_id
+
+    @staticmethod
+    def persist_swift_extension(
+        cursor,
+        instruction_id: str,
+        ext: 'SwiftExtension'
+    ) -> str:
+        """Persist SWIFT MT extension data."""
+        extension_id = f"swiftext_{uuid.uuid4().hex[:12]}"
+        cursor.execute("""
+            INSERT INTO gold.cdm_payment_extension_swift (
+                extension_id, instruction_id,
+                swift_message_type, sender_bic, receiver_bic, message_priority,
+                senders_correspondent_bic, senders_correspondent_account,
+                receivers_correspondent_bic, receivers_correspondent_account,
+                ordering_institution_bic, account_with_institution_bic,
+                sender_charges_amount, sender_charges_currency,
+                sender_to_receiver_information, instruction_codes
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (instruction_id) DO UPDATE SET
+                swift_message_type = EXCLUDED.swift_message_type,
+                sender_bic = EXCLUDED.sender_bic
+        """, (
+            extension_id, instruction_id,
+            ext.swift_message_type, ext.sender_bic, ext.receiver_bic, ext.message_priority,
+            ext.senders_correspondent_bic, ext.senders_correspondent_account,
+            ext.receivers_correspondent_bic, ext.receivers_correspondent_account,
+            ext.ordering_institution_bic, ext.account_with_institution_bic,
+            ext.sender_charges_amount, ext.sender_charges_currency,
+            ext.sender_to_receiver_information, ext.instruction_codes
+        ))
+        return extension_id
+
+    @staticmethod
+    def persist_rtp_extension(
+        cursor,
+        instruction_id: str,
+        ext: 'RtpExtension'
+    ) -> str:
+        """Persist RTP extension data."""
+        extension_id = f"rtpext_{uuid.uuid4().hex[:12]}"
+        cursor.execute("""
+            INSERT INTO gold.cdm_payment_extension_rtp (
+                extension_id, instruction_id,
+                rtp_message_type, debtor_agent_rtn, creditor_agent_rtn,
+                rfp_reference, rfp_expiry_datetime
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (instruction_id) DO UPDATE SET
+                rtp_message_type = EXCLUDED.rtp_message_type
+        """, (
+            extension_id, instruction_id,
+            ext.rtp_message_type, ext.debtor_agent_rtn, ext.creditor_agent_rtn,
+            ext.rfp_reference, ext.rfp_expiry_datetime
+        ))
+        return extension_id
+
+    @staticmethod
+    def persist_iso20022_extension(
+        cursor,
+        instruction_id: str,
+        ext: 'Iso20022Extension'
+    ) -> str:
+        """Persist ISO 20022 extension data."""
+        extension_id = f"isoext_{uuid.uuid4().hex[:12]}"
+        cursor.execute("""
+            INSERT INTO gold.cdm_payment_extension_iso20022 (
+                extension_id, instruction_id,
+                message_definition, message_namespace, payment_info_id,
+                initiating_party_name, initiating_party_id,
+                instruction_priority, clearing_channel,
+                regulatory_reporting_code, creditor_reference
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (instruction_id) DO UPDATE SET
+                message_definition = EXCLUDED.message_definition
+        """, (
+            extension_id, instruction_id,
+            ext.message_definition, ext.message_namespace, ext.payment_info_id,
+            ext.initiating_party_name, ext.initiating_party_id,
+            ext.instruction_priority, ext.clearing_channel,
+            ext.regulatory_reporting_code, ext.creditor_reference
+        ))
+        return extension_id
+
+    @classmethod
+    def persist_extension(
+        cls,
+        cursor,
+        instruction_id: str,
+        message_type: str,
+        staging_record: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Persist scheme-specific extension data based on message type.
+
+        Args:
+            cursor: Database cursor
+            instruction_id: The payment instruction ID
+            message_type: Message type (FEDWIRE, ACH, SEPA, MT103, RTP, pain.001, etc.)
+            staging_record: Silver staging record with extracted fields
+
+        Returns:
+            Extension ID if created, None otherwise
+        """
+        msg_type_upper = message_type.upper()
+
+        if msg_type_upper == 'FEDWIRE':
+            ext = FedwireExtension(
+                wire_type_code=staging_record.get('type_code'),
+                wire_subtype_code=staging_record.get('subtype_code'),
+                imad=staging_record.get('imad'),
+                omad=staging_record.get('omad'),
+                previous_imad=staging_record.get('previous_imad'),
+                fi_to_fi_info=staging_record.get('fi_to_fi_info'),
+                beneficiary_reference=staging_record.get('beneficiary_reference'),
+                input_cycle_date=staging_record.get('input_cycle_date'),
+                input_sequence_number=staging_record.get('input_sequence_number'),
+                input_source=staging_record.get('input_source'),
+                originator_id_type=staging_record.get('originator_id_type'),
+                originator_option_f=staging_record.get('originator_option_f'),
+                beneficiary_id_type=staging_record.get('beneficiary_id_type'),
+                charges=staging_record.get('charges'),
+            )
+            return cls.persist_fedwire_extension(cursor, instruction_id, ext)
+
+        elif msg_type_upper == 'ACH':
+            ext = AchExtension(
+                immediate_destination=staging_record.get('immediate_destination'),
+                immediate_origin=staging_record.get('immediate_origin'),
+                file_creation_date=staging_record.get('file_creation_date'),
+                file_creation_time=staging_record.get('file_creation_time'),
+                file_id_modifier=staging_record.get('file_id_modifier'),
+                standard_entry_class=staging_record.get('standard_entry_class'),
+                company_entry_description=staging_record.get('company_entry_description'),
+                batch_number=staging_record.get('batch_number'),
+                originator_status_code=staging_record.get('originator_status_code'),
+                transaction_code=staging_record.get('transaction_code'),
+                originating_dfi_id=staging_record.get('originating_dfi_id'),
+                receiving_dfi_id=staging_record.get('receiving_dfi_id'),
+                individual_id=staging_record.get('individual_id'),
+                discretionary_data=staging_record.get('discretionary_data'),
+                addenda_indicator=staging_record.get('addenda_indicator'),
+                addenda_type=staging_record.get('addenda_type'),
+                addenda_info=staging_record.get('addenda_info'),
+                return_reason_code=staging_record.get('return_reason_code'),
+                original_entry_trace=staging_record.get('original_entry_trace'),
+                date_of_death=staging_record.get('date_of_death'),
+                original_receiving_dfi=staging_record.get('original_receiving_dfi'),
+            )
+            return cls.persist_ach_extension(cursor, instruction_id, ext)
+
+        elif msg_type_upper == 'SEPA':
+            ext = SepaExtension(
+                sepa_message_type=staging_record.get('sepa_message_type'),
+                sepa_scheme=staging_record.get('sepa_scheme'),
+                settlement_method=staging_record.get('settlement_method'),
+                mandate_id=staging_record.get('mandate_id'),
+                mandate_date=staging_record.get('mandate_date'),
+                sequence_type=staging_record.get('sequence_type'),
+                creditor_scheme_id=staging_record.get('creditor_id'),
+            )
+            return cls.persist_sepa_extension(cursor, instruction_id, ext)
+
+        elif msg_type_upper in ('MT103', 'MT202', 'MT202COV'):
+            ext = SwiftExtension(
+                swift_message_type=staging_record.get('message_type'),
+                sender_bic=staging_record.get('sender_bic'),
+                receiver_bic=staging_record.get('receiver_bic'),
+                message_priority=staging_record.get('priority'),
+                senders_correspondent_bic=staging_record.get('senders_correspondent_bic'),
+                senders_correspondent_account=staging_record.get('senders_correspondent_account'),
+                receivers_correspondent_bic=staging_record.get('receivers_correspondent_bic'),
+                receivers_correspondent_account=staging_record.get('receivers_correspondent_account'),
+                ordering_institution_bic=staging_record.get('ordering_institution_bic'),
+                account_with_institution_bic=staging_record.get('account_with_institution_bic'),
+                sender_to_receiver_information=staging_record.get('sender_to_receiver_information'),
+                instruction_codes=staging_record.get('instruction_code'),
+            )
+            return cls.persist_swift_extension(cursor, instruction_id, ext)
+
+        elif msg_type_upper == 'RTP':
+            ext = RtpExtension(
+                rtp_message_type=staging_record.get('rtp_message_type'),
+                debtor_agent_rtn=staging_record.get('debtor_agent_id'),
+                creditor_agent_rtn=staging_record.get('creditor_agent_id'),
+            )
+            return cls.persist_rtp_extension(cursor, instruction_id, ext)
+
+        elif msg_type_upper.startswith('PAIN.') or msg_type_upper.startswith('PACS.'):
+            ext = Iso20022Extension(
+                message_definition=message_type,
+                payment_info_id=staging_record.get('payment_info_id'),
+                initiating_party_name=staging_record.get('initiating_party_name'),
+                initiating_party_id=staging_record.get('initiating_party_id'),
+                instruction_priority=staging_record.get('instruction_priority'),
+                creditor_reference=staging_record.get('creditor_reference'),
+            )
+            return cls.persist_iso20022_extension(cursor, instruction_id, ext)
+
+        return None
 
 
 # =============================================================================
