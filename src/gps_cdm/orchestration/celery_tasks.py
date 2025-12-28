@@ -713,8 +713,10 @@ from gps_cdm.orchestration import zone_tasks  # noqa: F401
 # ENTITY EXTRACTION HELPER FUNCTIONS
 # =============================================================================
 
-# Import extractors and common persistence
-from gps_cdm.message_formats.base import ExtractorRegistry, GoldEntityPersister
+# Import all extractors to trigger registration, then get the registry
+# This import triggers registration of all 29+ message format extractors
+from gps_cdm.message_formats import ExtractorRegistry
+from gps_cdm.message_formats.base import GoldEntityPersister
 
 
 def extract_and_persist_entities(cursor, msg_content: dict, message_type: str, stg_id: str, batch_id: str):

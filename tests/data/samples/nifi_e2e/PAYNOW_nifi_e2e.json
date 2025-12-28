@@ -1,0 +1,18 @@
+{
+  "transactionId": "PAYNOW-E2E-2025122701",
+  "endToEndId": "E2E-PN-20251227",
+  "creationDateTime": "2025-12-27T10:30:00Z",
+  "amount": 5000.00,
+  "currency": "SGD",
+  "payerProxyType": "NRIC",
+  "payerProxyValue": "S1234567A",
+  "payerName": "Tan Wei Ming",
+  "payerBankCode": "DBSSSGSGXXX",
+  "payerAccount": "0123456789",
+  "payeeProxyType": "UEN",
+  "payeeProxyValue": "12345678A",
+  "payeeName": "ABC Pte Ltd",
+  "payeeBankCode": "UABORSGSGXXX",
+  "payeeAccount": "9876543210",
+  "remittanceInfo": "Invoice payment - PayNow E2E Test"
+}

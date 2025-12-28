@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - ISO 20022 camt.053 Bank to Customer Statement
+  Standard: ISO 20022 Cash Management
+  Format: XML
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>CAMT053-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00Z</CreDtTm>
+      <MsgPgntn>
+        <PgNb>1</PgNb>
+        <LastPgInd>true</LastPgInd>
+      </MsgPgntn>
+    </GrpHdr>
+
+    <Stmt>
+      <Id>STMT-NIFI-E2E-20251227-001</Id>
+      <ElctrncSeqNb>1</ElctrncSeqNb>
+      <LglSeqNb>1</LglSeqNb>
+      <CreDtTm>2025-12-27T10:00:00Z</CreDtTm>
+      <FrToDt>
+        <FrDtTm>2025-12-26T00:00:00Z</FrDtTm>
+        <ToDtTm>2025-12-26T23:59:59Z</ToDtTm>
+      </FrToDt>
+
+      <Acct>
+        <Id>
+          <IBAN>US12345678901234567890</IBAN>
+        </Id>
+        <Tp>
+          <Cd>CACC</Cd>
+        </Tp>
+        <Ccy>USD</Ccy>
+        <Nm>NiFi E2E Test Account</Nm>
+        <Ownr>
+          <Nm>NiFi E2E Test Corporation</Nm>
+        </Ownr>
+        <Svcr>
+          <FinInstnId>
+            <BICFI>CHASUS33XXX</BICFI>
+            <Nm>JPMorgan Chase Bank NA</Nm>
+          </FinInstnId>
+        </Svcr>
+      </Acct>
+
+      <Bal>
+        <Tp>
+          <CdOrPrtry>
+            <Cd>OPBD</Cd>
+          </CdOrPrtry>
+        </Tp>
+        <Amt Ccy="USD">100000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt>
+          <Dt>2025-12-26</Dt>
+        </Dt>
+      </Bal>
+
+      <Bal>
+        <Tp>
+          <CdOrPrtry>
+            <Cd>CLBD</Cd>
+          </CdOrPrtry>
+        </Tp>
+        <Amt Ccy="USD">125000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt>
+          <Dt>2025-12-26</Dt>
+        </Dt>
+      </Bal>
+
+      <TxsSummry>
+        <TtlNtries>
+          <NbOfNtries>2</NbOfNtries>
+          <Sum>75000.00</Sum>
+          <TtlNetNtry>
+            <Amt>25000.00</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+          </TtlNetNtry>
+        </TtlNtries>
+        <TtlCdtNtries>
+          <NbOfNtries>1</NbOfNtries>
+          <Sum>50000.00</Sum>
+        </TtlCdtNtries>
+        <TtlDbtNtries>
+          <NbOfNtries>1</NbOfNtries>
+          <Sum>25000.00</Sum>
+        </TtlDbtNtries>
+      </TxsSummry>
+
+      <Ntry>
+        <NtryRef>ENTRY-NIFI-001</NtryRef>
+        <Amt Ccy="USD">50000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>
+          <Cd>BOOK</Cd>
+        </Sts>
+        <BookgDt>
+          <Dt>2025-12-26</Dt>
+        </BookgDt>
+        <ValDt>
+          <Dt>2025-12-26</Dt>
+        </ValDt>
+        <AcctSvcrRef>REF-NIFI-CREDIT-001</AcctSvcrRef>
+        <BkTxCd>
+          <Domn>
+            <Cd>PMNT</Cd>
+            <Fmly>
+              <Cd>RCDT</Cd>
+              <SubFmlyCd>DMCT</SubFmlyCd>
+            </Fmly>
+          </Domn>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <EndToEndId>E2E-CREDIT-NIFI-001</EndToEndId>
+            </Refs>
+            <Amt Ccy="USD">50000.00</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+            <RltdPties>
+              <Dbtr>
+                <Nm>NiFi E2E Payer Corp</Nm>
+              </Dbtr>
+            </RltdPties>
+            <RmtInf>
+              <Ustrd>NiFi E2E Credit Transfer</Ustrd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+
+      <Ntry>
+        <NtryRef>ENTRY-NIFI-002</NtryRef>
+        <Amt Ccy="USD">25000.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>
+          <Cd>BOOK</Cd>
+        </Sts>
+        <BookgDt>
+          <Dt>2025-12-26</Dt>
+        </BookgDt>
+        <ValDt>
+          <Dt>2025-12-26</Dt>
+        </ValDt>
+        <AcctSvcrRef>REF-NIFI-DEBIT-001</AcctSvcrRef>
+        <BkTxCd>
+          <Domn>
+            <Cd>PMNT</Cd>
+            <Fmly>
+              <Cd>ICDT</Cd>
+              <SubFmlyCd>DMCT</SubFmlyCd>
+            </Fmly>
+          </Domn>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <EndToEndId>E2E-DEBIT-NIFI-001</EndToEndId>
+            </Refs>
+            <Amt Ccy="USD">25000.00</Amt>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <RltdPties>
+              <Cdtr>
+                <Nm>NiFi E2E Beneficiary Corp</Nm>
+              </Cdtr>
+            </RltdPties>
+            <RmtInf>
+              <Ustrd>NiFi E2E Outgoing Payment</Ustrd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

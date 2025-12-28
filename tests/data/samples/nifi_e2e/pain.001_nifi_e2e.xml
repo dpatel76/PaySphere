@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - ISO 20022 pain.001.001.09 Customer Credit Transfer Initiation
+  Standard: ISO 20022 Financial Services - Payments Initiation
+  Format: XML
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CstmrCdtTrfInitn>
+    <!-- Group Header -->
+    <GrpHdr>
+      <MsgId>PAIN001-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>25000.00</CtrlSum>
+      <InitgPty>
+        <Nm>NiFi E2E Test Corporation</Nm>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>NIFIE2E123456</Id>
+              <SchmeNm>
+                <Cd>CUST</Cd>
+              </SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </InitgPty>
+    </GrpHdr>
+
+    <!-- Payment Information -->
+    <PmtInf>
+      <PmtInfId>PMTINF-NIFI-E2E-20251227-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <BtchBookg>false</BtchBookg>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>25000.00</CtrlSum>
+
+      <!-- Payment Type Information -->
+      <PmtTpInf>
+        <InstrPrty>HIGH</InstrPrty>
+        <SvcLvl>
+          <Cd>URGP</Cd>
+        </SvcLvl>
+        <CtgyPurp>
+          <Cd>SUPP</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+
+      <ReqdExctnDt>
+        <Dt>2025-12-27</Dt>
+      </ReqdExctnDt>
+
+      <!-- Debtor (Payer) -->
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer Corp</Nm>
+        <PstlAdr>
+          <StrtNm>100 Test Boulevard</StrtNm>
+          <BldgNb>Suite 500</BldgNb>
+          <PstCd>10001</PstCd>
+          <TwnNm>New York</TwnNm>
+          <CtrySubDvsn>NY</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>529300NIFIE2ETESTPAYER</LEI>
+          </OrgId>
+        </Id>
+      </Dbtr>
+
+      <!-- Debtor Account -->
+      <DbtrAcct>
+        <Id>
+          <IBAN>US12345678901234567890</IBAN>
+        </Id>
+        <Ccy>USD</Ccy>
+      </DbtrAcct>
+
+      <!-- Debtor Agent -->
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>CHASUS33XXX</BICFI>
+          <Nm>JPMorgan Chase Bank NA</Nm>
+          <PstlAdr>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <!-- Credit Transfer Transaction Information -->
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>PAIN001-INSTR-NIFI-001</InstrId>
+          <EndToEndId>E2E-PAIN001-NIFI-20251227-001</EndToEndId>
+          <UETR>f1a2b3c4-d5e6-7890-abcd-123456789abc</UETR>
+        </PmtId>
+
+        <Amt>
+          <InstdAmt Ccy="USD">25000.00</InstdAmt>
+        </Amt>
+
+        <ChrgBr>SHAR</ChrgBr>
+
+        <!-- Creditor Agent -->
+        <CdtrAgt>
+          <FinInstnId>
+            <BICFI>BOFAUS3NXXX</BICFI>
+            <Nm>Bank of America NA</Nm>
+            <PstlAdr>
+              <Ctry>US</Ctry>
+            </PstlAdr>
+          </FinInstnId>
+        </CdtrAgt>
+
+        <!-- Creditor (Beneficiary) -->
+        <Cdtr>
+          <Nm>NiFi E2E Test Beneficiary Inc</Nm>
+          <PstlAdr>
+            <StrtNm>200 Destination Avenue</StrtNm>
+            <PstCd>90001</PstCd>
+            <TwnNm>Los Angeles</TwnNm>
+            <CtrySubDvsn>CA</CtrySubDvsn>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+          <Id>
+            <OrgId>
+              <Othr>
+                <Id>BENEFICIARY789</Id>
+                <SchmeNm>
+                  <Cd>CUST</Cd>
+                </SchmeNm>
+              </Othr>
+            </OrgId>
+          </Id>
+        </Cdtr>
+
+        <!-- Creditor Account -->
+        <CdtrAcct>
+          <Id>
+            <IBAN>US98765432109876543210</IBAN>
+          </Id>
+        </CdtrAcct>
+
+        <!-- Purpose -->
+        <Purp>
+          <Cd>SUPP</Cd>
+        </Purp>
+
+        <!-- Remittance Information -->
+        <RmtInf>
+          <Ustrd>NiFi E2E Test - Payment for Contract NIFI-2025-001</Ustrd>
+        </RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - UAE FTS (UAE Funds Transfer System)
+  Standard: CBUAE UAE FTS/IPP
+  Format: XML (based on ISO 20022)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>UAEFTS-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00+04:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="AED">200000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>UAEFTS</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>EABORAEAXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>UAECLR</Prtry>
+            </ClrSysId>
+            <MmbId>032</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>MASHAEADXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>UAECLR</Prtry>
+            </ClrSysId>
+            <MmbId>046</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>UAEFTS-INSTR-NIFI-001</InstrId>
+        <EndToEndId>UAEFTS-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>UAEFTS-TXID-NIFI-001</TxId>
+        <UETR>uaefts-nifi-e2e-uuid-1234</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>IPP</Prtry>
+        </SvcLvl>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="AED">200000.00</IntrBkSttlmAmt>
+
+      <ChrgBr>SHAR</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>EABORAEAXXX</BICFI>
+          <Nm>Emirates NBD</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer AE</Nm>
+        <PstlAdr>
+          <StrtNm>Sheikh Zayed Road</StrtNm>
+          <TwnNm>Dubai</TwnNm>
+          <Ctry>AE</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <IBAN>AE070331234567890123456</IBAN>
+        </Id>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>MASHAEADXXX</BICFI>
+          <Nm>Mashreq Bank</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary AE</Nm>
+        <PstlAdr>
+          <StrtNm>Corniche Road</StrtNm>
+          <TwnNm>Abu Dhabi</TwnNm>
+          <Ctry>AE</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <IBAN>AE460261234567891234567</IBAN>
+        </Id>
+      </CdtrAcct>
+
+      <RmtInf>
+        <Ustrd>NiFi E2E UAE FTS/IPP Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

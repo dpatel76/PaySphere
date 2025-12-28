@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - ISO 20022 pacs.008.001.08 FI to FI Customer Credit Transfer
+  Standard: ISO 20022 Financial Services - Payments Clearing and Settlement
+  Format: XML
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <!-- Group Header -->
+    <GrpHdr>
+      <MsgId>PACS008-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="USD">75000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>INDA</SttlmMtd>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>CHASUS33XXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>BOFAUS3NXXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <!-- Credit Transfer Transaction Information -->
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>PACS-INSTR-NIFI-001</InstrId>
+        <EndToEndId>E2E-PACS-NIFI-20251227-001</EndToEndId>
+        <TxId>TX-PACS-NIFI-001</TxId>
+        <UETR>a1b2c3d4-e5f6-7890-abcd-ef1234567890</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <InstrPrty>HIGH</InstrPrty>
+        <SvcLvl>
+          <Cd>URGP</Cd>
+        </SvcLvl>
+        <CtgyPurp>
+          <Cd>SUPP</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="USD">75000.00</IntrBkSttlmAmt>
+      <InstdAmt Ccy="USD">75000.00</InstdAmt>
+
+      <ChrgBr>SHAR</ChrgBr>
+
+      <!-- Debtor Agent -->
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>CHASUS33XXX</BICFI>
+          <Nm>JPMorgan Chase Bank NA</Nm>
+          <PstlAdr>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <!-- Debtor -->
+      <Dbtr>
+        <Nm>Global Manufacturing Corp</Nm>
+        <PstlAdr>
+          <StrtNm>100 Industrial Way</StrtNm>
+          <PstCd>60601</PstCd>
+          <TwnNm>Chicago</TwnNm>
+          <CtrySubDvsn>IL</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>529300GLOBALM12345678</LEI>
+          </OrgId>
+        </Id>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <IBAN>US12345678901234567890</IBAN>
+        </Id>
+        <Ccy>USD</Ccy>
+      </DbtrAcct>
+
+      <!-- Creditor Agent -->
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>BOFAUS3NXXX</BICFI>
+          <Nm>Bank of America NA</Nm>
+          <PstlAdr>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <!-- Creditor -->
+      <Cdtr>
+        <Nm>British Engineering Solutions Ltd</Nm>
+        <PstlAdr>
+          <StrtNm>50 Canary Wharf</StrtNm>
+          <PstCd>E14 5AB</PstCd>
+          <TwnNm>London</TwnNm>
+          <Ctry>GB</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>BRENG001</Id>
+              <SchmeNm>
+                <Cd>CUST</Cd>
+              </SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <IBAN>GB82BARC20035398765432</IBAN>
+        </Id>
+        <Ccy>GBP</Ccy>
+      </CdtrAcct>
+
+      <!-- Remittance Information -->
+      <RmtInf>
+        <Ustrd>NiFi E2E Test - Payment for Engineering Contract EC-2025-001</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

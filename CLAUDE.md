@@ -4,16 +4,76 @@
 
 GPS Common Domain Model (CDM) - A payment message processing pipeline supporting 63+ payment standards across ISO 20022, SWIFT MT, and regional payment schemes. Uses medallion architecture (Bronze → Silver → Gold) with Celery for distributed task processing and NiFi for flow orchestration.
 
-## Architecture
+## Architecture (v2.0 - Kafka-Based)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              INGESTION TIER                                 │
+│  Files (SFTP/S3) → NiFi (Parse + Route) → Kafka (payment.bronze.{type})    │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PROCESSING TIER                                   │
+│  Kafka Consumer → MicroBatchAccumulator (10K records) → BulkWriter (COPY)  │
+│                          │                                                  │
+│                          ▼                                                  │
+│  Celery Beat (poll pending) → Bronze→Silver→Gold promotion tasks           │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          PERSISTENCE TIER                                   │
+│  Bronze (raw_*) → Silver (stg_*) → Gold (cdm_*) [PostgreSQL/Databricks]    │
+│                          │                                                  │
+│  Observability: batch_tracking, kafka_checkpoints, micro_batch_tracking     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| `MicroBatchAccumulator` | Accumulates Kafka messages, flushes on size/time | `streaming/micro_batch_accumulator.py` |
+| `BulkWriter` | PostgreSQL COPY / Databricks COPY INTO | `streaming/bulk_writer.py` |
+| `KafkaBatchConsumer` | Kafka consumer with checkpointing | `streaming/kafka_batch_consumer.py` |
+| `batch_promotion_tasks` | Bronze→Silver→Gold Celery tasks | `orchestration/batch_promotion_tasks.py` |
+| `batch_stats` API | Real-time processing stats | `api/routes/batch_stats.py` |
+
+### Performance Targets
+
+- **PostgreSQL COPY**: ~135,000 rows/second
+- **Micro-batch size**: 10,000-50,000 records
+- **Flush interval**: 10 seconds max
+- **Target throughput**: 50M+ messages/day
+
+### Restartability
+
+Crash recovery is handled via:
+1. **Kafka checkpoints** (`kafka_consumer_checkpoints`) - consumer offsets + pending records
+2. **Micro-batch tracking** (`micro_batch_tracking`) - batch state through pipeline
+3. **Dead letter queue** (`kafka_dead_letter_queue`) - failed batches for replay
+
+On restart:
+1. Consumer claims stale checkpoints (>60s heartbeat)
+2. Pending records recovered from checkpoint
+3. Incomplete batches resumed or sent to DLQ
+
+---
+
+## Legacy Architecture (v1.0 - Flower API)
 
 ```
 NiFi (Flow Orchestration)
-    → Flower API (Celery Task Submission)
+    → Flower API (Celery Task Submission) [DEPRECATED - unstable]
     → Redis (Message Broker)
     → Celery Workers (Task Processing)
     → PostgreSQL / Databricks (Persistence)
     → Neo4j (Knowledge Graph)
 ```
+
+**Note**: Flower API had reliability issues (HTTP 400 errors, JSON escaping).
+Use Kafka-based architecture (v2.0) for production.
 
 ## Key Learnings
 

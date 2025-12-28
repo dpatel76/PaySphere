@@ -388,15 +388,15 @@ class MT103Extractor(BaseExtractor):
             'receivers_correspondent_account': trunc(receivers_corr.get('account'), 35),
             'receivers_correspondent_name': trunc(receivers_corr.get('name'), 140),
 
-            # Intermediary Institution (Field 56)
-            'intermediary_institution_bic': intermediary.get('bic'),
-            'intermediary_institution_name': trunc(intermediary.get('name'), 140),
-            'intermediary_institution_country': intermediary.get('country'),
+            # Intermediary Institution (Field 56) - column names match DB schema
+            'intermediary_bic': intermediary.get('bic'),
+            'intermediary_account': trunc(intermediary.get('account'), 35),
+            'intermediary_name': trunc(intermediary.get('name'), 140),
 
-            # Account With Institution (Field 57)
+            # Account With Institution (Field 57) - column names match DB schema
             'account_with_institution_bic': acct_with_inst.get('bic'),
+            'account_with_institution_account': trunc(acct_with_inst.get('account'), 35),
             'account_with_institution_name': trunc(acct_with_inst.get('name'), 140),
-            'account_with_institution_country': acct_with_inst.get('country'),
 
             # Beneficiary Customer (Field 59)
             'beneficiary_name': trunc(beneficiary.get('name'), 140),
@@ -411,15 +411,15 @@ class MT103Extractor(BaseExtractor):
             # Details of Charges (Field 71)
             'details_of_charges': trunc(details_of_charges.get('chargeBearer') if isinstance(details_of_charges, dict) else details_of_charges, 3),
 
-            # Sender to Receiver Information (Field 72)
-            'sender_to_receiver_information': trunc(msg_content.get('senderToReceiverInformation'), 210),
+            # Sender to Receiver Information (Field 72) - matches DB column name
+            'sender_to_receiver_info': trunc(msg_content.get('senderToReceiverInformation'), 210),
 
             # Regulatory Reporting (Field 77B)
             'regulatory_reporting': trunc(regulatory.get('code') if isinstance(regulatory, dict) else regulatory, 140),
         }
 
     def get_silver_columns(self) -> List[str]:
-        """Return ordered list of Silver table columns for INSERT."""
+        """Return ordered list of Silver table columns for INSERT - matches DB schema exactly."""
         return [
             'stg_id', 'raw_id', '_batch_id',
             'senders_reference', 'transaction_reference_number', 'bank_operation_code', 'instruction_codes',
@@ -430,11 +430,11 @@ class MT103Extractor(BaseExtractor):
             'ordering_institution_country',
             'senders_correspondent_bic', 'senders_correspondent_account', 'senders_correspondent_name',
             'receivers_correspondent_bic', 'receivers_correspondent_account', 'receivers_correspondent_name',
-            'intermediary_institution_bic', 'intermediary_institution_name', 'intermediary_institution_country',
-            'account_with_institution_bic', 'account_with_institution_name', 'account_with_institution_country',
+            'intermediary_bic', 'intermediary_account', 'intermediary_name',
+            'account_with_institution_bic', 'account_with_institution_account', 'account_with_institution_name',
             'beneficiary_name', 'beneficiary_account', 'beneficiary_address', 'beneficiary_country',
             'beneficiary_party_id',
-            'remittance_information', 'details_of_charges', 'sender_to_receiver_information',
+            'remittance_information', 'details_of_charges', 'sender_to_receiver_info',
             'regulatory_reporting',
         ]
 

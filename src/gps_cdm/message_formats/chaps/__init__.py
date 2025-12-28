@@ -19,6 +19,174 @@ from ..base import (
 logger = logging.getLogger(__name__)
 
 
+class ChapsSwiftParser:
+    """Parser for CHAPS SWIFT block format messages (MT103-like)."""
+
+    BLOCK_PATTERN = re.compile(r'\{(\d):([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}')
+    TAG_PATTERN = re.compile(r':(\d{2}[A-Z]?):([^\r\n:]+(?:\r?\n(?!:)[^\r\n:]*)*)', re.MULTILINE)
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse CHAPS SWIFT block message into structured dict."""
+        result = {
+            'messageType': 'CHAPS',
+        }
+
+        # Handle JSON input (pre-parsed)
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{') and not raw_content.strip().startswith('{1:'):
+            try:
+                parsed = json.loads(raw_content)
+                if isinstance(parsed, dict) and 'messageType' not in parsed:
+                    parsed['messageType'] = 'CHAPS'
+                return parsed
+            except json.JSONDecodeError:
+                pass
+
+        # Parse SWIFT block format
+        for match in self.BLOCK_PATTERN.finditer(raw_content):
+            block_num = match.group(1)
+            block_content = match.group(2)
+
+            if block_num == '1':
+                self._parse_basic_header(block_content, result)
+            elif block_num == '2':
+                self._parse_application_header(block_content, result)
+            elif block_num == '3':
+                self._parse_user_header(block_content, result)
+            elif block_num == '4':
+                self._parse_text_block(block_content, result)
+
+        return result
+
+    def _parse_basic_header(self, content: str, result: Dict):
+        """Parse Block 1: Basic Header."""
+        if len(content) >= 12:
+            result['debtorAgentBic'] = content[3:15].strip() if len(content) >= 15 else content[3:].strip()
+
+    def _parse_application_header(self, content: str, result: Dict):
+        """Parse Block 2: Application Header."""
+        if content.startswith('O'):
+            if len(content) >= 28:
+                result['creditorAgentBic'] = content[16:28].strip()
+
+    def _parse_user_header(self, content: str, result: Dict):
+        """Parse Block 3: User Header."""
+        # Extract {108:value} for message reference
+        match = re.search(r'\{108:([^}]+)\}', content)
+        if match:
+            result['messageId'] = match.group(1)
+
+    def _parse_text_block(self, content: str, result: Dict):
+        """Parse Block 4: Text Block (CHAPS Fields)."""
+        for match in self.TAG_PATTERN.finditer(content):
+            tag = match.group(1)
+            value = match.group(2).strip()
+
+            # Transaction Reference (Field 20)
+            if tag == '20':
+                result['instructionId'] = value
+                if not result.get('messageId'):
+                    result['messageId'] = value
+
+            # Bank Operation Code (Field 23B)
+            elif tag == '23B':
+                result['bankOperationCode'] = value
+
+            # Value Date/Currency/Amount (Field 32A)
+            elif tag == '32A':
+                self._parse_value_date_amount(value, result)
+
+            # Instructed Amount (Field 33B)
+            elif tag == '33B':
+                if len(value) >= 4:
+                    result['currency'] = value[:3]
+
+            # Ordering Customer (Field 50K)
+            elif tag in ('50K', '50A', '50F'):
+                self._parse_party(value, result, 'debtor')
+
+            # Ordering Institution (Field 52A)
+            elif tag in ('52A', '52D'):
+                bic = self._extract_bic(value)
+                if bic:
+                    result['debtorAgentBic'] = bic
+
+            # Beneficiary Customer (Field 59)
+            elif tag in ('59', '59A', '59F'):
+                self._parse_party(value, result, 'creditor')
+
+            # Beneficiary Institution (Field 57A)
+            elif tag in ('57A', '57D'):
+                bic = self._extract_bic(value)
+                if bic:
+                    result['creditorAgentBic'] = bic
+
+            # Remittance Information (Field 70)
+            elif tag == '70':
+                result['remittanceInfo'] = value.replace('\n', ' ')
+
+            # Details of Charges (Field 71A)
+            elif tag == '71A':
+                result['chargeBearer'] = value
+
+            # Sender to Receiver Info (Field 72)
+            elif tag == '72':
+                result['senderToReceiverInfo'] = value.replace('\n', ' ')
+
+    def _parse_value_date_amount(self, value: str, result: Dict):
+        """Parse tag 32A: YYMMDDCCCAMOUNT"""
+        if len(value) >= 6:
+            date_str = value[:6]
+            try:
+                year = int(date_str[:2])
+                full_year = 2000 + year if year < 50 else 1900 + year
+                result['settlementDate'] = f"{full_year}-{date_str[2:4]}-{date_str[4:6]}"
+            except ValueError:
+                pass
+
+        if len(value) >= 9:
+            result['currency'] = value[6:9]
+
+        if len(value) > 9:
+            amount_str = value[9:].replace(',', '.')
+            try:
+                result['amount'] = float(amount_str)
+            except ValueError:
+                pass
+
+    def _parse_party(self, value: str, result: Dict, party_type: str):
+        """Parse party field (50 or 59)."""
+        lines = value.split('\n')
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+
+            if i == 0 and line.startswith('/'):
+                # Account number
+                result[f'{party_type}Account'] = line[1:].split('\n')[0][:34]
+                # Extract sort code if format is /SC:NNNNNN/ACCOUNT
+                if 'GB' in line or len(line) > 10:
+                    # UK IBAN format
+                    if line.startswith('/GB'):
+                        result[f'{party_type}SortCode'] = line[5:11] if len(line) > 10 else None
+            elif f'{party_type}Name' not in result:
+                result[f'{party_type}Name'] = line[:140]
+            elif f'{party_type}Address' not in result:
+                result[f'{party_type}Address'] = line
+
+    def _extract_bic(self, value: str) -> Optional[str]:
+        """Extract BIC from field value."""
+        lines = value.split('\n')
+        for line in lines:
+            line = line.strip()
+            if len(line) >= 8 and line[:8].isalnum():
+                return line[:11] if len(line) >= 11 else line[:8]
+        return None
+
+
 class ChapsXmlParser:
     """Parser for CHAPS ISO 20022 XML messages."""
 
@@ -223,15 +391,15 @@ class ChapsExtractor(BaseExtractor):
             # Debtor
             'debtor_name': trunc(msg_content.get('debtorName'), 140),
             'debtor_address': msg_content.get('debtorAddress'),
-            'debtor_sort_code': trunc(msg_content.get('debtorSortCode'), 6),
-            'debtor_account': trunc(msg_content.get('debtorAccount'), 34),
+            'debtor_sort_code': trunc(msg_content.get('debtorSortCode'), 10),
+            'debtor_account': trunc(msg_content.get('debtorAccount'), 34),  # IBAN max length
             'debtor_agent_bic': trunc(msg_content.get('debtorAgentBic'), 11),
 
             # Creditor
             'creditor_name': trunc(msg_content.get('creditorName'), 140),
             'creditor_address': msg_content.get('creditorAddress'),
-            'creditor_sort_code': trunc(msg_content.get('creditorSortCode'), 6),
-            'creditor_account': trunc(msg_content.get('creditorAccount'), 34),
+            'creditor_sort_code': trunc(msg_content.get('creditorSortCode'), 10),
+            'creditor_account': trunc(msg_content.get('creditorAccount'), 34),  # IBAN max length
             'creditor_agent_bic': trunc(msg_content.get('creditorAgentBic'), 11),
 
             # Payment IDs

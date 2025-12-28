@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - Australia NPP (New Payments Platform)
+  Standard: Australian NPP (based on ISO 20022 pacs.008)
+  Format: XML
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>NPP-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00+11:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="AUD">1000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>NPP</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>CTBAAU2SXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>AUBSB</Prtry>
+            </ClrSysId>
+            <MmbId>062000</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>WPACAU2SXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>AUBSB</Prtry>
+            </ClrSysId>
+            <MmbId>032000</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>NPP-INSTR-NIFI-001</InstrId>
+        <EndToEndId>NPP-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>NPP-TXID-NIFI-001</TxId>
+        <UETR>npp-nifi-e2e-uuid-12345678</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>OSKO</Prtry>
+        </SvcLvl>
+        <LclInstrm>
+          <Prtry>INSTANT</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="AUD">1000.00</IntrBkSttlmAmt>
+
+      <ChrgBr>SLEV</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>CTBAAU2SXXX</BICFI>
+          <Nm>Commonwealth Bank of Australia</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer AU</Nm>
+        <PstlAdr>
+          <StrtNm>100 Test Street</StrtNm>
+          <PstCd>2000</PstCd>
+          <TwnNm>Sydney</TwnNm>
+          <CtrySubDvsn>NSW</CtrySubDvsn>
+          <Ctry>AU</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>062000123456789</Id>
+            <SchmeNm>
+              <Prtry>BBAN</Prtry>
+            </SchmeNm>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>WPACAU2SXXX</BICFI>
+          <Nm>Westpac Banking Corporation</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary AU</Nm>
+        <PstlAdr>
+          <StrtNm>200 Destination Road</StrtNm>
+          <PstCd>3000</PstCd>
+          <TwnNm>Melbourne</TwnNm>
+          <CtrySubDvsn>VIC</CtrySubDvsn>
+          <Ctry>AU</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>032000987654321</Id>
+            <SchmeNm>
+              <Prtry>BBAN</Prtry>
+            </SchmeNm>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <RmtInf>
+        <Ustrd>NiFi E2E NPP/Osko Instant Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

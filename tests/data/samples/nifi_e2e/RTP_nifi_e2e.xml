@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - TCH RTP Credit Transfer (pacs.008)
+  Standard: The Clearing House Real-Time Payments (based on ISO 20022)
+  Format: XML
+-->
+<Document xmlns="urn:tch:xsd:pacs.008.001.01"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <!-- Group Header -->
+    <GrpHdr>
+      <MsgId>RTP-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00.000Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Cd>RTP</Cd>
+        </ClrSys>
+      </SttlmInf>
+    </GrpHdr>
+
+    <!-- Credit Transfer Transaction Information -->
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>RTP-INSTR-NIFI-E2E-001</InstrId>
+        <EndToEndId>RTP-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>RTP-TXID-NIFI-E2E-001</TxId>
+        <UETR>a1b2c3d4-e5f6-7890-nifi-e2e123456789</UETR>
+      </PmtId>
+
+      <!-- Amounts -->
+      <IntrBkSttlmAmt Ccy="USD">1500.00</IntrBkSttlmAmt>
+      <InstdAmt Ccy="USD">1500.00</InstdAmt>
+
+      <!-- Settlement Date - Same day for RTP -->
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+
+      <!-- Charge Bearer -->
+      <ChrgBr>SLEV</ChrgBr>
+
+      <!-- Debtor Agent (Sender FI) - RTN -->
+      <DbtrAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <MmbId>021000021</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <!-- Debtor (Payer) -->
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer LLC</Nm>
+        <PstlAdr>
+          <StrtNm>100 Test Street</StrtNm>
+          <PstCd>60601</PstCd>
+          <TwnNm>Chicago</TwnNm>
+          <CtrySubDvsn>IL</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <!-- Debtor Account -->
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFI123456789</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <!-- Creditor Agent (Receiver FI) - RTN -->
+      <CdtrAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <MmbId>021000089</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <!-- Creditor (Beneficiary) -->
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary Corp</Nm>
+        <PstlAdr>
+          <StrtNm>200 Destination Blvd</StrtNm>
+          <PstCd>60602</PstCd>
+          <TwnNm>Chicago</TwnNm>
+          <CtrySubDvsn>IL</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <!-- Creditor Account -->
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFI987654321</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <!-- Purpose -->
+      <Purp>
+        <Cd>CASH</Cd>
+      </Purp>
+
+      <!-- Remittance Information -->
+      <RmtInf>
+        <Ustrd>NiFi E2E Test RTP Payment Order NIFI-RTP-2025-001</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

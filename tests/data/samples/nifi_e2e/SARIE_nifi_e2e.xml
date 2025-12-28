@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - Saudi Arabia SARIE (Saudi Arabian Riyal Interbank Express)
+  Standard: SAMA SARIE RTGS
+  Format: XML (based on ISO 20022)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>SARIE-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00+03:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="SAR">500000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>SARIE</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>NCBKSAJEXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>SACLR</Prtry>
+            </ClrSysId>
+            <MmbId>10</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>RIABORIJXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>SACLR</Prtry>
+            </ClrSysId>
+            <MmbId>20</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>SARIE-INSTR-NIFI-001</InstrId>
+        <EndToEndId>SARIE-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>SARIE-TXID-NIFI-001</TxId>
+        <UETR>sarie-nifi-e2e-uuid-12345</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>RTGS</Prtry>
+        </SvcLvl>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="SAR">500000.00</IntrBkSttlmAmt>
+
+      <ChrgBr>SHAR</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>NCBKSAJEXXX</BICFI>
+          <Nm>National Commercial Bank</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer SA</Nm>
+        <PstlAdr>
+          <StrtNm>King Fahd Road</StrtNm>
+          <PstCd>21411</PstCd>
+          <TwnNm>Jeddah</TwnNm>
+          <Ctry>SA</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <IBAN>SA0380000000608010167519</IBAN>
+        </Id>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>RIABORIJXXX</BICFI>
+          <Nm>Riyad Bank</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary SA</Nm>
+        <PstlAdr>
+          <StrtNm>Olaya Street</StrtNm>
+          <PstCd>11211</PstCd>
+          <TwnNm>Riyadh</TwnNm>
+          <Ctry>SA</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <IBAN>SA4420000001234567891234</IBAN>
+        </Id>
+      </CdtrAcct>
+
+      <RmtInf>
+        <Ustrd>NiFi E2E SARIE RTGS Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

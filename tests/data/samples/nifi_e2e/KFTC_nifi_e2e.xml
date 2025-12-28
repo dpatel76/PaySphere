@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - Korea KFTC (Korea Financial Telecommunications and Clearings Institute)
+  Standard: KFTC Payment System
+  Format: XML (based on ISO 20022)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>KFTC-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00+09:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="KRW">50000000</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>KFTC</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>KOABORKKXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>KRCLR</Prtry>
+            </ClrSysId>
+            <MmbId>004</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>SHBAKRSEXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>KRCLR</Prtry>
+            </ClrSysId>
+            <MmbId>088</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>KFTC-INSTR-NIFI-001</InstrId>
+        <EndToEndId>KFTC-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>KFTC-TXID-NIFI-001</TxId>
+        <UETR>kftc-nifi-e2e-uuid-12345678</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>EXPRESS</Prtry>
+        </SvcLvl>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="KRW">50000000</IntrBkSttlmAmt>
+
+      <ChrgBr>SHAR</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>KOABORKKXXX</BICFI>
+          <Nm>KB Kookmin Bank</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer KR</Nm>
+        <PstlAdr>
+          <StrtNm>84 Namdaemun-ro</StrtNm>
+          <PstCd>04532</PstCd>
+          <TwnNm>Jung-gu</TwnNm>
+          <CtrySubDvsn>Seoul</CtrySubDvsn>
+          <Ctry>KR</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFIKR123456789012</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>SHBAKRSEXXX</BICFI>
+          <Nm>Shinhan Bank</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary KR</Nm>
+        <PstlAdr>
+          <StrtNm>20 Sejong-daero</StrtNm>
+          <PstCd>04513</PstCd>
+          <TwnNm>Jung-gu</TwnNm>
+          <CtrySubDvsn>Seoul</CtrySubDvsn>
+          <Ctry>KR</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFIKR987654321098</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <RmtInf>
+        <Ustrd>NiFi E2E KFTC Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

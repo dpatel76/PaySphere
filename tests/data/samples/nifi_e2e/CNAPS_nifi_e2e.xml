@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - China CNAPS (China National Advanced Payment System)
+  Standard: PBOC CNAPS/HVPS
+  Format: XML (based on ISO 20022)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>CNAPS-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00+08:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="CNY">1000000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>CNAPS</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>ICBKCNBJXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>CNAPS</Prtry>
+            </ClrSysId>
+            <MmbId>102100099996</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>PCABORKKXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>CNAPS</Prtry>
+            </ClrSysId>
+            <MmbId>103100000017</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>CNAPS-INSTR-NIFI-001</InstrId>
+        <EndToEndId>CNAPS-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>CNAPS-TXID-NIFI-001</TxId>
+        <UETR>cnaps-nifi-e2e-uuid-12345</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>HVPS</Prtry>
+        </SvcLvl>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="CNY">1000000.00</IntrBkSttlmAmt>
+
+      <ChrgBr>SHAR</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>ICBKCNBJXXX</BICFI>
+          <Nm>Industrial and Commercial Bank of China</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer CN</Nm>
+        <PstlAdr>
+          <StrtNm>55 Fuxingmennei Street</StrtNm>
+          <PstCd>100140</PstCd>
+          <TwnNm>Xicheng District</TwnNm>
+          <CtrySubDvsn>Beijing</CtrySubDvsn>
+          <Ctry>CN</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFICN1234567890123456</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>PCABORKKXXX</BICFI>
+          <Nm>Agricultural Bank of China</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary CN</Nm>
+        <PstlAdr>
+          <StrtNm>69 Jianguomen Street</StrtNm>
+          <PstCd>100005</PstCd>
+          <TwnNm>Dongcheng District</TwnNm>
+          <CtrySubDvsn>Beijing</CtrySubDvsn>
+          <Ctry>CN</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFICN9876543210987654</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <RmtInf>
+        <Ustrd>NiFi E2E CNAPS HVPS Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

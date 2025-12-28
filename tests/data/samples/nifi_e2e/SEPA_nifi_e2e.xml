@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - SEPA Credit Transfer (pain.001.001.09)
+  Standard: EPC SEPA Credit Transfer Scheme Rulebook
+  Format: XML (ISO 20022)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CstmrCdtTrfInitn>
+    <!-- Group Header -->
+    <GrpHdr>
+      <MsgId>SEPA-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>5000.00</CtrlSum>
+      <InitgPty>
+        <Nm>NiFi E2E Test GmbH</Nm>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>DE-NIFIE2E-789</Id>
+              <SchmeNm>
+                <Cd>CUST</Cd>
+              </SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </InitgPty>
+    </GrpHdr>
+
+    <!-- Payment Information -->
+    <PmtInf>
+      <PmtInfId>SEPA-PMTINF-NIFI-E2E-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <BtchBookg>true</BtchBookg>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>5000.00</CtrlSum>
+
+      <!-- Payment Type Information - SEPA Specific -->
+      <PmtTpInf>
+        <InstrPrty>NORM</InstrPrty>
+        <SvcLvl>
+          <Cd>SEPA</Cd>
+        </SvcLvl>
+        <LclInstrm>
+          <Cd>CORE</Cd>
+        </LclInstrm>
+        <CtgyPurp>
+          <Cd>SUPP</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+
+      <ReqdExctnDt>
+        <Dt>2025-12-27</Dt>
+      </ReqdExctnDt>
+
+      <!-- Debtor (Payer) -->
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer</Nm>
+        <PstlAdr>
+          <StrtNm>Teststrasse 100</StrtNm>
+          <PstCd>80331</PstCd>
+          <TwnNm>Munich</TwnNm>
+          <Ctry>DE</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <!-- Debtor Account - IBAN Required for SEPA -->
+      <DbtrAcct>
+        <Id>
+          <IBAN>DE89370400440532013000</IBAN>
+        </Id>
+        <Ccy>EUR</Ccy>
+      </DbtrAcct>
+
+      <!-- Debtor Agent - BIC -->
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <!-- Charge Bearer - Must be SLEV for SEPA -->
+      <ChrgBr>SLEV</ChrgBr>
+
+      <!-- Credit Transfer Transaction Information -->
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>SEPA-INSTR-NIFI-E2E-001</InstrId>
+          <EndToEndId>SEPA-E2E-NIFI-20251227-001</EndToEndId>
+        </PmtId>
+
+        <Amt>
+          <InstdAmt Ccy="EUR">5000.00</InstdAmt>
+        </Amt>
+
+        <!-- Creditor Agent -->
+        <CdtrAgt>
+          <FinInstnId>
+            <BICFI>BNPAFRPPXXX</BICFI>
+          </FinInstnId>
+        </CdtrAgt>
+
+        <!-- Creditor (Beneficiary) -->
+        <Cdtr>
+          <Nm>NiFi E2E Test Beneficiary SARL</Nm>
+          <PstlAdr>
+            <StrtNm>Rue du Test 50</StrtNm>
+            <PstCd>75002</PstCd>
+            <TwnNm>Paris</TwnNm>
+            <Ctry>FR</Ctry>
+          </PstlAdr>
+        </Cdtr>
+
+        <!-- Creditor Account - IBAN Required for SEPA -->
+        <CdtrAcct>
+          <Id>
+            <IBAN>FR7630004000031234567890143</IBAN>
+          </Id>
+        </CdtrAcct>
+
+        <!-- Purpose -->
+        <Purp>
+          <Cd>SUPP</Cd>
+        </Purp>
+
+        <!-- Remittance Information -->
+        <RmtInf>
+          <Ustrd>NiFi E2E Test SEPA Payment Invoice NIFI-2025-001</Ustrd>
+        </RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

@@ -1,0 +1,14 @@
+{
+  "transactionId": "INSTAPAY-E2E-2025122701",
+  "referenceNumber": "REF-20251227-INSTAPAY",
+  "creationDateTime": "2025-12-27T10:30:00Z",
+  "amount": 50000.00,
+  "currency": "PHP",
+  "senderBankCode": "MABORSBAXXX",
+  "senderAccount": "000123456789012",
+  "senderName": "Juan Dela Cruz",
+  "receiverBankCode": "ABORSBPHXXX",
+  "receiverAccount": "000987654321098",
+  "receiverName": "Maria Santos",
+  "remittanceInfo": "Payment for invoice INV-2025-001 - InstaPay E2E Test"
+}

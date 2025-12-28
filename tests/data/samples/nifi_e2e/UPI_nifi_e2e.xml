@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - India UPI (Unified Payments Interface)
+  Standard: NPCI UPI Specification
+  Format: XML (UPI API format)
+-->
+<upi:ReqPay xmlns:upi="http://npci.org/upi/schema/ReqPay"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Head ver="2.0" ts="2025-12-27T10:00:00+05:30" orgId="NIFIE2E" msgId="UPI-NIFI-E2E-20251227-001"/>
+
+  <Meta>
+    <Tag name="NIFIE2E" value="TEST"/>
+  </Meta>
+
+  <Txn id="UPI-TXID-NIFI-001" note="NiFi E2E UPI Payment Test" refId="NIFIE2EUPIREF001"
+       refUrl="https://nifie2e.test/upi" ts="2025-12-27T10:00:00+05:30" type="PAY">
+    <RiskScores>
+      <Score provider="NPCI" type="TXNRISK" value="LOW"/>
+    </RiskScores>
+  </Txn>
+
+  <Payer addr="nifie2epayer@upi" code="0000" name="NiFi E2E Test Payer"
+         seqNum="1" type="PERSON">
+    <Info>
+      <Identity id="NIFI123456" type="ACCOUNT" verifiedName="NIFI E2E TEST PAYER"/>
+    </Info>
+    <Device>
+      <Tag name="MOBILE" value="919876543210"/>
+      <Tag name="GEOCODE" value="28.6139,77.2090"/>
+      <Tag name="APP" value="NIFIE2ETEST"/>
+    </Device>
+    <Ac addrType="ACCOUNT">
+      <Detail name="IFSC" value="SBIN0001234"/>
+      <Detail name="ACTYPE" value="SAVINGS"/>
+      <Detail name="ACNUM" value="12345678901234"/>
+    </Ac>
+    <Amount curr="INR" value="5000.00"/>
+  </Payer>
+
+  <Payees>
+    <Payee addr="nifie2ebeneficiary@upi" code="0000" name="NiFi E2E Test Beneficiary"
+           seqNum="1" type="PERSON">
+      <Info>
+        <Identity id="NIFI789012" type="ACCOUNT" verifiedName="NIFI E2E TEST BENEFICIARY"/>
+      </Info>
+      <Ac addrType="ACCOUNT">
+        <Detail name="IFSC" value="HDFC0001234"/>
+        <Detail name="ACTYPE" value="SAVINGS"/>
+        <Detail name="ACNUM" value="98765432109876"/>
+      </Ac>
+      <Amount curr="INR" value="5000.00"/>
+    </Payee>
+  </Payees>
+</upi:ReqPay>

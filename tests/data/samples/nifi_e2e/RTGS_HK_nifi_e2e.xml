@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - Hong Kong CHATS/RTGS
+  Standard: HKMA CHATS (Clearing House Automated Transfer System)
+  Format: XML (based on ISO 20022)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>CHATS-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00+08:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="HKD">500000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>CHATS</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>HABORHKHXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>HKCLR</Prtry>
+            </ClrSysId>
+            <MmbId>004</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>SCBLHKHHXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>HKCLR</Prtry>
+            </ClrSysId>
+            <MmbId>003</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>CHATS-INSTR-NIFI-001</InstrId>
+        <EndToEndId>CHATS-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>CHATS-TXID-NIFI-001</TxId>
+        <UETR>chats-nifi-e2e-uuid-12345678</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>RTGS</Prtry>
+        </SvcLvl>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="HKD">500000.00</IntrBkSttlmAmt>
+
+      <ChrgBr>SHAR</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>HABORHKHXXX</BICFI>
+          <Nm>Hang Seng Bank Limited</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer HK</Nm>
+        <PstlAdr>
+          <StrtNm>100 Des Voeux Road Central</StrtNm>
+          <TwnNm>Central</TwnNm>
+          <Ctry>HK</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFIHK123456789</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>SCBLHKHHXXX</BICFI>
+          <Nm>Standard Chartered Bank (Hong Kong) Limited</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary HK</Nm>
+        <PstlAdr>
+          <StrtNm>200 Queens Road Central</StrtNm>
+          <TwnNm>Central</TwnNm>
+          <Ctry>HK</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFIHK987654321</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <RmtInf>
+        <Ustrd>NiFi E2E CHATS RTGS Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

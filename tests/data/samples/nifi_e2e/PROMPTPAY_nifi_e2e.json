@@ -1,0 +1,19 @@
+{
+  "transactionId": "PROMPTPAY-E2E-2025122701",
+  "endToEndId": "E2E-PP-20251227",
+  "creationDateTime": "2025-12-27T10:30:00Z",
+  "amount": 100000.00,
+  "currency": "THB",
+  "payerProxyType": "MOBILE",
+  "payerProxyValue": "0812345678",
+  "payerName": "Somchai Jaidee",
+  "payerBankCode": "BABORQSBKBK",
+  "payerAccount": "0123456789",
+  "payeeProxyType": "NATID",
+  "payeeProxyValue": "1234567890123",
+  "payeeName": "Nong Kai Shop",
+  "payeeBankCode": "KRTHTHBKXXX",
+  "payeeAccount": "9876543210",
+  "qrCodeData": "00020101021229370016A000000677010111011300661234567890520400005303764540810000.005802TH",
+  "remittanceInfo": "QR Payment - PromptPay E2E Test"
+}

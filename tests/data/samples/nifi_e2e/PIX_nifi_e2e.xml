@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - Brazil PIX Instant Payment
+  Standard: BCB PIX (Banco Central do Brasil)
+  Format: XML (based on ISO 20022 pacs.008)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>PIX-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00-03:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="BRL">2500.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>PIX</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>BBLOBRSPXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>ISPB</Prtry>
+            </ClrSysId>
+            <MmbId>00000000</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>ITAUBRSPXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>ISPB</Prtry>
+            </ClrSysId>
+            <MmbId>60701190</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>PIX-INSTR-NIFI-001</InstrId>
+        <EndToEndId>E00000000202512271000NIFIE2ETEST</EndToEndId>
+        <TxId>PIX-TXID-NIFI-001</TxId>
+        <UETR>pix-nifi-e2e-uuid-12345678</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>PIX</Prtry>
+        </SvcLvl>
+        <LclInstrm>
+          <Prtry>MANU</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="BRL">2500.00</IntrBkSttlmAmt>
+
+      <ChrgBr>SLEV</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>BBLOBRSPXXX</BICFI>
+          <Nm>Banco do Brasil SA</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer BR</Nm>
+        <PstlAdr>
+          <StrtNm>Av Paulista 1000</StrtNm>
+          <PstCd>01310-100</PstCd>
+          <TwnNm>Sao Paulo</TwnNm>
+          <CtrySubDvsn>SP</CtrySubDvsn>
+          <Ctry>BR</Ctry>
+        </PstlAdr>
+        <Id>
+          <PrvtId>
+            <Othr>
+              <Id>12345678901</Id>
+              <SchmeNm>
+                <Prtry>CPF</Prtry>
+              </SchmeNm>
+            </Othr>
+          </PrvtId>
+        </Id>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>nifie2epayer@pix.bcb.gov.br</Id>
+            <SchmeNm>
+              <Prtry>PIXKEY</Prtry>
+            </SchmeNm>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>ITAUBRSPXXX</BICFI>
+          <Nm>Itau Unibanco SA</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary BR</Nm>
+        <PstlAdr>
+          <StrtNm>Rua Rio Branco 200</StrtNm>
+          <PstCd>20040-002</PstCd>
+          <TwnNm>Rio de Janeiro</TwnNm>
+          <CtrySubDvsn>RJ</CtrySubDvsn>
+          <Ctry>BR</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>12345678000190</Id>
+              <SchmeNm>
+                <Prtry>CNPJ</Prtry>
+              </SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>nifie2ebeneficiary@pix.bcb.gov.br</Id>
+            <SchmeNm>
+              <Prtry>PIXKEY</Prtry>
+            </SchmeNm>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <RmtInf>
+        <Ustrd>NiFi E2E PIX Instant Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

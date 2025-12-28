@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - TARGET2 RTGS Payment
+  Standard: Eurosystem TARGET2 (based on ISO 20022 pacs.009)
+  Format: XML
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FICdtTrf>
+    <GrpHdr>
+      <MsgId>TARGET2-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="EUR">5000000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Cd>TGT</Cd>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>BNPAFRPPXXX</BICFI>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>T2-INSTR-NIFI-001</InstrId>
+        <EndToEndId>T2-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>T2-TXID-NIFI-001</TxId>
+        <UETR>t2-nifi-e2e-uuid-12345678</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <InstrPrty>HIGH</InstrPrty>
+        <SvcLvl>
+          <Cd>G001</Cd>
+        </SvcLvl>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="EUR">5000000.00</IntrBkSttlmAmt>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+          <Nm>Deutsche Bank AG</Nm>
+          <PstlAdr>
+            <Ctry>DE</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>BNPAFRPPXXX</BICFI>
+          <Nm>BNP Paribas SA</Nm>
+          <PstlAdr>
+            <Ctry>FR</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <InstrForCdtrAgt>
+        <Cd>PHOB</Cd>
+        <InstrInf>NiFi E2E TARGET2 High Value Transfer</InstrInf>
+      </InstrForCdtrAgt>
+    </CdtTrfTxInf>
+  </FICdtTrf>
+</Document>

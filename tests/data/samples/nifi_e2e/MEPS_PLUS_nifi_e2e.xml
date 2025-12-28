@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - Singapore MEPS+ (MAS Electronic Payment System)
+  Standard: MAS MEPS+ RTGS
+  Format: XML (based on ISO 20022)
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>MEPS-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00+08:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="SGD">250000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>MEPS</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>DBSSSGSGXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>SGCLR</Prtry>
+            </ClrSysId>
+            <MmbId>7171</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>OCBCSGSGXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Prtry>SGCLR</Prtry>
+            </ClrSysId>
+            <MmbId>7339</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>MEPS-INSTR-NIFI-001</InstrId>
+        <EndToEndId>MEPS-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>MEPS-TXID-NIFI-001</TxId>
+        <UETR>meps-nifi-e2e-uuid-12345678</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>RTGS</Prtry>
+        </SvcLvl>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="SGD">250000.00</IntrBkSttlmAmt>
+
+      <ChrgBr>SHAR</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>DBSSSGSGXXX</BICFI>
+          <Nm>DBS Bank Ltd</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>NiFi E2E Test Payer SG</Nm>
+        <PstlAdr>
+          <StrtNm>12 Marina Boulevard</StrtNm>
+          <PstCd>018982</PstCd>
+          <TwnNm>Singapore</TwnNm>
+          <Ctry>SG</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFISG1234567890</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>OCBCSGSGXXX</BICFI>
+          <Nm>Oversea-Chinese Banking Corporation Limited</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>NiFi E2E Test Beneficiary SG</Nm>
+        <PstlAdr>
+          <StrtNm>65 Chulia Street</StrtNm>
+          <PstCd>049513</PstCd>
+          <TwnNm>Singapore</TwnNm>
+          <Ctry>SG</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFISG9876543210</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <RmtInf>
+        <Ustrd>NiFi E2E MEPS+ RTGS Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

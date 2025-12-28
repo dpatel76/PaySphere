@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GPS CDM NiFi E2E Test - FedNow Instant Payment (pacs.008)
+  Standard: Federal Reserve FedNow Service (based on ISO 20022)
+  Format: XML
+-->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FIToFICstmrCdtTrf>
+    <!-- Group Header -->
+    <GrpHdr>
+      <MsgId>FEDNOW-NIFI-E2E-20251227-001</MsgId>
+      <CreDtTm>2025-12-27T10:00:00.000Z</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="USD">2500.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-27</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>FEDNOW</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Cd>USABA</Cd>
+            </ClrSysId>
+            <MmbId>021000021</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Cd>USABA</Cd>
+            </ClrSysId>
+            <MmbId>026009593</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <!-- Credit Transfer Transaction Information -->
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>FEDNOW-INSTR-NIFI-001</InstrId>
+        <EndToEndId>FEDNOW-E2E-NIFI-20251227-001</EndToEndId>
+        <TxId>FEDNOW-TXID-NIFI-001</TxId>
+        <UETR>fednow-nifi-e2e-test-uuid-001</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>FEDNOW</Prtry>
+        </SvcLvl>
+        <LclInstrm>
+          <Prtry>INSTANT</Prtry>
+        </LclInstrm>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="USD">2500.00</IntrBkSttlmAmt>
+      <InstdAmt Ccy="USD">2500.00</InstdAmt>
+
+      <ChrgBr>SLEV</ChrgBr>
+
+      <!-- Debtor Agent -->
+      <DbtrAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <MmbId>021000021</MmbId>
+          </ClrSysMmbId>
+          <Nm>JPMorgan Chase Bank NA</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <!-- Debtor -->
+      <Dbtr>
+        <Nm>NiFi E2E FedNow Payer</Nm>
+        <PstlAdr>
+          <StrtNm>100 Federal Way</StrtNm>
+          <PstCd>20001</PstCd>
+          <TwnNm>Washington</TwnNm>
+          <CtrySubDvsn>DC</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFIFEDNOW12345</Id>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+
+      <!-- Creditor Agent -->
+      <CdtrAgt>
+        <FinInstnId>
+          <ClrSysMmbId>
+            <MmbId>026009593</MmbId>
+          </ClrSysMmbId>
+          <Nm>Bank of America NA</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <!-- Creditor -->
+      <Cdtr>
+        <Nm>NiFi E2E FedNow Beneficiary</Nm>
+        <PstlAdr>
+          <StrtNm>200 Reserve Street</StrtNm>
+          <PstCd>28255</PstCd>
+          <TwnNm>Charlotte</TwnNm>
+          <CtrySubDvsn>NC</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>NIFIFEDNOW98765</Id>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+
+      <!-- Remittance Information -->
+      <RmtInf>
+        <Ustrd>NiFi E2E FedNow Instant Payment Test</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

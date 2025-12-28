@@ -1,0 +1,351 @@
+{
+  "name": "GPS CDM Payment Pipeline - Kafka Publisher",
+  "description": "NiFi flow template for publishing payment messages to Kafka for micro-batch processing",
+  "version": "2.0.0",
+  "processors": [
+    {
+      "id": "getfile-input",
+      "type": "org.apache.nifi.processors.standard.GetFile",
+      "name": "Read Payment Files",
+      "config": {
+        "Input Directory": "/opt/nifi/nifi-current/input",
+        "File Filter": ".*\\.(xml|json|txt)$",
+        "Keep Source File": "false",
+        "Polling Interval": "10 sec",
+        "Batch Size": "100"
+      },
+      "relationships": {
+        "success": "detect-message-type"
+      }
+    },
+    {
+      "id": "detect-message-type",
+      "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+      "name": "Detect Message Type from Filename",
+      "config": {
+        "properties": {
+          "message.type": "${filename:substringBefore('_'):toUpper()}",
+          "batch.id": "${UUID()}",
+          "source.file": "${filename}",
+          "ingestion.timestamp": "${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'')}"
+        }
+      },
+      "relationships": {
+        "success": "route-by-format"
+      }
+    },
+    {
+      "id": "route-by-format",
+      "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+      "name": "Route by Message Format",
+      "config": {
+        "properties": {
+          "iso20022": "${message.type:matches('PAIN.*|PACS.*|CAMT.*|ACMT.*')}",
+          "swift_mt": "${message.type:matches('MT[0-9]+')}",
+          "domestic_us": "${message.type:matches('FEDWIRE|ACH|RTP|FEDNOW|CHIPS')}",
+          "domestic_eu": "${message.type:matches('SEPA.*|TARGET2|BACS|CHAPS|FPS')}",
+          "domestic_apac": "${message.type:matches('NPP|UPI|CNAPS|BOJNET|RTGS.*')}"
+        },
+        "Routing Strategy": "Route to Property name"
+      },
+      "relationships": {
+        "iso20022": "parse-iso20022",
+        "swift_mt": "parse-swift-mt",
+        "domestic_us": "parse-domestic-us",
+        "domestic_eu": "parse-domestic-eu",
+        "domestic_apac": "parse-domestic-apac",
+        "unmatched": "parse-generic"
+      }
+    },
+    {
+      "id": "parse-iso20022",
+      "type": "org.apache.nifi.processors.standard.EvaluateXPath",
+      "name": "Parse ISO 20022 Message",
+      "config": {
+        "Destination": "flowfile-attribute",
+        "properties": {
+          "msg.id": "//MsgId/text()",
+          "creation.datetime": "//CreDtTm/text()",
+          "num.transactions": "//NbOfTxs/text()",
+          "control.sum": "//CtrlSum/text()"
+        }
+      },
+      "relationships": {
+        "matched": "add-kafka-headers",
+        "unmatched": "add-kafka-headers",
+        "failure": "log-parse-error"
+      }
+    },
+    {
+      "id": "parse-swift-mt",
+      "type": "org.apache.nifi.processors.standard.ExtractText",
+      "name": "Parse SWIFT MT Message",
+      "config": {
+        "properties": {
+          "msg.id": ":20:([A-Za-z0-9]+)",
+          "sender.bic": "\\{1:F01([A-Z0-9]{8})",
+          "receiver.bic": "\\{2:[A-Z]\\d{3}([A-Z0-9]{8})"
+        }
+      },
+      "relationships": {
+        "matched": "add-kafka-headers",
+        "unmatched": "add-kafka-headers"
+      }
+    },
+    {
+      "id": "parse-domestic-us",
+      "type": "org.apache.nifi.processors.standard.ExtractText",
+      "name": "Parse US Domestic Message",
+      "config": {
+        "properties": {
+          "record.type": "^(\\d{1})",
+          "routing.number": "^.{3}(\\d{9})"
+        }
+      },
+      "relationships": {
+        "matched": "add-kafka-headers",
+        "unmatched": "add-kafka-headers"
+      }
+    },
+    {
+      "id": "parse-domestic-eu",
+      "type": "org.apache.nifi.processors.standard.EvaluateXPath",
+      "name": "Parse EU Domestic Message",
+      "config": {
+        "Destination": "flowfile-attribute",
+        "properties": {
+          "msg.id": "//MsgId/text()",
+          "iban.debtor": "//DbtrAcct//IBAN/text()"
+        }
+      },
+      "relationships": {
+        "matched": "add-kafka-headers",
+        "unmatched": "add-kafka-headers",
+        "failure": "add-kafka-headers"
+      }
+    },
+    {
+      "id": "parse-domestic-apac",
+      "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+      "name": "Parse APAC Domestic Message",
+      "config": {
+        "properties": {
+          "region": "APAC"
+        }
+      },
+      "relationships": {
+        "success": "add-kafka-headers"
+      }
+    },
+    {
+      "id": "parse-generic",
+      "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+      "name": "Parse Generic Message",
+      "config": {
+        "properties": {
+          "parse.status": "generic"
+        }
+      },
+      "relationships": {
+        "success": "add-kafka-headers"
+      }
+    },
+    {
+      "id": "add-kafka-headers",
+      "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+      "name": "Add Kafka Headers",
+      "config": {
+        "properties": {
+          "kafka.topic": "${message.type:toLower():prepend('payment.bronze.')}",
+          "kafka.key": "${batch.id}",
+          "kafka.header.message_type": "${message.type}",
+          "kafka.header.message_id": "${msg.id:ifEmpty(${UUID()})}",
+          "kafka.header.source_file": "${source.file}",
+          "kafka.header.batch_id": "${batch.id}",
+          "kafka.header.ingestion_timestamp": "${ingestion.timestamp}"
+        }
+      },
+      "relationships": {
+        "success": "publish-kafka"
+      }
+    },
+    {
+      "id": "publish-kafka",
+      "type": "org.apache.nifi.processors.kafka.pubsub.PublishKafka_2_6",
+      "name": "Publish to Kafka",
+      "config": {
+        "Kafka Brokers": "${KAFKA_BOOTSTRAP_SERVERS:ifEmpty('localhost:9092')}",
+        "Topic Name": "${kafka.topic}",
+        "Delivery Guarantee": "GUARANTEE_REPLICATED_DELIVERY",
+        "Message Key": "${kafka.key}",
+        "Message Key Character Set": "UTF-8",
+        "Attributes To Send As Headers (Regex)": "kafka\\.header\\..*",
+        "Partitioner class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+        "Compression Type": "lz4",
+        "Max Request Size": "10485760",
+        "acks": "all"
+      },
+      "relationships": {
+        "success": "log-success",
+        "failure": "retry-publish"
+      }
+    },
+    {
+      "id": "retry-publish",
+      "type": "org.apache.nifi.processors.standard.RetryFlowFile",
+      "name": "Retry Failed Publish",
+      "config": {
+        "Retry Amount": "3",
+        "Retry Attribute": "kafka.retry.count",
+        "Penalty Duration": "30 sec"
+      },
+      "relationships": {
+        "retry": "publish-kafka",
+        "retries_exceeded": "dead-letter-queue",
+        "failure": "dead-letter-queue"
+      }
+    },
+    {
+      "id": "log-success",
+      "type": "org.apache.nifi.processors.standard.LogAttribute",
+      "name": "Log Success",
+      "config": {
+        "Log Level": "INFO",
+        "Attributes to Log": "message.type,batch.id,kafka.topic",
+        "Log Payload": "false"
+      },
+      "relationships": {
+        "success": "update-metrics"
+      }
+    },
+    {
+      "id": "log-parse-error",
+      "type": "org.apache.nifi.processors.standard.LogAttribute",
+      "name": "Log Parse Error",
+      "config": {
+        "Log Level": "WARN",
+        "Attributes to Log": ".*",
+        "Log Payload": "true"
+      },
+      "relationships": {
+        "success": "dead-letter-queue"
+      }
+    },
+    {
+      "id": "dead-letter-queue",
+      "type": "org.apache.nifi.processors.standard.PutFile",
+      "name": "Write to Dead Letter Queue",
+      "config": {
+        "Directory": "/opt/nifi/nifi-current/dlq/${message.type:ifEmpty('unknown')}",
+        "Conflict Resolution Strategy": "replace",
+        "Create Missing Directories": "true"
+      },
+      "relationships": {
+        "success": "log-dlq",
+        "failure": "log-dlq-failure"
+      }
+    },
+    {
+      "id": "log-dlq",
+      "type": "org.apache.nifi.processors.standard.LogAttribute",
+      "name": "Log DLQ Entry",
+      "config": {
+        "Log Level": "ERROR",
+        "Attributes to Log": "message.type,batch.id,source.file"
+      }
+    },
+    {
+      "id": "log-dlq-failure",
+      "type": "org.apache.nifi.processors.standard.LogAttribute",
+      "name": "Log DLQ Write Failure",
+      "config": {
+        "Log Level": "ERROR"
+      }
+    },
+    {
+      "id": "update-metrics",
+      "type": "org.apache.nifi.processors.standard.UpdateAttribute",
+      "name": "Update Metrics",
+      "config": {
+        "properties": {
+          "metrics.published": "true"
+        }
+      },
+      "comments": "Placeholder for metrics update - can be replaced with InvokeHTTP to stats endpoint"
+    }
+  ],
+  "connections": [
+    {"from": "getfile-input", "to": "detect-message-type", "relationships": ["success"]},
+    {"from": "detect-message-type", "to": "route-by-format", "relationships": ["success"]},
+    {"from": "route-by-format", "to": "parse-iso20022", "relationships": ["iso20022"]},
+    {"from": "route-by-format", "to": "parse-swift-mt", "relationships": ["swift_mt"]},
+    {"from": "route-by-format", "to": "parse-domestic-us", "relationships": ["domestic_us"]},
+    {"from": "route-by-format", "to": "parse-domestic-eu", "relationships": ["domestic_eu"]},
+    {"from": "route-by-format", "to": "parse-domestic-apac", "relationships": ["domestic_apac"]},
+    {"from": "route-by-format", "to": "parse-generic", "relationships": ["unmatched"]},
+    {"from": "parse-iso20022", "to": "add-kafka-headers", "relationships": ["matched", "unmatched"]},
+    {"from": "parse-iso20022", "to": "log-parse-error", "relationships": ["failure"]},
+    {"from": "parse-swift-mt", "to": "add-kafka-headers", "relationships": ["matched", "unmatched"]},
+    {"from": "parse-domestic-us", "to": "add-kafka-headers", "relationships": ["matched", "unmatched"]},
+    {"from": "parse-domestic-eu", "to": "add-kafka-headers", "relationships": ["matched", "unmatched", "failure"]},
+    {"from": "parse-domestic-apac", "to": "add-kafka-headers", "relationships": ["success"]},
+    {"from": "parse-generic", "to": "add-kafka-headers", "relationships": ["success"]},
+    {"from": "add-kafka-headers", "to": "publish-kafka", "relationships": ["success"]},
+    {"from": "publish-kafka", "to": "log-success", "relationships": ["success"]},
+    {"from": "publish-kafka", "to": "retry-publish", "relationships": ["failure"]},
+    {"from": "retry-publish", "to": "publish-kafka", "relationships": ["retry"]},
+    {"from": "retry-publish", "to": "dead-letter-queue", "relationships": ["retries_exceeded", "failure"]},
+    {"from": "log-parse-error", "to": "dead-letter-queue", "relationships": ["success"]},
+    {"from": "dead-letter-queue", "to": "log-dlq", "relationships": ["success"]},
+    {"from": "dead-letter-queue", "to": "log-dlq-failure", "relationships": ["failure"]}
+  ],
+  "controller_services": [
+    {
+      "id": "ssl-context",
+      "type": "org.apache.nifi.ssl.StandardSSLContextService",
+      "name": "Kafka SSL Context",
+      "config": {
+        "SSL Protocol": "TLS"
+      },
+      "comments": "Enable for production Kafka clusters with SSL"
+    }
+  ],
+  "kafka_topics": {
+    "description": "Required Kafka topics - create before deploying flow",
+    "topics": [
+      "payment.bronze.pain.001",
+      "payment.bronze.pain.002",
+      "payment.bronze.pain.008",
+      "payment.bronze.pacs.002",
+      "payment.bronze.pacs.008",
+      "payment.bronze.pacs.009",
+      "payment.bronze.camt.052",
+      "payment.bronze.camt.053",
+      "payment.bronze.camt.054",
+      "payment.bronze.mt103",
+      "payment.bronze.mt202",
+      "payment.bronze.fedwire",
+      "payment.bronze.ach",
+      "payment.bronze.rtp",
+      "payment.bronze.fednow",
+      "payment.bronze.chips",
+      "payment.bronze.sepa",
+      "payment.bronze.sepa_inst",
+      "payment.bronze.target2",
+      "payment.bronze.bacs",
+      "payment.bronze.chaps",
+      "payment.bronze.fps",
+      "payment.bronze.npp",
+      "payment.bronze.upi",
+      "payment.bronze.pix",
+      "payment.bronze.cnaps",
+      "payment.bronze.unknown"
+    ],
+    "config": {
+      "partitions": 6,
+      "replication_factor": 3,
+      "retention.ms": 604800000,
+      "cleanup.policy": "delete"
+    }
+  }
+}

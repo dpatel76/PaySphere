@@ -1,8 +1,9 @@
-"""UPI (India Unified Payments Interface) Extractor - JSON based."""
+"""UPI (India Unified Payments Interface) Extractor - XML and JSON based."""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
+import re
 import logging
 
 from ..base import (
@@ -15,6 +16,119 @@ from ..base import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class UpiXmlParser:
+    """Parser for UPI XML format messages (NPCI specification)."""
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse UPI XML message into structured dict."""
+        result = {
+            'messageType': 'UPI',
+        }
+
+        # Handle JSON input (pre-parsed)
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{'):
+            try:
+                parsed = json.loads(raw_content)
+                if isinstance(parsed, dict) and 'messageType' not in parsed:
+                    parsed['messageType'] = 'UPI'
+                return parsed
+            except json.JSONDecodeError:
+                pass
+
+        # Parse UPI XML format using regex
+        content = raw_content
+
+        # Remove namespaces for easier parsing
+        content = re.sub(r'xmlns[^"]*"[^"]*"', '', content)
+        content = re.sub(r'<([a-zA-Z]+):', r'<', content)
+        content = re.sub(r'</([a-zA-Z]+):', r'</', content)
+
+        # Head attributes
+        head_match = re.search(r'<Head[^>]*msgId="([^"]*)"', content)
+        if head_match:
+            result['transactionId'] = head_match.group(1)
+
+        head_ts_match = re.search(r'<Head[^>]*ts="([^"]*)"', content)
+        if head_ts_match:
+            result['creationDateTime'] = head_ts_match.group(1)
+
+        # Transaction info
+        txn_match = re.search(r'<Txn[^>]*id="([^"]*)"', content)
+        if txn_match:
+            result['transactionRefId'] = txn_match.group(1)
+
+        txn_note_match = re.search(r'<Txn[^>]*note="([^"]*)"', content)
+        if txn_note_match:
+            result['remittanceInfo'] = txn_note_match.group(1)
+
+        txn_type_match = re.search(r'<Txn[^>]*type="([^"]*)"', content)
+        if txn_type_match:
+            result['transactionType'] = txn_type_match.group(1)
+
+        # Payer info
+        payer_match = re.search(r'<Payer[^>]*>', content)
+        if payer_match:
+            payer_block = payer_match.group(0)
+            addr_match = re.search(r'addr="([^"]*)"', payer_block)
+            if addr_match:
+                result['payerVpa'] = addr_match.group(1)
+            name_match = re.search(r'name="([^"]*)"', payer_block)
+            if name_match:
+                result['payerName'] = name_match.group(1)
+
+        # Payer Account details
+        payer_acct_match = re.search(r'<Payer[^>]*>.*?<Ac[^>]*>(.*?)</Ac>', content, re.DOTALL)
+        if payer_acct_match:
+            acct_block = payer_acct_match.group(1)
+            ifsc_match = re.search(r'name="IFSC"[^>]*value="([^"]*)"', acct_block)
+            if ifsc_match:
+                result['payerIfsc'] = ifsc_match.group(1)
+            acnum_match = re.search(r'name="ACNUM"[^>]*value="([^"]*)"', acct_block)
+            if acnum_match:
+                result['payerAccount'] = acnum_match.group(1)
+
+        # Payer Amount (within Payer block)
+        payer_amount_match = re.search(r'<Payer[^>]*>.*?<Amount[^>]*curr="([^"]*)"[^>]*value="([^"]*)"', content, re.DOTALL)
+        if payer_amount_match:
+            result['currency'] = payer_amount_match.group(1)
+            try:
+                result['amount'] = float(payer_amount_match.group(2))
+            except ValueError:
+                result['amount'] = None
+
+        # Payee info
+        payee_match = re.search(r'<Payee[^>]*>', content)
+        if payee_match:
+            payee_block = payee_match.group(0)
+            addr_match = re.search(r'addr="([^"]*)"', payee_block)
+            if addr_match:
+                result['payeeVpa'] = addr_match.group(1)
+            name_match = re.search(r'name="([^"]*)"', payee_block)
+            if name_match:
+                result['payeeName'] = name_match.group(1)
+
+        # Payee Account details
+        payee_acct_match = re.search(r'<Payee[^>]*>.*?<Ac[^>]*>(.*?)</Ac>', content, re.DOTALL)
+        if payee_acct_match:
+            acct_block = payee_acct_match.group(1)
+            ifsc_match = re.search(r'name="IFSC"[^>]*value="([^"]*)"', acct_block)
+            if ifsc_match:
+                result['payeeIfsc'] = ifsc_match.group(1)
+            acnum_match = re.search(r'name="ACNUM"[^>]*value="([^"]*)"', acct_block)
+            if acnum_match:
+                result['payeeAccount'] = acnum_match.group(1)
+
+        # Mobile from Device tags
+        mobile_match = re.search(r'name="MOBILE"[^>]*value="([^"]*)"', content)
+        if mobile_match:
+            result['payerMobile'] = mobile_match.group(1)
+
+        return result
 
 
 class UpiExtractor(BaseExtractor):
