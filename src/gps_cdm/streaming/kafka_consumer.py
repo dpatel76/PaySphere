@@ -39,15 +39,51 @@ except ImportError:
     KAFKA_AVAILABLE = False
     Consumer = None
 
-# Celery imports
-try:
-    from gps_cdm.orchestration.celery_tasks import (
-        process_bronze_partition,
-        create_medallion_workflow,
-    )
-    CELERY_AVAILABLE = True
-except ImportError:
-    CELERY_AVAILABLE = False
+# Celery imports - use medallion pipeline for proper Bronze → Silver → Gold flow
+# Note: Celery app and connection are initialized lazily in _ensure_celery_connection()
+# to avoid issues with subprocess spawning and thread pools
+celery_app = None
+process_medallion_pipeline = None
+CELERY_AVAILABLE = False
+
+def _ensure_celery_connection():
+    """
+    Initialize Celery connection lazily when first needed.
+
+    This must be called from the main thread before any worker threads
+    attempt to use Celery, to properly establish the connection pool.
+    """
+    global celery_app, process_medallion_pipeline, CELERY_AVAILABLE
+
+    if CELERY_AVAILABLE:
+        return True
+
+    try:
+        # Import the Celery app first to set it as the current app
+        from gps_cdm.orchestration.celery_tasks import app as _celery_app
+        celery_app = _celery_app
+
+        # Force connection initialization - this establishes the broker connection
+        # in the main thread before any workers try to use it
+        with celery_app.connection_or_acquire() as conn:
+            conn.ensure_connection(max_retries=3)
+            logger.info("Celery broker connection established successfully")
+
+        from gps_cdm.orchestration.zone_tasks import (
+            process_medallion_pipeline as _process_medallion_pipeline,
+        )
+        process_medallion_pipeline = _process_medallion_pipeline
+
+        CELERY_AVAILABLE = True
+        logger.info("Celery integration enabled")
+        return True
+
+    except ImportError as e:
+        logger.error(f"Celery import error: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Celery connection error: {e}")
+        return False
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -82,7 +118,8 @@ class KafkaConfig:
             "group.id": self.group_id,
             "auto.offset.reset": self.auto_offset_reset,
             "enable.auto.commit": self.enable_auto_commit,
-            "max.poll.records": self.max_poll_records,
+            # Note: max.poll.records is not supported by confluent-kafka
+            # Using batch_size logic in consumer instead
             "session.timeout.ms": self.session_timeout_ms,
             "heartbeat.interval.ms": self.heartbeat_interval_ms,
             "max.poll.interval.ms": self.max_poll_interval_ms,
@@ -168,6 +205,12 @@ class StreamingConsumer:
         logger.info(f"Consumer group: {self.config.group_id}")
         logger.info(f"Bootstrap servers: {self.config.bootstrap_servers}")
 
+        # Initialize Celery connection in main thread BEFORE creating worker pool
+        # This ensures the connection pool is properly established before any
+        # worker threads try to submit tasks
+        if not _ensure_celery_connection():
+            logger.warning("Celery not available - messages will be processed locally")
+
         # Create consumer
         self.consumer = Consumer(self.config.to_confluent_config())
         self.consumer.subscribe(self.topics)
@@ -215,11 +258,24 @@ class StreamingConsumer:
                 message = self._parse_message(msg)
                 self.messages_consumed += 1
 
-                # Add to batch
+                # Add to batch - respect batch boundaries from NiFi
                 with self.batch_lock:
+                    # Check if this message belongs to a different NiFi batch
+                    # If so, flush the current batch first to maintain batch integrity
+                    new_batch_id = message.headers.get("batch_id") or message.headers.get("batch.id")
+                    if self.current_batch:
+                        current_batch_id = (
+                            self.current_batch[0].headers.get("batch_id") or
+                            self.current_batch[0].headers.get("batch.id")
+                        )
+                        if new_batch_id and current_batch_id and new_batch_id != current_batch_id:
+                            # Different batch_id - flush current batch first
+                            logger.info(f"Batch boundary detected: {current_batch_id} -> {new_batch_id}")
+                            self._process_batch()
+
                     self.current_batch.append(message)
 
-                    # Check if batch is ready
+                    # Check if batch is ready (size limit for micro-batching within same NiFi batch)
                     if len(self.current_batch) >= self.config.batch_size:
                         self._process_batch()
 
@@ -238,6 +294,9 @@ class StreamingConsumer:
         if msg.headers():
             for key, value in msg.headers():
                 headers[key] = value.decode("utf-8") if value else None
+            # Debug: log all headers for troubleshooting
+            if headers.get("batch.id"):
+                logger.debug(f"Kafka headers: {list(headers.keys())}, batch.id={headers.get('batch.id')}")
 
         # Parse value
         value = msg.value().decode("utf-8") if msg.value() else ""
@@ -280,9 +339,24 @@ class StreamingConsumer:
         if not self.current_batch:
             return
 
-        # Create batch
+        # Get batch_id from NiFi (passed via Kafka headers) or generate new one
+        # NiFi sets batch.id per file and passes it as kafka.header.batch_id
+        nifi_batch_id = None
+        if self.current_batch:
+            # Check for batch_id in first message's headers
+            # NiFi sets this via kafka.header.batch_id which becomes "batch_id" header
+            first_msg = self.current_batch[0]
+            nifi_batch_id = first_msg.headers.get("batch_id") or first_msg.headers.get("batch.id")
+
+        # Create batch - use NiFi's batch_id if available for end-to-end traceability
+        final_batch_id = nifi_batch_id or str(uuid.uuid4())
+        if nifi_batch_id:
+            logger.info(f"Using NiFi batch_id: {nifi_batch_id}")
+        else:
+            logger.info(f"Generated new batch_id: {final_batch_id}")
+
         batch = Batch(
-            batch_id=str(uuid.uuid4()),
+            batch_id=final_batch_id,
             messages=self.current_batch.copy(),
             message_type=self.message_type,
             created_at=datetime.utcnow(),
@@ -323,34 +397,88 @@ class StreamingConsumer:
             # Don't commit offsets - messages will be reprocessed
 
     def _submit_to_celery(self, batch: Batch):
-        """Submit batch to Celery for processing."""
-        # Prepare file-like data for Celery task
-        # In streaming mode, we pass message content directly
+        """
+        Submit batch to Celery for BRONZE-ONLY processing.
 
-        # Create temporary storage for message contents
-        message_contents = [
-            {
-                "message_id": msg.message_id,
-                "message_type": msg.message_type,
-                "content": msg.value,
-                "headers": msg.headers,
-                "kafka_offset": msg.offset,
-                "kafka_partition": msg.partition,
-            }
-            for msg in batch.messages
-        ]
+        Architecture:
+        - Kafka Consumer submits to Bronze task only
+        - Bronze task returns raw_ids
+        - A separate orchestrator (or callback) triggers Silver task with raw_ids
+        - Silver task returns stg_ids
+        - A separate orchestrator triggers Gold task with stg_ids
 
-        # Submit as Celery task
-        result = process_bronze_partition.delay(
-            partition_id=f"{batch.batch_id}:kafka",
-            file_paths=[],  # Not using file paths for streaming
-            message_type=batch.message_type,
-            batch_id=batch.batch_id,
-            config=self.persistence_config,
-        )
+        This ensures:
+        1. Transactional integrity per zone (ACID)
+        2. No Gold records without Silver records
+        3. No Silver records without Bronze records
+        4. Proper ID passing between zones
+        """
+        # Collect all messages in this batch for Bronze processing
+        records = []
 
-        # Could optionally wait for result
-        # result.get(timeout=300)
+        for msg in batch.messages:
+            try:
+                # Parse the message content
+                content = msg.value
+
+                # Determine message type from header or key
+                message_type = msg.message_type or batch.message_type
+
+                # If message_type is in the key (e.g., "pain.001" from NiFi)
+                if msg.key and not message_type:
+                    message_type = msg.key
+
+                # Check headers for message.type from NiFi
+                if msg.headers.get("message.type"):
+                    message_type = msg.headers["message.type"]
+
+                records.append({
+                    'content': content,
+                    'message_type': message_type,
+                    'kafka_metadata': {
+                        'topic': msg.topic,
+                        'partition': msg.partition,
+                        'offset': msg.offset,
+                        'message_id': msg.message_id,
+                    }
+                })
+
+            except Exception as e:
+                logger.error(f"Failed to prepare message for Celery: {e}")
+                self.errors += 1
+
+        if not records:
+            logger.warning(f"No valid records in batch {batch.batch_id}")
+            return
+
+        logger.info(f"Submitting {len(records)} records to Medallion pipeline, batch_id={batch.batch_id}")
+
+        try:
+            # Submit to Medallion Pipeline task using send_task with connection pool
+            # This handles Bronze → Silver → Gold with:
+            # 1. ACID transactions per zone
+            # 2. Proper ID passing between zones
+            # 3. No Gold without Silver, no Silver without Bronze
+            # 4. Complete lineage tracking
+            #
+            # Use celery_app.send_task() instead of .delay() to ensure proper
+            # connection pool sharing between threads
+            with celery_app.connection_or_acquire() as conn:
+                result = celery_app.send_task(
+                    'gps_cdm.zone_tasks.process_medallion_pipeline',
+                    kwargs={
+                        'batch_id': batch.batch_id,
+                        'records': records,
+                        'config': self.persistence_config,
+                    },
+                    connection=conn,
+                )
+
+            logger.info(f"Medallion pipeline task submitted: task_id={result.id}, batch_id={batch.batch_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to submit Medallion pipeline task: {e}")
+            self.errors += 1
 
     def _process_locally(self, batch: Batch):
         """Process batch locally (for testing/development)."""

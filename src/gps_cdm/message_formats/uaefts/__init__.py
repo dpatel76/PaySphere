@@ -110,63 +110,69 @@ class UaeftsExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from UAEFTS message."""
+        """Extract Gold layer entities from UAEFTS Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Originator Party (Debtor)
-        if msg_content.get('originatorName'):
+        # Originator Party (Debtor) - uses Silver column names
+        if silver_data.get('originator_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('originatorName'),
+                name=silver_data.get('originator_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
                 country='AE',
             ))
 
         # Beneficiary Party (Creditor)
-        if msg_content.get('beneficiaryName'):
+        if silver_data.get('beneficiary_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('beneficiaryName'),
+                name=silver_data.get('beneficiary_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
                 country='AE',
             ))
 
         # Originator Account
-        if msg_content.get('originatorAccount'):
+        if silver_data.get('originator_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('originatorAccount'),
+                account_number=silver_data.get('originator_account'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'AED',
+                currency=silver_data.get('currency') or 'AED',
             ))
 
         # Beneficiary Account
-        if msg_content.get('beneficiaryAccount'):
+        if silver_data.get('beneficiary_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('beneficiaryAccount'),
+                account_number=silver_data.get('beneficiary_account'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'AED',
+                currency=silver_data.get('currency') or 'AED',
             ))
 
         # Sending Bank
-        if msg_content.get('sendingBankCode'):
+        if silver_data.get('sending_bank_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                clearing_code=msg_content.get('sendingBankCode'),
+                clearing_code=silver_data.get('sending_bank_code'),
                 clearing_system='AEUAEFTS',  # UAEFTS
                 country='AE',
             ))
 
         # Receiving Bank
-        if msg_content.get('receivingBankCode'):
+        if silver_data.get('receiving_bank_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                clearing_code=msg_content.get('receivingBankCode'),
+                clearing_code=silver_data.get('receiving_bank_code'),
                 clearing_system='AEUAEFTS',
                 country='AE',
             ))

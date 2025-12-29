@@ -22,15 +22,227 @@ import os
 
 logger = logging.getLogger(__name__)
 
+
+# =============================================================================
+# LINEAGE AND OBSERVABILITY HELPERS
+# =============================================================================
+
+def ensure_batch_tracking(cursor, batch_id: str, message_type: str, source_system: str = 'KAFKA') -> None:
+    """
+    Ensure a batch tracking record exists in obs_batch_tracking.
+    This is required before inserting lineage records due to FK constraint.
+
+    Args:
+        cursor: Database cursor
+        batch_id: Batch identifier
+        message_type: Message type being processed
+        source_system: Source system name
+    """
+    cursor.execute("""
+        INSERT INTO observability.obs_batch_tracking (
+            batch_id, message_type, source_system, status, current_layer,
+            started_at, created_at, updated_at
+        ) VALUES (%s, %s, %s, 'PROCESSING', 'bronze', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (batch_id) DO UPDATE SET
+            updated_at = CURRENT_TIMESTAMP
+    """, (batch_id, message_type, source_system))
+
+
+def update_batch_tracking_layer(
+    cursor,
+    batch_id: str,
+    layer: str,
+    record_count: int,
+    status: str = 'PROCESSING'
+) -> None:
+    """
+    Update batch tracking with layer completion info.
+
+    Args:
+        cursor: Database cursor
+        batch_id: Batch identifier
+        layer: Current layer (bronze, silver, gold)
+        record_count: Number of records processed
+        status: Processing status
+    """
+    layer_column = f"{layer}_records"
+    completed_column = f"{layer}_completed_at"
+
+    cursor.execute(f"""
+        UPDATE observability.obs_batch_tracking
+        SET current_layer = %s,
+            {layer_column} = %s,
+            {completed_column} = CURRENT_TIMESTAMP,
+            status = %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE batch_id = %s
+    """, (layer, record_count, status, batch_id))
+
+
+# NOTE: PostgreSQL lineage tracking removed - all lineage is now in Neo4j only
+# See update_neo4j_lineage() for lineage tracking implementation
+#
+# BATCH STATISTICS TRACKING:
+# -------------------------
+# Batch statistics are tracked in TWO places for redundancy:
+#
+# 1. PostgreSQL (observability.obs_batch_tracking):
+#    - Minimal operational tracking for database queries
+#    - Columns: batch_id, message_type, status, bronze_records, silver_records, gold_records
+#    - Updated via ensure_batch_tracking() and update_batch_tracking_layer()
+#
+# 2. Neo4j (primary lineage store):
+#    - Batch nodes with BatchLayer child nodes
+#    - Contains: processed_count, failed_count, input_count, duration_ms
+#    - Relationships: PROMOTED_TO between layers with success_rate
+#    - Updated via update_neo4j_lineage()
+#
+# Neo4j is the source of truth for lineage; PostgreSQL is for operational queries
+
+
+def update_neo4j_lineage(
+    batch_id: str,
+    message_type: str,
+    bronze_count: int,
+    silver_count: int,
+    gold_count: int,
+    duration_ms: int,
+    status: str,
+) -> bool:
+    """
+    Update Neo4j knowledge graph with batch lineage information.
+
+    Args:
+        batch_id: Batch identifier
+        message_type: Message type processed
+        bronze_count: Number of Bronze records
+        silver_count: Number of Silver records
+        gold_count: Number of Gold records
+        duration_ms: Total processing duration in milliseconds
+        status: Final batch status
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        from gps_cdm.orchestration.neo4j_service import get_neo4j_service
+        neo4j = get_neo4j_service()
+
+        if not neo4j.is_available():
+            logger.warning("Neo4j not available for lineage update")
+            return False
+
+        now = datetime.utcnow()
+
+        # Create/update batch node
+        neo4j.upsert_batch({
+            'batch_id': batch_id,
+            'message_type': message_type,
+            'source_system': 'GPS_CDM',
+            'status': status,
+            'created_at': now.isoformat(),
+            'completed_at': now.isoformat() if status in ('SUCCESS', 'PARTIAL', 'FAILED') else None,
+            'total_records': bronze_count,
+            'duration_ms': duration_ms,
+        })
+
+        # Create/update Bronze layer stats
+        if bronze_count > 0:
+            neo4j.upsert_batch_layer(batch_id, 'bronze', {
+                'input_count': bronze_count,
+                'processed_count': bronze_count,
+                'failed_count': 0,
+                'pending_count': 0,
+                'started_at': now.isoformat(),
+                'completed_at': now.isoformat(),
+            })
+
+        # Create/update Silver layer stats and promotion
+        if silver_count > 0:
+            neo4j.upsert_batch_layer(batch_id, 'silver', {
+                'input_count': bronze_count,
+                'processed_count': silver_count,
+                'failed_count': bronze_count - silver_count,
+                'pending_count': 0,
+                'started_at': now.isoformat(),
+                'completed_at': now.isoformat(),
+            })
+
+            # Create Bronze -> Silver promotion relationship
+            success_rate = silver_count / bronze_count if bronze_count > 0 else 0
+            neo4j.create_layer_promotion(
+                batch_id=batch_id,
+                source_layer='bronze',
+                target_layer='silver',
+                record_count=silver_count,
+                success_rate=success_rate,
+            )
+
+        # Create/update Gold layer stats and promotion
+        if gold_count > 0:
+            neo4j.upsert_batch_layer(batch_id, 'gold', {
+                'input_count': silver_count,
+                'processed_count': gold_count,
+                'failed_count': silver_count - gold_count if silver_count > gold_count else 0,
+                'pending_count': 0,
+                'started_at': now.isoformat(),
+                'completed_at': now.isoformat(),
+            })
+
+            # Create Silver -> Gold promotion relationship
+            success_rate = gold_count / silver_count if silver_count > 0 else 0
+            neo4j.create_layer_promotion(
+                batch_id=batch_id,
+                source_layer='silver',
+                target_layer='gold',
+                record_count=gold_count,
+                success_rate=success_rate,
+            )
+
+        logger.info(f"[{batch_id}] Neo4j lineage updated: Bronze={bronze_count}, Silver={silver_count}, Gold={gold_count}")
+        return True
+
+    except ImportError:
+        logger.warning("Neo4j service not available (neo4j package not installed)")
+        return False
+    except Exception as e:
+        logger.error(f"[{batch_id}] Failed to update Neo4j lineage: {e}")
+        return False
+
 # Import extractors and common persistence
 from gps_cdm.message_formats.base import ExtractorRegistry, GoldEntityPersister
 
-# Import extractor modules to trigger registration
+# Import ALL extractor modules to trigger registration
 # Each module registers its extractor when imported
 from gps_cdm.message_formats import pain001  # noqa: F401
-from gps_cdm.message_formats import mt103    # noqa: F401
 from gps_cdm.message_formats import pacs008  # noqa: F401
+from gps_cdm.message_formats import mt103    # noqa: F401
+from gps_cdm.message_formats import mt202    # noqa: F401
+from gps_cdm.message_formats import mt940    # noqa: F401
 from gps_cdm.message_formats import fedwire  # noqa: F401
+from gps_cdm.message_formats import ach      # noqa: F401
+from gps_cdm.message_formats import rtp      # noqa: F401
+from gps_cdm.message_formats import sepa     # noqa: F401
+from gps_cdm.message_formats import bacs     # noqa: F401
+from gps_cdm.message_formats import chaps    # noqa: F401
+from gps_cdm.message_formats import fps      # noqa: F401
+from gps_cdm.message_formats import chips    # noqa: F401
+from gps_cdm.message_formats import fednow   # noqa: F401
+from gps_cdm.message_formats import npp      # noqa: F401
+from gps_cdm.message_formats import pix      # noqa: F401
+from gps_cdm.message_formats import upi      # noqa: F401
+from gps_cdm.message_formats import instapay # noqa: F401
+from gps_cdm.message_formats import paynow   # noqa: F401
+from gps_cdm.message_formats import promptpay # noqa: F401
+from gps_cdm.message_formats import target2  # noqa: F401
+from gps_cdm.message_formats import sarie    # noqa: F401
+from gps_cdm.message_formats import uaefts   # noqa: F401
+from gps_cdm.message_formats import rtgs_hk  # noqa: F401
+from gps_cdm.message_formats import meps_plus # noqa: F401
+from gps_cdm.message_formats import cnaps    # noqa: F401
+from gps_cdm.message_formats import bojnet   # noqa: F401
+from gps_cdm.message_formats import kftc     # noqa: F401
+from gps_cdm.message_formats import camt053  # noqa: F401
 
 
 def get_db_connection():
@@ -864,3 +1076,559 @@ def bulk_retry_errors(
         'failed': failed_count,
         'results': results,
     }
+
+
+# =============================================================================
+# MEDALLION ORCHESTRATOR TASK
+# =============================================================================
+
+@shared_task(bind=True, max_retries=3, autoretry_for=(Exception,), retry_backoff=True,
+             name='gps_cdm.zone_tasks.process_medallion_pipeline')
+def process_medallion_pipeline(
+    self,
+    batch_id: str,
+    records: List[Dict[str, Any]],
+    config: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Orchestrate the complete medallion pipeline: Bronze → Silver → Gold.
+
+    This task ensures:
+    1. Transactional integrity per zone (ACID)
+    2. No Gold records without Silver records
+    3. No Silver records without Bronze records
+    4. Proper ID passing between zones
+    5. Complete lineage tracking
+
+    The flow is:
+    1. Process all records to Bronze (returns raw_ids)
+    2. Group raw_ids by message_type
+    3. For each message_type, process Silver (returns stg_ids)
+    4. For each message_type, process Gold (returns instruction_ids)
+    5. Track lineage for all successful records
+
+    Args:
+        batch_id: Unique batch identifier
+        records: List of {content: str/dict, message_type: str}
+        config: Optional configuration
+
+    Returns:
+        {
+            status: 'SUCCESS' | 'PARTIAL' | 'FAILED',
+            batch_id: str,
+            bronze: {raw_ids: [...], failed: [...]},
+            silver: {stg_ids: [...], failed: [...]},
+            gold: {instruction_ids: [...], failed: [...]},
+            lineage: {...},
+            duration_seconds: float
+        }
+    """
+    start_time = datetime.utcnow()
+
+    result = {
+        'status': 'PENDING',
+        'batch_id': batch_id,
+        'bronze': {'raw_ids': [], 'failed': []},
+        'silver': {'stg_ids': [], 'failed': []},
+        'gold': {'instruction_ids': [], 'failed': []},
+        'lineage': {},
+        'duration_seconds': 0,
+    }
+
+    conn = None
+    cursor = None
+
+    try:
+        # =====================================================================
+        # STEP 1: BRONZE - Ingest all records
+        # =====================================================================
+        logger.info(f"[{batch_id}] Starting Bronze processing for {len(records)} records")
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Determine primary message type for batch tracking
+        primary_message_type = records[0].get('message_type', 'UNKNOWN') if records else 'UNKNOWN'
+
+        # Create batch tracking record (for PostgreSQL operational tracking)
+        ensure_batch_tracking(cursor, batch_id, primary_message_type, 'KAFKA')
+        conn.commit()
+
+        # Group records by message_type for tracking
+        raw_ids_by_type = {}
+
+        # Import message splitter for multi-record files
+        from gps_cdm.orchestration.message_splitter import split_message
+
+        # Expand records: split multi-record files into individual transactions
+        expanded_records = []
+        for record in records:
+            content = record.get('content', record)
+            message_type = record.get('message_type', 'UNKNOWN')
+            kafka_metadata = record.get('kafka_metadata', {})
+
+            # Get raw content string for splitting
+            if isinstance(content, str):
+                raw_content = content
+            elif isinstance(content, dict):
+                # Check if it contains raw text (from file)
+                raw_content = content.get('_raw_text', content.get('raw', ''))
+                if not raw_content:
+                    raw_content = json.dumps(content)
+            else:
+                raw_content = str(content)
+
+            # Split into individual records
+            split_records = split_message(raw_content, message_type)
+
+            for split_rec in split_records:
+                expanded_records.append({
+                    'content': split_rec['content'],
+                    'message_type': message_type,
+                    'kafka_metadata': kafka_metadata,
+                    'parent_context': split_rec.get('parent_context', {}),
+                    'record_index': split_rec.get('index', 0),
+                })
+
+        logger.info(f"[{batch_id}] Expanded {len(records)} input records to {len(expanded_records)} individual transactions")
+
+        for idx, record in enumerate(expanded_records):
+            try:
+                content = record.get('content', record)
+                message_type = record.get('message_type', 'UNKNOWN')
+
+                # Parse content if string
+                if isinstance(content, str):
+                    try:
+                        msg_content = json.loads(content)
+                    except json.JSONDecodeError:
+                        msg_content = {'_raw_text': content}
+                else:
+                    msg_content = content
+
+                # Merge parent context if available
+                parent_context = record.get('parent_context', {})
+                if parent_context and isinstance(msg_content, dict):
+                    # Parent context provides shared fields (e.g., debtor info)
+                    for key, value in parent_context.items():
+                        if key not in msg_content or msg_content[key] is None:
+                            msg_content[key] = value
+
+                # Generate raw_id
+                raw_id = f"raw_{uuid.uuid4().hex[:12]}"
+
+                # Compute content hash
+                content_str = json.dumps(msg_content, sort_keys=True) if isinstance(msg_content, dict) else str(msg_content)
+                content_hash = hashlib.sha256(content_str.encode()).hexdigest()[:64]
+
+                # Get message format
+                message_format = get_message_format(message_type)
+
+                # Insert into Bronze
+                cursor.execute("""
+                    INSERT INTO bronze.raw_payment_messages (
+                        raw_id, message_type, message_format, raw_content,
+                        raw_content_hash, source_system, source_file_path,
+                        processing_status, _batch_id, _ingested_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (raw_id) DO NOTHING
+                    RETURNING raw_id
+                """, (
+                    raw_id, message_type, message_format, content_str,
+                    content_hash, 'KAFKA', f'kafka://batch/{batch_id}',
+                    'PENDING', batch_id, datetime.utcnow()
+                ))
+
+                row = cursor.fetchone()
+                if row:
+                    result['bronze']['raw_ids'].append(raw_id)
+
+                    # Group by message_type for Silver processing
+                    if message_type not in raw_ids_by_type:
+                        raw_ids_by_type[message_type] = []
+                    raw_ids_by_type[message_type].append(raw_id)
+                else:
+                    result['bronze']['failed'].append({
+                        'index': idx,
+                        'message_type': message_type,
+                        'error': 'Duplicate record',
+                        'error_code': 'DUPLICATE_MESSAGE'
+                    })
+
+            except Exception as e:
+                import traceback
+                result['bronze']['failed'].append({
+                    'index': idx,
+                    'message_type': record.get('message_type', 'UNKNOWN'),
+                    'error': str(e),
+                    'error_code': 'PARSE_ERROR'
+                })
+
+        # COMMIT Bronze transaction - ensures ACID for Bronze zone
+        conn.commit()
+        logger.info(f"[{batch_id}] Bronze complete: {len(result['bronze']['raw_ids'])} succeeded, {len(result['bronze']['failed'])} failed")
+
+        # If Bronze completely failed, stop here
+        if not result['bronze']['raw_ids']:
+            result['status'] = 'FAILED'
+            result['duration_seconds'] = (datetime.utcnow() - start_time).total_seconds()
+            return result
+
+        # =====================================================================
+        # STEP 2: SILVER - Transform records by message_type
+        # =====================================================================
+        logger.info(f"[{batch_id}] Starting Silver processing for {len(raw_ids_by_type)} message types")
+
+        stg_ids_by_type = {}
+
+        for message_type, raw_ids in raw_ids_by_type.items():
+            # Get extractor for this message type
+            extractor = ExtractorRegistry.get(message_type)
+
+            if not extractor:
+                logger.warning(f"[{batch_id}] No extractor for message type: {message_type}, skipping Silver")
+                for raw_id in raw_ids:
+                    result['silver']['failed'].append({
+                        'raw_id': raw_id,
+                        'message_type': message_type,
+                        'error': f'No extractor for {message_type}',
+                        'error_code': 'NO_EXTRACTOR'
+                    })
+                continue
+
+            silver_table = extractor.SILVER_TABLE
+
+            # Read Bronze records for this message type
+            placeholders = ','.join(['%s'] * len(raw_ids))
+            cursor.execute(f"""
+                SELECT raw_id, raw_content
+                FROM bronze.raw_payment_messages
+                WHERE raw_id IN ({placeholders})
+                  AND processing_status = 'PENDING'
+            """, tuple(raw_ids))
+
+            bronze_records = cursor.fetchall()
+
+            stg_ids_for_type = []
+
+            for raw_id, raw_content in bronze_records:
+                # Use savepoint to isolate each record's transaction
+                # This prevents a single failure from aborting the entire batch
+                savepoint_name = f"sp_silver_{raw_id.replace('-', '_')}"
+                try:
+                    cursor.execute(f"SAVEPOINT {savepoint_name}")
+
+                    msg_content = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
+
+                    # Unwrap raw content if it was stored with {"raw": "..."}
+                    # This happens when Kafka receives non-JSON messages (XML, SWIFT MT, etc.)
+                    if isinstance(msg_content, dict) and 'raw' in msg_content and len(msg_content) == 1:
+                        raw_text = msg_content['raw']
+                        # Try to parse the raw text as JSON first
+                        try:
+                            msg_content = json.loads(raw_text)
+                        except (json.JSONDecodeError, TypeError):
+                            # Keep as raw text for XML/SWIFT MT parsers
+                            msg_content = {'_raw_text': raw_text, '_format': 'raw'}
+
+                    # Generate stg_id
+                    stg_id = extractor.generate_stg_id()
+
+                    # Extract Silver record
+                    silver_record = extractor.extract_silver(msg_content, raw_id, stg_id, batch_id)
+
+                    # Get columns and values
+                    columns = extractor.get_silver_columns()
+                    values = extractor.get_silver_values(silver_record)
+
+                    # Build INSERT
+                    col_names = ', '.join(columns)
+                    placeholders_sql = ', '.join(['%s'] * len(columns))
+
+                    cursor.execute(f"""
+                        INSERT INTO silver.{silver_table} ({col_names})
+                        VALUES ({placeholders_sql})
+                        ON CONFLICT (stg_id) DO NOTHING
+                        RETURNING stg_id
+                    """, values)
+
+                    row = cursor.fetchone()
+                    if row:
+                        result['silver']['stg_ids'].append(stg_id)
+                        stg_ids_for_type.append(stg_id)
+
+                        # Update Bronze status
+                        cursor.execute("""
+                            UPDATE bronze.raw_payment_messages
+                            SET processing_status = 'PROMOTED_TO_SILVER',
+                                processed_to_silver_at = CURRENT_TIMESTAMP
+                            WHERE raw_id = %s
+                        """, (raw_id,))
+
+                        # Release the savepoint on success
+                        cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+                    else:
+                        cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                        result['silver']['failed'].append({
+                            'raw_id': raw_id,
+                            'message_type': message_type,
+                            'error': 'Duplicate stg_id',
+                            'error_code': 'DUPLICATE_MESSAGE'
+                        })
+
+                except Exception as e:
+                    # Rollback to savepoint to allow subsequent records to continue
+                    try:
+                        cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                    except Exception:
+                        pass  # Savepoint might not exist if error was during SAVEPOINT creation
+                    result['silver']['failed'].append({
+                        'raw_id': raw_id,
+                        'message_type': message_type,
+                        'error': str(e),
+                        'error_code': 'TRANSFORM_ERROR'
+                    })
+
+            stg_ids_by_type[message_type] = stg_ids_for_type
+
+        # COMMIT Silver transaction - ensures ACID for Silver zone
+        conn.commit()
+        logger.info(f"[{batch_id}] Silver complete: {len(result['silver']['stg_ids'])} succeeded, {len(result['silver']['failed'])} failed")
+
+        # Update batch tracking with Bronze and Silver completion
+        update_batch_tracking_layer(cursor, batch_id, 'bronze', len(result['bronze']['raw_ids']), 'PROCESSING')
+        update_batch_tracking_layer(cursor, batch_id, 'silver', len(result['silver']['stg_ids']), 'PROCESSING')
+        conn.commit()
+
+        # If Silver completely failed, stop here (Bronze is committed)
+        if not result['silver']['stg_ids']:
+            result['status'] = 'PARTIAL'  # Bronze succeeded but Silver failed
+            result['duration_seconds'] = (datetime.utcnow() - start_time).total_seconds()
+            return result
+
+        # =====================================================================
+        # STEP 3: GOLD - Normalize and map to CDM
+        # =====================================================================
+        logger.info(f"[{batch_id}] Starting Gold processing")
+
+        for message_type, stg_ids in stg_ids_by_type.items():
+            if not stg_ids:
+                continue
+
+            extractor = ExtractorRegistry.get(message_type)
+            if not extractor:
+                continue
+
+            silver_table = extractor.SILVER_TABLE
+
+            # Read Silver records - Gold reads from Silver (already parsed data), NOT Bronze
+            placeholders = ','.join(['%s'] * len(stg_ids))
+
+            # Get all columns from Silver table for Gold entity extraction
+            silver_columns = extractor.get_silver_columns()
+            col_list = ', '.join(silver_columns)
+
+            cursor.execute(f"""
+                SELECT {col_list}
+                FROM silver.{silver_table}
+                WHERE stg_id IN ({placeholders})
+            """, tuple(stg_ids))
+
+            silver_records = cursor.fetchall()
+
+            # Convert to dict for easier access
+            for silver_row in silver_records:
+                silver_data = dict(zip(silver_columns, silver_row))
+                stg_id = silver_data.get('stg_id')
+                raw_id = silver_data.get('raw_id')
+
+                # Use savepoint to isolate each record's transaction
+                savepoint_name = f"sp_gold_{stg_id.replace('-', '_')}"
+                try:
+                    cursor.execute(f"SAVEPOINT {savepoint_name}")
+
+                    # Gold reads from Silver (already parsed/validated data)
+                    # No need to re-parse Bronze - Silver has the structured data
+
+                    # Extract Gold entities from Silver data
+                    gold_entities = extractor.extract_gold_entities(silver_data, stg_id, batch_id)
+
+                    # Persist entities
+                    entity_ids = GoldEntityPersister.persist_all_entities(
+                        cursor, gold_entities, message_type, stg_id, 'GPS_CDM'
+                    )
+
+                    # Create payment instruction
+                    instruction_id = f"instr_{uuid.uuid4().hex[:12]}"
+                    payment_id = f"pmt_{uuid.uuid4().hex[:12]}"
+
+                    # Extract amount/currency from Silver data (already parsed)
+                    # Silver tables use standardized column names
+                    amount = silver_data.get('amount') or silver_data.get('instructed_amount') or 0
+                    currency = silver_data.get('currency') or silver_data.get('instructed_currency') or 'XXX'
+                    end_to_end_id = silver_data.get('end_to_end_id') or silver_data.get('message_id')
+                    uetr = silver_data.get('uetr')
+
+                    payment_type_map = {
+                        'pain.001': 'CREDIT_TRANSFER', 'pain001': 'CREDIT_TRANSFER',
+                        'pacs.008': 'CREDIT_TRANSFER', 'pacs008': 'CREDIT_TRANSFER',
+                        'mt103': 'CREDIT_TRANSFER', 'fedwire': 'WIRE_TRANSFER',
+                        'ach': 'ACH_TRANSFER', 'rtp': 'REAL_TIME', 'sepa': 'CREDIT_TRANSFER',
+                    }
+                    payment_type = payment_type_map.get(message_type.lower().replace('.', '').replace('-', ''), 'TRANSFER')
+
+                    scheme_map = {
+                        'pain.001': 'ISO20022', 'pain001': 'ISO20022',
+                        'pacs.008': 'ISO20022', 'pacs008': 'ISO20022',
+                        'mt103': 'SWIFT_MT', 'fedwire': 'FEDWIRE',
+                        'ach': 'ACH', 'rtp': 'RTP', 'sepa': 'SEPA',
+                    }
+                    scheme_code = scheme_map.get(message_type.lower().replace('.', '').replace('-', ''), 'OTHER')
+
+                    now = datetime.utcnow()
+
+                    cursor.execute("""
+                        INSERT INTO gold.cdm_payment_instruction (
+                            instruction_id, payment_id, source_stg_id, source_stg_table, source_message_type,
+                            payment_type, scheme_code, direction, source_system,
+                            instructed_amount, instructed_currency, end_to_end_id, uetr,
+                            debtor_id, debtor_account_id, debtor_agent_id,
+                            creditor_id, creditor_account_id, creditor_agent_id,
+                            intermediary_agent1_id, ultimate_debtor_id, ultimate_creditor_id,
+                            current_status, lineage_batch_id, partition_year, partition_month,
+                            created_at, updated_at
+                        ) VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            'PROCESSED', %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                        )
+                        ON CONFLICT (instruction_id) DO NOTHING
+                        RETURNING instruction_id
+                    """, (
+                        instruction_id, payment_id, stg_id, silver_table, message_type,
+                        payment_type, scheme_code, 'OUTGOING', 'GPS_CDM',
+                        amount, currency, end_to_end_id, uetr,
+                        entity_ids.get('debtor_id'),
+                        entity_ids.get('debtor_account_id'),
+                        entity_ids.get('debtor_agent_id'),
+                        entity_ids.get('creditor_id'),
+                        entity_ids.get('creditor_account_id'),
+                        entity_ids.get('creditor_agent_id'),
+                        entity_ids.get('intermediary_agent1_id'),
+                        entity_ids.get('ultimate_debtor_id'),
+                        entity_ids.get('ultimate_creditor_id'),
+                        batch_id, now.year, now.month
+                    ))
+
+                    row = cursor.fetchone()
+                    if row:
+                        result['gold']['instruction_ids'].append(instruction_id)
+
+                        # Update Silver status
+                        cursor.execute(f"""
+                            UPDATE silver.{silver_table}
+                            SET processing_status = 'PROMOTED_TO_GOLD',
+                                processed_to_gold_at = CURRENT_TIMESTAMP
+                            WHERE stg_id = %s
+                        """, (stg_id,))
+
+                        # Track record-level lineage in result (for debugging/response)
+                        result['lineage'][stg_id] = {
+                            'source_table': f'silver.{silver_table}',
+                            'target_table': 'gold.cdm_payment_instruction',
+                            'source_id': stg_id,
+                            'target_id': instruction_id,
+                            'transformation': 'NORMALIZE'
+                        }
+
+                        # Release the savepoint on success
+                        cursor.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+                    else:
+                        cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                        result['gold']['failed'].append({
+                            'stg_id': stg_id,
+                            'message_type': message_type,
+                            'error': 'Duplicate instruction_id',
+                            'error_code': 'DUPLICATE_MESSAGE'
+                        })
+
+                except Exception as e:
+                    # Rollback to savepoint to allow subsequent records to continue
+                    try:
+                        cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                    except Exception:
+                        pass
+                    result['gold']['failed'].append({
+                        'stg_id': stg_id,
+                        'message_type': message_type,
+                        'error': str(e),
+                        'error_code': 'GOLD_ERROR'
+                    })
+
+        # COMMIT Gold transaction - ensures ACID for Gold zone
+        conn.commit()
+        gold_end_time = datetime.utcnow()
+        logger.info(f"[{batch_id}] Gold complete: {len(result['gold']['instruction_ids'])} succeeded, {len(result['gold']['failed'])} failed")
+
+        # NOTE: PostgreSQL Gold lineage removed - lineage tracked in Neo4j only via update_neo4j_lineage()
+
+        # Update batch tracking with Gold completion
+        final_status = 'SUCCESS' if not result['bronze']['failed'] and not result['silver']['failed'] and not result['gold']['failed'] else 'PARTIAL'
+        update_batch_tracking_layer(cursor, batch_id, 'gold', len(result['gold']['instruction_ids']), final_status)
+
+        # Finalize batch tracking
+        total_duration_ms = int((gold_end_time - start_time).total_seconds() * 1000)
+        total_duration_seconds = (gold_end_time - start_time).total_seconds()
+        cursor.execute("""
+            UPDATE observability.obs_batch_tracking
+            SET status = %s,
+                completed_at = CURRENT_TIMESTAMP,
+                duration_seconds = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE batch_id = %s
+        """, (final_status, total_duration_seconds, batch_id))
+        conn.commit()
+
+        # Update Neo4j knowledge graph with lineage
+        update_neo4j_lineage(
+            batch_id=batch_id,
+            message_type=primary_message_type,
+            bronze_count=len(result['bronze']['raw_ids']),
+            silver_count=len(result['silver']['stg_ids']),
+            gold_count=len(result['gold']['instruction_ids']),
+            duration_ms=total_duration_ms,
+            status=final_status,
+        )
+
+        # Determine final status
+        if not result['bronze']['failed'] and not result['silver']['failed'] and not result['gold']['failed']:
+            result['status'] = 'SUCCESS'
+        elif result['gold']['instruction_ids']:
+            result['status'] = 'PARTIAL'
+        else:
+            result['status'] = 'FAILED'
+
+        result['duration_seconds'] = (datetime.utcnow() - start_time).total_seconds()
+
+        logger.info(f"[{batch_id}] Medallion pipeline complete: status={result['status']}, "
+                   f"Bronze={len(result['bronze']['raw_ids'])}, "
+                   f"Silver={len(result['silver']['stg_ids'])}, "
+                   f"Gold={len(result['gold']['instruction_ids'])}")
+
+        return result
+
+    except Exception as e:
+        import traceback
+        logger.exception(f"[{batch_id}] Medallion pipeline failed: {e}")
+        if conn:
+            conn.rollback()
+        result['status'] = 'FAILED'
+        result['error'] = str(e)
+        result['error_trace'] = traceback.format_exc()
+        result['duration_seconds'] = (datetime.utcnow() - start_time).total_seconds()
+        return result
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()

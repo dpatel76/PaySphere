@@ -326,6 +326,14 @@ class MT103Extractor(BaseExtractor):
         """Extract all Silver layer fields from MT103 message."""
         trunc = self.trunc
 
+        # Handle raw text content - parse it first
+        if isinstance(msg_content, dict) and '_raw_text' in msg_content:
+            raw_text = msg_content['_raw_text']
+            # SWIFT MT103 format starts with {1: block
+            if raw_text.strip().startswith('{1:') or raw_text.strip().startswith('{2:'):
+                parser = MT103SwiftParser()
+                msg_content = parser.parse(raw_text)
+
         # Extract nested objects
         ordering_cust = msg_content.get('orderingCustomer', {})
         ordering_cust_addr = ordering_cust.get('address', {}) if ordering_cust else {}
@@ -449,98 +457,87 @@ class MT103Extractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from MT103 message."""
+        """Extract Gold layer entities from MT103 Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Extract nested objects
-        ordering_cust = msg_content.get('orderingCustomer', {})
-        ordering_cust_addr = ordering_cust.get('address', {}) if ordering_cust else {}
-        ordering_inst = msg_content.get('orderingInstitution', {})
-        beneficiary = msg_content.get('beneficiaryCustomer', {})
-        beneficiary_addr = beneficiary.get('address', {}) if beneficiary else {}
-        acct_with_inst = msg_content.get('accountWithInstitution', {})
-        intermediary = msg_content.get('intermediaryInstitution', {})
-
-        # Ordering Customer (Debtor)
-        if ordering_cust.get('name'):
+        # Ordering Customer (Debtor) - uses Silver column names
+        if silver_data.get('ordering_customer_name'):
             entities.parties.append(PartyData(
-                name=ordering_cust.get('name'),
+                name=silver_data.get('ordering_customer_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
-                street_name=ordering_cust_addr.get('streetName'),
-                building_number=ordering_cust_addr.get('buildingNumber'),
-                post_code=ordering_cust_addr.get('postalCode'),
-                town_name=ordering_cust_addr.get('townName'),
-                country_sub_division=ordering_cust_addr.get('countrySubDivision'),
-                country=ordering_cust_addr.get('country'),
-                identification_type='CUST' if ordering_cust.get('partyIdentifier') else ('NATL' if ordering_cust.get('nationalId') else None),
-                identification_number=ordering_cust.get('partyIdentifier') or ordering_cust.get('nationalId'),
+                street_name=silver_data.get('ordering_customer_address'),
+                country=silver_data.get('ordering_customer_country'),
+                identification_type='CUST' if silver_data.get('ordering_customer_party_id') else ('NATL' if silver_data.get('ordering_customer_national_id') else None),
+                identification_number=silver_data.get('ordering_customer_party_id') or silver_data.get('ordering_customer_national_id'),
             ))
 
         # Beneficiary Customer (Creditor)
-        if beneficiary.get('name'):
+        if silver_data.get('beneficiary_name'):
             entities.parties.append(PartyData(
-                name=beneficiary.get('name'),
+                name=silver_data.get('beneficiary_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
-                street_name=beneficiary_addr.get('streetName'),
-                building_number=beneficiary_addr.get('buildingNumber'),
-                post_code=beneficiary_addr.get('postalCode'),
-                town_name=beneficiary_addr.get('townName'),
-                country_sub_division=beneficiary_addr.get('countrySubDivision'),
-                country=beneficiary_addr.get('country'),
-                identification_type='CUST' if beneficiary.get('partyIdentifier') else None,
-                identification_number=beneficiary.get('partyIdentifier'),
+                street_name=silver_data.get('beneficiary_address'),
+                country=silver_data.get('beneficiary_country'),
+                identification_type='CUST' if silver_data.get('beneficiary_party_id') else None,
+                identification_number=silver_data.get('beneficiary_party_id'),
             ))
 
         # Ordering Customer Account (Debtor Account)
-        if ordering_cust.get('account'):
+        if silver_data.get('ordering_customer_account'):
             entities.accounts.append(AccountData(
-                account_number=ordering_cust.get('account'),
+                account_number=silver_data.get('ordering_customer_account'),
                 role="DEBTOR",
                 account_type='UNKNOWN',
-                currency=msg_content.get('currencyCode') or 'XXX',
+                currency=silver_data.get('currency') or 'XXX',
             ))
 
         # Beneficiary Account (Creditor Account)
-        if beneficiary.get('account'):
+        if silver_data.get('beneficiary_account'):
             entities.accounts.append(AccountData(
-                account_number=beneficiary.get('account'),
+                account_number=silver_data.get('beneficiary_account'),
                 role="CREDITOR",
                 account_type='UNKNOWN',
-                currency=msg_content.get('currencyCode') or 'XXX',
+                currency=silver_data.get('currency') or 'XXX',
             ))
 
         # Ordering Institution (Debtor Agent)
-        if ordering_inst.get('bic'):
+        if silver_data.get('ordering_institution_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                name=ordering_inst.get('name'),
-                bic=ordering_inst.get('bic'),
-                clearing_code=ordering_inst.get('clearingCode'),
-                country=ordering_inst.get('country') or 'XX',
+                name=silver_data.get('ordering_institution_name'),
+                bic=silver_data.get('ordering_institution_bic'),
+                clearing_code=silver_data.get('ordering_institution_clearing_code'),
+                country=silver_data.get('ordering_institution_country') or 'XX',
             ))
 
         # Account With Institution (Creditor Agent)
-        if acct_with_inst.get('bic'):
+        if silver_data.get('account_with_institution_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                name=acct_with_inst.get('name'),
-                bic=acct_with_inst.get('bic'),
-                country=acct_with_inst.get('country') or 'XX',
+                name=silver_data.get('account_with_institution_name'),
+                bic=silver_data.get('account_with_institution_bic'),
+                country=silver_data.get('account_with_institution_country') or 'XX',
             ))
 
         # Intermediary Institution
-        if intermediary.get('bic'):
+        if silver_data.get('intermediary_institution_bic') or silver_data.get('intermediary_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="INTERMEDIARY",
-                name=intermediary.get('name'),
-                bic=intermediary.get('bic'),
-                country=intermediary.get('country') or 'XX',
+                name=silver_data.get('intermediary_institution_name') or silver_data.get('intermediary_name'),
+                bic=silver_data.get('intermediary_institution_bic') or silver_data.get('intermediary_bic'),
+                country=silver_data.get('intermediary_institution_country') or 'XX',
             ))
 
         return entities

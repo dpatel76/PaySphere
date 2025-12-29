@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GPS CDM Multi-Record Test - pain.001 (3 payment transactions) -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>PAIN001-MULTI-20251228-001</MsgId>
+      <CreDtTm>2025-12-28T10:00:00Z</CreDtTm>
+      <NbOfTxs>3</NbOfTxs>
+      <CtrlSum>85000.00</CtrlSum>
+      <InitgPty>
+        <Nm>Multi-Payment Test Corp</Nm>
+      </InitgPty>
+    </GrpHdr>
+
+    <PmtInf>
+      <PmtInfId>PMTINF-MULTI-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <NbOfTxs>3</NbOfTxs>
+      <CtrlSum>85000.00</CtrlSum>
+      <ReqdExctnDt><Dt>2025-12-28</Dt></ReqdExctnDt>
+
+      <Dbtr>
+        <Nm>Multi-Payment Payer Corp</Nm>
+        <PstlAdr><Ctry>US</Ctry></PstlAdr>
+      </Dbtr>
+      <DbtrAcct><Id><IBAN>US12345678901234567890</IBAN></Id><Ccy>USD</Ccy></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>CHASUS33XXX</BICFI></FinInstnId></DbtrAgt>
+
+      <!-- Transaction 1: $25,000 -->
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>MULTI-INSTR-001</InstrId>
+          <EndToEndId>E2E-MULTI-001</EndToEndId>
+        </PmtId>
+        <Amt><InstdAmt Ccy="USD">25000.00</InstdAmt></Amt>
+        <ChrgBr>SHAR</ChrgBr>
+        <CdtrAgt><FinInstnId><BICFI>BOFAUS3NXXX</BICFI></FinInstnId></CdtrAgt>
+        <Cdtr><Nm>Beneficiary Alpha Inc</Nm><PstlAdr><Ctry>US</Ctry></PstlAdr></Cdtr>
+        <CdtrAcct><Id><IBAN>US11111111111111111111</IBAN></Id></CdtrAcct>
+        <RmtInf><Ustrd>Payment 1 - Invoice INV-2025-001</Ustrd></RmtInf>
+      </CdtTrfTxInf>
+
+      <!-- Transaction 2: $35,000 -->
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>MULTI-INSTR-002</InstrId>
+          <EndToEndId>E2E-MULTI-002</EndToEndId>
+        </PmtId>
+        <Amt><InstdAmt Ccy="USD">35000.00</InstdAmt></Amt>
+        <ChrgBr>DEBT</ChrgBr>
+        <CdtrAgt><FinInstnId><BICFI>CITIUS33XXX</BICFI></FinInstnId></CdtrAgt>
+        <Cdtr><Nm>Beneficiary Beta LLC</Nm><PstlAdr><Ctry>US</Ctry></PstlAdr></Cdtr>
+        <CdtrAcct><Id><IBAN>US22222222222222222222</IBAN></Id></CdtrAcct>
+        <RmtInf><Ustrd>Payment 2 - Contract CON-2025-002</Ustrd></RmtInf>
+      </CdtTrfTxInf>
+
+      <!-- Transaction 3: $25,000 -->
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>MULTI-INSTR-003</InstrId>
+          <EndToEndId>E2E-MULTI-003</EndToEndId>
+        </PmtId>
+        <Amt><InstdAmt Ccy="USD">25000.00</InstdAmt></Amt>
+        <ChrgBr>CRED</ChrgBr>
+        <CdtrAgt><FinInstnId><BICFI>WFBIUS6SXXX</BICFI></FinInstnId></CdtrAgt>
+        <Cdtr><Nm>Beneficiary Gamma Corp</Nm><PstlAdr><Ctry>US</Ctry></PstlAdr></Cdtr>
+        <CdtrAcct><Id><IBAN>US33333333333333333333</IBAN></Id></CdtrAcct>
+        <RmtInf><Ustrd>Payment 3 - Service SVC-2025-003</Ustrd></RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

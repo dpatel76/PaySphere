@@ -6,20 +6,23 @@ Distributed task processing using Celery for high-throughput batch processing.
 Designed for 50M+ messages/day with horizontal scaling.
 
 Architecture:
-- NiFi handles ingestion, routing, and Kafka integration
+    NiFi → Kafka (per-message-type topics) → Kafka Consumers → Celery → PostgreSQL
+
+- NiFi handles ingestion, routing, and publishes to Kafka per-message-type topics
+- Kafka consumers with micro-batching dispatch to Celery
 - Celery handles parallel processing across worker pools
-- Redis/RabbitMQ as message broker
+- Redis as message broker
 - Workers process partitions independently with checkpointing
 
 Usage:
     # Start workers (one per core):
-    celery -A gps_cdm.orchestration.celery_tasks worker --loglevel=info --concurrency=8
+    celery -A gps_cdm.orchestration.celery_tasks worker -Q celery,bronze,silver,gold,dq,cdc -l info --concurrency=8
 
     # Start beat scheduler for periodic tasks:
     celery -A gps_cdm.orchestration.celery_tasks beat --loglevel=info
 
-    # Monitor with Flower:
-    celery -A gps_cdm.orchestration.celery_tasks flower
+    # Start Kafka consumers:
+    python -m gps_cdm.streaming.consumer_launcher
 """
 
 from celery import Celery, group, chain, chord

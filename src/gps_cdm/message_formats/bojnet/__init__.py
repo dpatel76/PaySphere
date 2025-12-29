@@ -105,45 +105,51 @@ class BojnetExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from BOJ-NET message."""
+        """Extract Gold layer entities from BOJ-NET Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Debit Account
-        if msg_content.get('debitAccount'):
+        # Debit Account - uses Silver column names
+        if silver_data.get('debit_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('debitAccount'),
+                account_number=silver_data.get('debit_account'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'JPY',
+                currency=silver_data.get('currency') or 'JPY',
             ))
 
         # Credit Account
-        if msg_content.get('creditAccount'):
+        if silver_data.get('credit_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('creditAccount'),
+                account_number=silver_data.get('credit_account'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'JPY',
+                currency=silver_data.get('currency') or 'JPY',
             ))
 
         # Sending Participant
-        if msg_content.get('sendingParticipantCode'):
+        if silver_data.get('sending_participant_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                clearing_code=msg_content.get('sendingParticipantCode'),
+                clearing_code=silver_data.get('sending_participant_code'),
                 clearing_system='JPBOJ',  # BOJ clearing
                 country='JP',
             ))
 
         # Receiving Participant
-        if msg_content.get('receivingParticipantCode'):
+        if silver_data.get('receiving_participant_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                clearing_code=msg_content.get('receivingParticipantCode'),
+                clearing_code=silver_data.get('receiving_participant_code'),
                 clearing_system='JPBOJ',
                 country='JP',
             ))

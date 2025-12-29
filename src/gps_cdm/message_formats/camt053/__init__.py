@@ -121,36 +121,42 @@ class Camt053Extractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from camt.053 message."""
+        """Extract Gold layer entities from camt.053 Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Account Owner Party
-        if msg_content.get('accountOwnerName'):
+        # Account Owner Party - uses Silver column names
+        if silver_data.get('account_owner_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('accountOwnerName'),
+                name=silver_data.get('account_owner_name'),
                 role="ACCOUNT_OWNER",
                 party_type='UNKNOWN',
             ))
 
         # Statement Account
-        if msg_content.get('accountIban') or msg_content.get('accountNumber'):
+        if silver_data.get('account_iban') or silver_data.get('account_number'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('accountNumber'),
+                account_number=silver_data.get('account_number'),
                 role="STATEMENT_ACCOUNT",
-                iban=msg_content.get('accountIban'),
+                iban=silver_data.get('account_iban'),
                 account_type='CACC',
-                currency=msg_content.get('accountCurrency') or 'XXX',
+                currency=silver_data.get('account_currency') or 'XXX',
             ))
 
         # Account Servicer (Bank)
-        if msg_content.get('accountServicerBic'):
+        if silver_data.get('account_servicer_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="ACCOUNT_SERVICER",
-                bic=msg_content.get('accountServicerBic'),
+                bic=silver_data.get('account_servicer_bic'),
             ))
 
         return entities

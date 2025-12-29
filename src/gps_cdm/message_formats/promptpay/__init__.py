@@ -109,63 +109,69 @@ class PromptPayExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from PromptPay message."""
+        """Extract Gold layer entities from PromptPay Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Payer Party (Debtor)
-        if msg_content.get('payerName'):
+        # Payer Party (Debtor) - uses Silver column names
+        if silver_data.get('payer_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('payerName'),
+                name=silver_data.get('payer_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
                 country='TH',
             ))
 
         # Payee Party (Creditor)
-        if msg_content.get('payeeName'):
+        if silver_data.get('payee_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('payeeName'),
+                name=silver_data.get('payee_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
                 country='TH',
             ))
 
         # Payer Account (or Proxy)
-        if msg_content.get('payerAccount') or msg_content.get('payerProxyValue'):
+        if silver_data.get('payer_account') or silver_data.get('payer_proxy_value'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('payerAccount') or msg_content.get('payerProxyValue'),
+                account_number=silver_data.get('payer_account') or silver_data.get('payer_proxy_value'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'THB',
+                currency=silver_data.get('currency') or 'THB',
             ))
 
         # Payee Account (or Proxy)
-        if msg_content.get('payeeAccount') or msg_content.get('payeeProxyValue'):
+        if silver_data.get('payee_account') or silver_data.get('payee_proxy_value'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('payeeAccount') or msg_content.get('payeeProxyValue'),
+                account_number=silver_data.get('payee_account') or silver_data.get('payee_proxy_value'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'THB',
+                currency=silver_data.get('currency') or 'THB',
             ))
 
         # Payer Bank
-        if msg_content.get('payerBankCode'):
+        if silver_data.get('payer_bank_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                clearing_code=msg_content.get('payerBankCode'),
+                clearing_code=silver_data.get('payer_bank_code'),
                 clearing_system='THPROMPTPAY',
                 country='TH',
             ))
 
         # Payee Bank
-        if msg_content.get('payeeBankCode'):
+        if silver_data.get('payee_bank_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                clearing_code=msg_content.get('payeeBankCode'),
+                clearing_code=silver_data.get('payee_bank_code'),
                 clearing_system='THPROMPTPAY',
                 country='TH',
             ))

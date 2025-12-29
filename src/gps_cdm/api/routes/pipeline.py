@@ -1,20 +1,23 @@
 """
 GPS CDM API - Pipeline Routes
 
+Architecture: NiFi → Kafka (per-message-type topics) → Celery consumers
+
 Provides endpoints for pipeline monitoring:
 1. Batch tracking and status
 2. Pipeline statistics
 3. Layer-level metrics
 4. NiFi flow status
-5. Celery worker status
+5. Celery queue status (via Redis)
 6. Message type routing and metrics
 
 Data sources:
 - Databricks: Primary data store for medallion layers
 - PostgreSQL: Fallback for local development
 - Neo4j: Knowledge graph (via graph routes)
-- NiFi: Flow orchestration status
-- Flower: Celery worker monitoring
+- NiFi: Flow orchestration, publishes to Kafka
+- Redis: Celery broker, queue inspection
+- Kafka: Message streaming with per-message-type topics
 """
 
 from typing import List, Optional, Dict, Any
@@ -236,10 +239,14 @@ async def list_batches(
         if batch_ids:
             placeholders = ','.join(['%s'] * len(batch_ids))
             # Query all silver tables for actual counts
+            # Query ALL Silver tables for accurate counts
             silver_tables = [
-                'stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_mt202',
-                'stg_fedwire', 'stg_sepa', 'stg_ach', 'stg_chaps',
-                'stg_bacs', 'stg_fednow', 'stg_rtp', 'stg_faster_payments'
+                'stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_mt202', 'stg_mt940',
+                'stg_fedwire', 'stg_sepa', 'stg_ach', 'stg_chaps', 'stg_camt053',
+                'stg_bacs', 'stg_fednow', 'stg_rtp', 'stg_faster_payments',
+                'stg_npp', 'stg_upi', 'stg_pix', 'stg_target2', 'stg_meps_plus',
+                'stg_rtgs_hk', 'stg_bojnet', 'stg_kftc', 'stg_cnaps', 'stg_chips',
+                'stg_sarie', 'stg_uaefts', 'stg_promptpay', 'stg_paynow', 'stg_instapay',
             ]
             for table in silver_tables:
                 try:
@@ -1143,9 +1150,7 @@ async def pipeline_health():
 # =============================================================================
 
 NIFI_BASE_URL = os.environ.get("NIFI_URL", "http://localhost:8080/nifi-api")
-FLOWER_BASE_URL = os.environ.get("FLOWER_URL", "http://localhost:5555")
-FLOWER_USER = os.environ.get("FLOWER_USER", "admin")
-FLOWER_PASSWORD = os.environ.get("FLOWER_PASSWORD", "flowerpassword")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 
 @router.get("/nifi/status")
@@ -1248,120 +1253,29 @@ async def get_nifi_connections():
 
 
 # =============================================================================
-# Celery/Flower Integration Endpoints
+# Celery Queue Status Endpoints (Direct Redis inspection)
 # =============================================================================
-
-@router.get("/celery/workers")
-async def get_celery_workers():
-    """Get Celery worker status from Flower."""
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            auth = httpx.BasicAuth(FLOWER_USER, FLOWER_PASSWORD)
-            resp = await client.get(f"{FLOWER_BASE_URL}/api/workers", auth=auth)
-
-            if resp.status_code != 200:
-                return {"status": "unavailable", "workers": []}
-
-            workers_data = resp.json()
-            workers = []
-
-            for worker_name, worker_info in workers_data.items():
-                stats = worker_info.get("stats", {})
-                pool = stats.get("pool", {})
-
-                workers.append({
-                    "name": worker_name,
-                    "status": "online" if worker_info.get("status") else "offline",
-                    "hostname": worker_info.get("hostname", worker_name),
-                    "concurrency": worker_info.get("concurrency", 0),
-                    "active_tasks": worker_info.get("active", 0),
-                    "processed_total": stats.get("total", {}).get("tasks.process_bronze_partition", 0),
-                    "pool_max_concurrency": pool.get("max-concurrency", 0),
-                    "pool_processes": pool.get("processes", []),
-                    "heartbeat": worker_info.get("heartbeat"),
-                    "queues": [q.get("name") for q in worker_info.get("queues", [])],
-                })
-
-            return {
-                "status": "running" if workers else "no_workers",
-                "worker_count": len(workers),
-                "workers": workers,
-            }
-    except httpx.TimeoutException:
-        return {"status": "timeout", "error": "Flower connection timed out", "workers": []}
-    except httpx.ConnectError:
-        return {"status": "unavailable", "error": "Cannot connect to Flower", "workers": []}
-    except Exception as e:
-        return {"status": "error", "error": str(e), "workers": []}
-
-
-@router.get("/celery/tasks")
-async def get_celery_tasks(
-    state: Optional[str] = Query(None, description="Filter by state: PENDING, STARTED, SUCCESS, FAILURE, RETRY"),
-    limit: int = Query(50, le=200),
-):
-    """Get recent Celery task status from Flower."""
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            auth = httpx.BasicAuth(FLOWER_USER, FLOWER_PASSWORD)
-            params = {"limit": limit}
-            if state:
-                params["state"] = state
-
-            resp = await client.get(f"{FLOWER_BASE_URL}/api/tasks", auth=auth, params=params)
-
-            if resp.status_code != 200:
-                return {"status": "unavailable", "tasks": []}
-
-            tasks_data = resp.json()
-            tasks = []
-
-            for task_id, task_info in tasks_data.items():
-                tasks.append({
-                    "task_id": task_id,
-                    "name": task_info.get("name", "").split(".")[-1],
-                    "state": task_info.get("state"),
-                    "received": task_info.get("received"),
-                    "started": task_info.get("started"),
-                    "succeeded": task_info.get("succeeded"),
-                    "failed": task_info.get("failed"),
-                    "retried": task_info.get("retried"),
-                    "runtime": task_info.get("runtime"),
-                    "worker": task_info.get("worker"),
-                    "args": task_info.get("args", "")[:100],  # Truncate args
-                    "exception": task_info.get("exception"),
-                })
-
-            # Sort by received time descending
-            tasks.sort(key=lambda x: x.get("received") or "", reverse=True)
-
-            return {
-                "status": "running",
-                "task_count": len(tasks),
-                "tasks": tasks[:limit],
-            }
-    except Exception as e:
-        return {"status": "error", "error": str(e), "tasks": []}
-
 
 @router.get("/celery/queues")
 async def get_celery_queues():
-    """Get Celery queue depths from Flower."""
+    """Get Celery queue depths from Redis directly."""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            auth = httpx.BasicAuth(FLOWER_USER, FLOWER_PASSWORD)
-            resp = await client.get(f"{FLOWER_BASE_URL}/api/queues/length", auth=auth)
+        import redis
+        r = redis.from_url(REDIS_URL)
 
-            if resp.status_code != 200:
-                return {"status": "unavailable", "queues": {}}
+        # Standard Celery queues
+        queue_names = ["celery", "bronze", "silver", "gold", "dq", "cdc"]
+        queues = {}
 
-            queues = resp.json().get("active_queues", {})
+        for queue in queue_names:
+            length = r.llen(queue)
+            queues[queue] = length
 
-            return {
-                "status": "running",
-                "queues": queues,
-                "total_pending": sum(queues.values()) if queues else 0,
-            }
+        return {
+            "status": "running",
+            "queues": queues,
+            "total_pending": sum(queues.values()),
+        }
     except Exception as e:
         return {"status": "error", "error": str(e), "queues": {}}
 

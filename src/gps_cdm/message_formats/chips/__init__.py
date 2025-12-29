@@ -223,72 +223,80 @@ class ChipsExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from CHIPS message."""
+        """Extract Gold layer entities from CHIPS Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Originator Party (Debtor)
-        if msg_content.get('originatorName'):
+        # Originator Party (Debtor) - uses Silver column names
+        if silver_data.get('originator_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('originatorName'),
+                name=silver_data.get('originator_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
+                country='US',
             ))
 
         # Beneficiary Party (Creditor)
-        if msg_content.get('beneficiaryName'):
+        if silver_data.get('beneficiary_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('beneficiaryName'),
+                name=silver_data.get('beneficiary_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
+                country='US',
             ))
 
         # Originator Account
-        if msg_content.get('originatorAccount'):
+        if silver_data.get('originator_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('originatorAccount'),
+                account_number=silver_data.get('originator_account'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency='USD',
+                currency=silver_data.get('currency') or 'USD',
             ))
 
         # Beneficiary Account
-        if msg_content.get('beneficiaryAccount'):
+        if silver_data.get('beneficiary_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('beneficiaryAccount'),
+                account_number=silver_data.get('beneficiary_account'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency='USD',
+                currency=silver_data.get('currency') or 'USD',
             ))
 
         # Originator Bank (Debtor Agent)
-        if msg_content.get('originatorBank') or msg_content.get('sendingParticipant'):
+        if silver_data.get('originator_bank') or silver_data.get('sending_participant'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                clearing_code=msg_content.get('sendingParticipant'),
-                bic=msg_content.get('originatorBank'),
+                clearing_code=silver_data.get('sending_participant'),
+                bic=silver_data.get('originator_bank'),
                 clearing_system='CHIPS',
                 country='US',
             ))
 
         # Beneficiary Bank (Creditor Agent)
-        if msg_content.get('beneficiaryBank') or msg_content.get('receivingParticipant'):
+        if silver_data.get('beneficiary_bank') or silver_data.get('receiving_participant'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                clearing_code=msg_content.get('receivingParticipant'),
-                bic=msg_content.get('beneficiaryBank'),
+                clearing_code=silver_data.get('receiving_participant'),
+                bic=silver_data.get('beneficiary_bank'),
                 clearing_system='CHIPS',
                 country='US',
             ))
 
         # Intermediary Bank
-        if msg_content.get('intermediaryBank'):
+        if silver_data.get('intermediary_bank'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="INTERMEDIARY",
-                bic=msg_content.get('intermediaryBank'),
+                bic=silver_data.get('intermediary_bank'),
                 clearing_system='CHIPS',
                 country='US',
             ))

@@ -437,65 +437,71 @@ class ChapsExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from CHAPS message."""
+        """Extract Gold layer entities from CHAPS Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Debtor Party
-        if msg_content.get('debtorName'):
+        # Debtor Party - uses Silver column names
+        if silver_data.get('debtor_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('debtorName'),
+                name=silver_data.get('debtor_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
                 country='GB',
             ))
 
         # Creditor Party
-        if msg_content.get('creditorName'):
+        if silver_data.get('creditor_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('creditorName'),
+                name=silver_data.get('creditor_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
                 country='GB',
             ))
 
         # Debtor Account
-        if msg_content.get('debtorAccount'):
+        if silver_data.get('debtor_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('debtorAccount'),
+                account_number=silver_data.get('debtor_account'),
                 role="DEBTOR",
                 account_type='CACC',
                 currency='GBP',
             ))
 
         # Creditor Account
-        if msg_content.get('creditorAccount'):
+        if silver_data.get('creditor_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('creditorAccount'),
+                account_number=silver_data.get('creditor_account'),
                 role="CREDITOR",
                 account_type='CACC',
                 currency='GBP',
             ))
 
         # Debtor Agent
-        if msg_content.get('debtorAgentBic') or msg_content.get('debtorSortCode'):
+        if silver_data.get('debtor_agent_bic') or silver_data.get('debtor_sort_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                bic=msg_content.get('debtorAgentBic'),
-                clearing_code=msg_content.get('debtorSortCode'),
+                bic=silver_data.get('debtor_agent_bic'),
+                clearing_code=silver_data.get('debtor_sort_code'),
                 clearing_system='GBDSC',  # UK Domestic Sort Code
                 country='GB',
             ))
 
         # Creditor Agent
-        if msg_content.get('creditorAgentBic') or msg_content.get('creditorSortCode'):
+        if silver_data.get('creditor_agent_bic') or silver_data.get('creditor_sort_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                bic=msg_content.get('creditorAgentBic'),
-                clearing_code=msg_content.get('creditorSortCode'),
+                bic=silver_data.get('creditor_agent_bic'),
+                clearing_code=silver_data.get('creditor_sort_code'),
                 clearing_system='GBDSC',
                 country='GB',
             ))

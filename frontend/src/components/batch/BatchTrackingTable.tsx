@@ -82,27 +82,34 @@ const BatchTrackingTable: React.FC<BatchTrackingTableProps> = ({
 
       // Transform response to extended format
       // Map API response fields to display fields
-      const items: BatchTrackingExtended[] = batches.map((batch: any) => ({
-        ...batch,
-        // Use created_at from API directly (it's already in ISO format)
-        created_at: batch.created_at,
-        // Bronze zone: input = record_count, processed = processed_count
-        bronze_input: batch.record_count || batch.bronze_count || 0,
-        bronze_processed: batch.processed_count || batch.bronze_count || 0,
-        bronze_exceptions: batch.failed_count || 0,
-        // Silver zone: input = processed bronze, processed = silver_count
-        silver_input: batch.processed_count || batch.bronze_count || 0,
-        silver_processed: batch.silver_count || batch.processed_count || 0,
-        silver_exceptions: 0,
-        // Gold zone: input = silver, processed = gold_count
-        gold_input: batch.silver_count || batch.processed_count || 0,
-        gold_processed: batch.gold_count || batch.processed_count || 0,
-        gold_exceptions: 0,
-        // Analytics zone: input = gold, processed = gold (same for now)
-        analytics_input: batch.gold_count || batch.processed_count || 0,
-        analytics_processed: batch.gold_count || batch.processed_count || 0,
-        analytics_exceptions: 0,
-      }));
+      // API returns: record_count, bronze_count, silver_count, gold_count, processed_count, failed_count
+      const items: BatchTrackingExtended[] = batches.map((batch: any) => {
+        const bronzeCount = batch.bronze_count ?? batch.record_count ?? 0;
+        const silverCount = batch.silver_count ?? 0;
+        const goldCount = batch.gold_count ?? 0;
+        const failedCount = batch.failed_count ?? 0;
+
+        return {
+          ...batch,
+          created_at: batch.created_at,
+          // Bronze zone: input = total records, processed = bronze_count, exceptions = failed
+          bronze_input: bronzeCount,
+          bronze_processed: bronzeCount,
+          bronze_exceptions: failedCount,
+          // Silver zone: input = bronze (what came in), processed = silver_count
+          silver_input: bronzeCount,
+          silver_processed: silverCount,
+          silver_exceptions: bronzeCount - silverCount, // Records that didn't make it to silver
+          // Gold zone: input = silver, processed = gold_count
+          gold_input: silverCount,
+          gold_processed: goldCount,
+          gold_exceptions: silverCount - goldCount, // Records that didn't make it to gold
+          // Analytics zone: input = gold, processed = gold (same for now)
+          analytics_input: goldCount,
+          analytics_processed: goldCount,
+          analytics_exceptions: 0,
+        };
+      });
 
       return {
         items,

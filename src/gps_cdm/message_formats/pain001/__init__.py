@@ -351,6 +351,13 @@ class Pain001Extractor(BaseExtractor):
         """Extract all Silver layer fields from pain.001 message."""
         trunc = self.trunc
 
+        # Handle raw XML content - parse it first
+        if isinstance(msg_content, dict) and '_raw_text' in msg_content:
+            raw_text = msg_content['_raw_text']
+            if raw_text.strip().startswith('<?xml') or raw_text.strip().startswith('<'):
+                parser = Pain001XmlParser()
+                msg_content = parser.parse(raw_text)
+
         # Extract nested objects
         initiating_party = msg_content.get('initiatingParty', {})
         pmt_info = msg_content.get('paymentInformation', {})
@@ -533,125 +540,118 @@ class Pain001Extractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from pain.001 message."""
+        """Extract Gold layer entities from pain.001 Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Extract nested objects
-        debtor = msg_content.get('debtor', {})
-        creditor = msg_content.get('creditor', {})
-        debtor_account = msg_content.get('debtorAccount', {})
-        creditor_account = msg_content.get('creditorAccount', {})
-        debtor_agent = msg_content.get('debtorAgent', {})
-        creditor_agent = msg_content.get('creditorAgent', {})
-        ultimate_debtor = msg_content.get('ultimateDebtor', {})
-        ultimate_creditor = msg_content.get('ultimateCreditor', {})
-        pmt_info = msg_content.get('paymentInformation', {})
-
-        # Debtor Party
-        if debtor.get('name'):
+        # Debtor Party - uses Silver column names
+        if silver_data.get('debtor_name'):
             entities.parties.append(PartyData(
-                name=debtor.get('name'),
+                name=silver_data.get('debtor_name'),
                 role="DEBTOR",
-                party_type='ORGANIZATION' if debtor.get('id') else 'UNKNOWN',
-                street_name=debtor.get('streetName'),
-                building_number=debtor.get('buildingNumber'),
-                post_code=debtor.get('postalCode'),
-                town_name=debtor.get('townName'),
-                country_sub_division=debtor.get('countrySubDivision'),
-                country=debtor.get('country'),
-                identification_type=debtor.get('idType'),
-                identification_number=debtor.get('id'),
+                party_type='ORGANIZATION' if silver_data.get('debtor_id') else 'UNKNOWN',
+                street_name=silver_data.get('debtor_street_name'),
+                building_number=silver_data.get('debtor_building_number'),
+                post_code=silver_data.get('debtor_postal_code'),
+                town_name=silver_data.get('debtor_town_name'),
+                country_sub_division=silver_data.get('debtor_country_sub_division'),
+                country=silver_data.get('debtor_country'),
+                identification_type=silver_data.get('debtor_id_type'),
+                identification_number=silver_data.get('debtor_id'),
             ))
 
         # Creditor Party
-        if creditor.get('name'):
+        if silver_data.get('creditor_name'):
             entities.parties.append(PartyData(
-                name=creditor.get('name'),
+                name=silver_data.get('creditor_name'),
                 role="CREDITOR",
-                party_type='ORGANIZATION' if creditor.get('id') else 'UNKNOWN',
-                street_name=creditor.get('streetName'),
-                building_number=creditor.get('buildingNumber'),
-                post_code=creditor.get('postalCode'),
-                town_name=creditor.get('townName'),
-                country_sub_division=creditor.get('countrySubDivision'),
-                country=creditor.get('country'),
-                identification_type=creditor.get('idType'),
-                identification_number=creditor.get('id'),
+                party_type='ORGANIZATION' if silver_data.get('creditor_id') else 'UNKNOWN',
+                street_name=silver_data.get('creditor_street_name'),
+                building_number=silver_data.get('creditor_building_number'),
+                post_code=silver_data.get('creditor_postal_code'),
+                town_name=silver_data.get('creditor_town_name'),
+                country_sub_division=silver_data.get('creditor_country_sub_division'),
+                country=silver_data.get('creditor_country'),
+                identification_type=silver_data.get('creditor_id_type'),
+                identification_number=silver_data.get('creditor_id'),
             ))
 
         # Ultimate Debtor Party
-        if ultimate_debtor.get('name'):
+        if silver_data.get('ultimate_debtor_name'):
             entities.parties.append(PartyData(
-                name=ultimate_debtor.get('name'),
+                name=silver_data.get('ultimate_debtor_name'),
                 role="ULTIMATE_DEBTOR",
                 party_type='UNKNOWN',
-                identification_type=ultimate_debtor.get('idType'),
-                identification_number=ultimate_debtor.get('id'),
+                identification_type=silver_data.get('ultimate_debtor_id_type'),
+                identification_number=silver_data.get('ultimate_debtor_id'),
             ))
 
         # Ultimate Creditor Party
-        if ultimate_creditor.get('name'):
+        if silver_data.get('ultimate_creditor_name'):
             entities.parties.append(PartyData(
-                name=ultimate_creditor.get('name'),
+                name=silver_data.get('ultimate_creditor_name'),
                 role="ULTIMATE_CREDITOR",
                 party_type='UNKNOWN',
-                identification_type=ultimate_creditor.get('idType'),
-                identification_number=ultimate_creditor.get('id'),
+                identification_type=silver_data.get('ultimate_creditor_id_type'),
+                identification_number=silver_data.get('ultimate_creditor_id'),
             ))
 
         # Debtor Account
-        if debtor_account.get('iban') or debtor_account.get('accountNumber'):
+        if silver_data.get('debtor_account_iban') or silver_data.get('debtor_account_other'):
             entities.accounts.append(AccountData(
-                account_number=debtor_account.get('iban') or debtor_account.get('accountNumber'),
+                account_number=silver_data.get('debtor_account_iban') or silver_data.get('debtor_account_other'),
                 role="DEBTOR",
-                iban=debtor_account.get('iban'),
-                account_type=debtor_account.get('accountType') or 'CACC',
-                currency=debtor_account.get('currency') or 'XXX',
+                iban=silver_data.get('debtor_account_iban'),
+                account_type=silver_data.get('debtor_account_type') or 'CACC',
+                currency=silver_data.get('debtor_account_currency') or 'XXX',
             ))
 
         # Creditor Account
-        if creditor_account.get('iban') or creditor_account.get('accountNumber'):
+        if silver_data.get('creditor_account_iban') or silver_data.get('creditor_account_other'):
             entities.accounts.append(AccountData(
-                account_number=creditor_account.get('iban') or creditor_account.get('accountNumber'),
+                account_number=silver_data.get('creditor_account_iban') or silver_data.get('creditor_account_other'),
                 role="CREDITOR",
-                iban=creditor_account.get('iban'),
-                account_type=creditor_account.get('accountType') or 'CACC',
-                currency=creditor_account.get('currency') or 'XXX',
+                iban=silver_data.get('creditor_account_iban'),
+                account_type=silver_data.get('creditor_account_type') or 'CACC',
+                currency=silver_data.get('creditor_account_currency') or 'XXX',
             ))
 
         # Debtor Agent
-        if debtor_agent.get('bic') or debtor_agent.get('memberId'):
+        if silver_data.get('debtor_agent_bic') or silver_data.get('debtor_agent_member_id'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                name=debtor_agent.get('name'),
-                bic=debtor_agent.get('bic'),
-                lei=debtor_agent.get('lei'),
-                clearing_code=debtor_agent.get('memberId'),
-                clearing_system=debtor_agent.get('clearingSystem'),
-                country=debtor_agent.get('country') or 'XX',
+                name=silver_data.get('debtor_agent_name'),
+                bic=silver_data.get('debtor_agent_bic'),
+                clearing_code=silver_data.get('debtor_agent_member_id'),
+                clearing_system=silver_data.get('debtor_agent_clearing_system'),
+                country=silver_data.get('debtor_agent_country') or 'XX',
             ))
 
         # Creditor Agent
-        if creditor_agent.get('bic') or creditor_agent.get('memberId'):
+        if silver_data.get('creditor_agent_bic') or silver_data.get('creditor_agent_member_id'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                name=creditor_agent.get('name'),
-                bic=creditor_agent.get('bic'),
-                lei=creditor_agent.get('lei'),
-                clearing_code=creditor_agent.get('memberId'),
-                clearing_system=creditor_agent.get('clearingSystem'),
-                country=creditor_agent.get('country') or 'XX',
+                name=silver_data.get('creditor_agent_name'),
+                bic=silver_data.get('creditor_agent_bic'),
+                clearing_code=silver_data.get('creditor_agent_member_id'),
+                clearing_system=silver_data.get('creditor_agent_clearing_system'),
+                country=silver_data.get('creditor_agent_country') or 'XX',
             ))
 
         # Payment instruction fields
-        entities.service_level = pmt_info.get('serviceLevel')
-        entities.local_instrument = pmt_info.get('localInstrument')
-        entities.category_purpose = pmt_info.get('categoryPurpose')
-        entities.exchange_rate = msg_content.get('exchangeRate')
+        entities.service_level = silver_data.get('service_level')
+        entities.local_instrument = silver_data.get('local_instrument')
+        entities.category_purpose = silver_data.get('category_purpose')
+        entities.exchange_rate = silver_data.get('exchange_rate')
 
         return entities
 

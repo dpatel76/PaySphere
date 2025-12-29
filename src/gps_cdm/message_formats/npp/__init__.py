@@ -111,63 +111,69 @@ class NppExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from NPP message."""
+        """Extract Gold layer entities from NPP Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Payer Party (Debtor)
-        if msg_content.get('payerName'):
+        # Payer Party (Debtor) - uses Silver column names
+        if silver_data.get('payer_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('payerName'),
+                name=silver_data.get('payer_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
                 country='AU',
             ))
 
         # Payee Party (Creditor)
-        if msg_content.get('payeeName'):
+        if silver_data.get('payee_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('payeeName'),
+                name=silver_data.get('payee_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
                 country='AU',
             ))
 
         # Payer Account
-        if msg_content.get('payerAccount') or msg_content.get('payerPayid'):
+        if silver_data.get('payer_account') or silver_data.get('payer_payid'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('payerAccount') or msg_content.get('payerPayid'),
+                account_number=silver_data.get('payer_account') or silver_data.get('payer_payid'),
                 role="DEBTOR",
                 account_type='CACC',
                 currency='AUD',
             ))
 
         # Payee Account
-        if msg_content.get('payeeAccount') or msg_content.get('payeePayid'):
+        if silver_data.get('payee_account') or silver_data.get('payee_payid'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('payeeAccount') or msg_content.get('payeePayid'),
+                account_number=silver_data.get('payee_account') or silver_data.get('payee_payid'),
                 role="CREDITOR",
                 account_type='CACC',
                 currency='AUD',
             ))
 
         # Payer Bank (by BSB)
-        if msg_content.get('payerBsb'):
+        if silver_data.get('payer_bsb'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                clearing_code=msg_content.get('payerBsb'),
+                clearing_code=silver_data.get('payer_bsb'),
                 clearing_system='AUBSB',  # Australian BSB
                 country='AU',
             ))
 
         # Payee Bank (by BSB)
-        if msg_content.get('payeeBsb'):
+        if silver_data.get('payee_bsb'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                clearing_code=msg_content.get('payeeBsb'),
+                clearing_code=silver_data.get('payee_bsb'),
                 clearing_system='AUBSB',
                 country='AU',
             ))

@@ -248,6 +248,14 @@ class FedwireExtractor(BaseExtractor):
         """Extract all Silver layer fields from Fedwire message."""
         trunc = self.trunc
 
+        # Handle raw text content - parse it first
+        if isinstance(msg_content, dict) and '_raw_text' in msg_content:
+            raw_text = msg_content['_raw_text']
+            # Fedwire format uses {NNNN} tags (4-digit numeric tags)
+            if '{1500}' in raw_text or '{2000}' in raw_text or '{3100}' in raw_text:
+                parser = FedwireTagValueParser()
+                msg_content = parser.parse(raw_text)
+
         # Extract nested objects
         sender = msg_content.get('sender', {})
         sender_addr = sender.get('address', {}) if sender else {}
@@ -267,8 +275,8 @@ class FedwireExtractor(BaseExtractor):
             '_batch_id': batch_id,
 
             # Message Header (matching actual DB schema)
-            'type_code': trunc(msg_content.get('typeCode'), 4),
-            'subtype_code': trunc(msg_content.get('subtypeCode'), 4),
+            'type_code': trunc(msg_content.get('typeCode'), 2),
+            'subtype_code': trunc(msg_content.get('subtypeCode'), 2),
             'imad': trunc(msg_content.get('imad'), 22),
             'omad': trunc(msg_content.get('omad'), 22),
             'input_cycle_date': msg_content.get('inputCycleDate'),
@@ -398,109 +406,103 @@ class FedwireExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from Fedwire message."""
+        """Extract Gold layer entities from Fedwire Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Extract nested objects
-        sender = msg_content.get('sender', {})
-        sender_addr = sender.get('address', {}) if sender else {}
-        receiver = msg_content.get('receiver', {})
-        receiver_addr = receiver.get('address', {}) if receiver else {}
-        originator = msg_content.get('originator', {})
-        originator_addr = originator.get('address', {}) if originator else {}
-        beneficiary = msg_content.get('beneficiary', {})
-        beneficiary_addr = beneficiary.get('address', {}) if beneficiary else {}
-        beneficiary_bank = msg_content.get('beneficiaryBank', {})
-        intermediary_bank = msg_content.get('intermediaryBank', {})
-
-        # Originator (Debtor Party)
-        if originator.get('name'):
+        # Originator (Debtor Party) - uses Silver column names
+        if silver_data.get('originator_name'):
             entities.parties.append(PartyData(
-                name=originator.get('name'),
+                name=silver_data.get('originator_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
-                street_name=originator_addr.get('line1'),
-                town_name=originator_addr.get('city'),
-                post_code=originator_addr.get('zipCode'),
-                country_sub_division=originator_addr.get('state'),
-                country=originator_addr.get('country') or 'US',
-                identification_type=originator.get('identifierType'),
-                identification_number=originator.get('identifier'),
+                street_name=silver_data.get('originator_address_line1'),
+                town_name=silver_data.get('originator_city'),
+                post_code=silver_data.get('originator_zip_code'),
+                country_sub_division=silver_data.get('originator_state'),
+                country=silver_data.get('originator_country') or 'US',
+                identification_type=silver_data.get('originator_id_type'),
+                identification_number=silver_data.get('originator_id'),
             ))
 
         # Beneficiary (Creditor Party)
-        if beneficiary.get('name'):
+        if silver_data.get('beneficiary_name'):
             entities.parties.append(PartyData(
-                name=beneficiary.get('name'),
+                name=silver_data.get('beneficiary_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
-                street_name=beneficiary_addr.get('line1'),
-                town_name=beneficiary_addr.get('city'),
-                post_code=beneficiary_addr.get('zipCode'),
-                country_sub_division=beneficiary_addr.get('state'),
-                country=beneficiary_addr.get('country') or 'US',
-                identification_type=beneficiary.get('identifierType'),
-                identification_number=beneficiary.get('identifier'),
+                street_name=silver_data.get('beneficiary_address_line1'),
+                town_name=silver_data.get('beneficiary_city'),
+                post_code=silver_data.get('beneficiary_zip_code'),
+                country_sub_division=silver_data.get('beneficiary_state'),
+                country=silver_data.get('beneficiary_country') or 'US',
+                identification_type=silver_data.get('beneficiary_id_type'),
+                identification_number=silver_data.get('beneficiary_id'),
             ))
 
         # Originator Account (Debtor Account)
-        if originator.get('accountNumber'):
+        if silver_data.get('originator_account_number'):
             entities.accounts.append(AccountData(
-                account_number=originator.get('accountNumber'),
+                account_number=silver_data.get('originator_account_number'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'USD',
+                currency=silver_data.get('currency') or 'USD',
             ))
 
         # Beneficiary Account (Creditor Account)
-        if beneficiary.get('accountNumber'):
+        if silver_data.get('beneficiary_account_number'):
             entities.accounts.append(AccountData(
-                account_number=beneficiary.get('accountNumber'),
+                account_number=silver_data.get('beneficiary_account_number'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'USD',
+                currency=silver_data.get('currency') or 'USD',
             ))
 
         # Sender FI (Debtor Agent)
-        if sender.get('routingNumber'):
+        if silver_data.get('sender_aba'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                name=sender.get('name'),
-                short_name=sender.get('shortName'),
-                bic=sender.get('bic'),
-                lei=sender.get('lei'),
-                clearing_code=sender.get('routingNumber'),
+                name=silver_data.get('sender_name'),
+                short_name=silver_data.get('sender_short_name'),
+                bic=silver_data.get('sender_bic'),
+                lei=silver_data.get('sender_lei'),
+                clearing_code=silver_data.get('sender_aba'),
                 clearing_system='USABA',
-                address_line1=sender_addr.get('line1'),
-                town_name=sender_addr.get('city'),
-                country=sender_addr.get('country') or 'US',
+                address_line1=silver_data.get('sender_address_line1'),
+                town_name=silver_data.get('sender_city'),
+                country=silver_data.get('sender_country') or 'US',
             ))
 
         # Receiver FI / Beneficiary Bank (Creditor Agent)
-        if receiver.get('routingNumber') or beneficiary_bank.get('routingNumber'):
+        if silver_data.get('receiver_aba') or silver_data.get('beneficiary_fi_id'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                name=receiver.get('name') or beneficiary_bank.get('name'),
-                short_name=receiver.get('shortName'),
-                bic=receiver.get('bic') or beneficiary_bank.get('bic'),
-                lei=receiver.get('lei'),
-                clearing_code=receiver.get('routingNumber') or beneficiary_bank.get('routingNumber'),
+                name=silver_data.get('receiver_name') or silver_data.get('beneficiary_fi_name'),
+                short_name=silver_data.get('receiver_short_name'),
+                bic=silver_data.get('receiver_bic') or silver_data.get('beneficiary_fi_bic'),
+                lei=silver_data.get('receiver_lei'),
+                clearing_code=silver_data.get('receiver_aba') or silver_data.get('beneficiary_fi_id'),
                 clearing_system='USABA',
-                address_line1=receiver_addr.get('line1'),
-                town_name=receiver_addr.get('city'),
-                country=receiver_addr.get('country') or 'US',
+                address_line1=silver_data.get('receiver_address_line1'),
+                town_name=silver_data.get('receiver_city'),
+                country=silver_data.get('receiver_country') or 'US',
             ))
 
         # Intermediary Bank
-        if intermediary_bank and intermediary_bank.get('routingNumber'):
+        if silver_data.get('intermediary_fi_id'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="INTERMEDIARY",
-                name=intermediary_bank.get('name'),
-                clearing_code=intermediary_bank.get('routingNumber'),
+                name=silver_data.get('intermediary_fi_name'),
+                clearing_code=silver_data.get('intermediary_fi_id'),
                 clearing_system='USABA',
                 country='US',
             ))

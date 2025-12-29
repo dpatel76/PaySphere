@@ -6,9 +6,10 @@ Handles re-processing of failed or updated records through the pipeline.
 Supports individual record re-processing, batch re-processing, and
 update-and-reprocess workflows.
 
-IMPORTANT: Reprocessing uses NiFi for orchestration. Records are submitted
-to NiFi which then triggers Celery tasks via the Flower API. This maintains
-the same E2E flow as initial ingestion.
+Architecture: NiFi → Kafka (per-message-type topics) → Celery consumers
+
+IMPORTANT: Reprocessing dispatches directly to Celery tasks using the same
+transformation logic as the main pipeline flow.
 
 Usage:
     reprocessor = PipelineReprocessor(db_connection)
@@ -658,7 +659,7 @@ class PipelineReprocessor:
         Submit a file to NiFi for reprocessing via the E2E flow.
 
         This writes a file to NiFi's input directory. NiFi's GetFile processor
-        picks it up, transforms it, and calls Flower API to dispatch Celery tasks.
+        picks it up, publishes to Kafka, and Kafka consumers dispatch to Celery.
 
         Args:
             raw_content: Raw message content (XML/JSON)

@@ -266,6 +266,14 @@ class RtpExtractor(BaseExtractor):
         """Extract all Silver layer fields from RTP message."""
         trunc = self.trunc
 
+        # Handle raw text content - parse it first
+        if isinstance(msg_content, dict) and '_raw_text' in msg_content:
+            raw_text = msg_content['_raw_text']
+            # RTP is XML-based (pacs.008 variant)
+            if raw_text.strip().startswith('<?xml') or raw_text.strip().startswith('<'):
+                parser = RtpXmlParser()
+                msg_content = parser.parse(raw_text)
+
         # Extract nested objects
         debtor = msg_content.get('debtor', {})
         debtor_account = msg_content.get('debtorAccount', {})
@@ -334,78 +342,67 @@ class RtpExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from RTP message."""
+        """Extract Gold layer entities from RTP Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        debtor = msg_content.get('debtor', {})
-        creditor = msg_content.get('creditor', {})
-        debtor_account = msg_content.get('debtorAccount', {})
-        creditor_account = msg_content.get('creditorAccount', {})
-        debtor_agent = msg_content.get('debtorAgent', {})
-        creditor_agent = msg_content.get('creditorAgent', {})
-
-        # Debtor Party
-        if debtor.get('name'):
+        # Debtor Party - uses Silver column names
+        if silver_data.get('debtor_name'):
             entities.parties.append(PartyData(
-                name=debtor.get('name'),
+                name=silver_data.get('debtor_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
-                street_name=debtor.get('streetName'),
-                post_code=debtor.get('postalCode'),
-                town_name=debtor.get('townName'),
-                country_sub_division=debtor.get('countrySubDivision'),
-                country=debtor.get('country'),
             ))
 
         # Creditor Party
-        if creditor.get('name'):
+        if silver_data.get('creditor_name'):
             entities.parties.append(PartyData(
-                name=creditor.get('name'),
+                name=silver_data.get('creditor_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
-                street_name=creditor.get('streetName'),
-                post_code=creditor.get('postalCode'),
-                town_name=creditor.get('townName'),
-                country_sub_division=creditor.get('countrySubDivision'),
-                country=creditor.get('country'),
             ))
 
         # Debtor Account
-        if debtor_account.get('accountNumber'):
+        if silver_data.get('debtor_account'):
             entities.accounts.append(AccountData(
-                account_number=debtor_account.get('accountNumber'),
+                account_number=silver_data.get('debtor_account'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency=msg_content.get('instructedCurrency') or 'USD',
+                currency=silver_data.get('instructed_currency') or 'USD',
             ))
 
         # Creditor Account
-        if creditor_account.get('accountNumber'):
+        if silver_data.get('creditor_account'):
             entities.accounts.append(AccountData(
-                account_number=creditor_account.get('accountNumber'),
+                account_number=silver_data.get('creditor_account'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency=msg_content.get('instructedCurrency') or 'USD',
+                currency=silver_data.get('instructed_currency') or 'USD',
             ))
 
         # Debtor Agent (RTN)
-        if debtor_agent.get('memberId'):
+        if silver_data.get('debtor_agent_id'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                clearing_code=debtor_agent.get('memberId'),
+                clearing_code=silver_data.get('debtor_agent_id'),
                 clearing_system='RTP',
                 country='US',
             ))
 
         # Creditor Agent (RTN)
-        if creditor_agent.get('memberId'):
+        if silver_data.get('creditor_agent_id'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                clearing_code=creditor_agent.get('memberId'),
+                clearing_code=silver_data.get('creditor_agent_id'),
                 clearing_system='RTP',
                 country='US',
             ))

@@ -241,6 +241,16 @@ class AchExtractor(BaseExtractor):
     MESSAGE_TYPE = "ACH"
     SILVER_TABLE = "stg_ach"
 
+    def _safe_int(self, value) -> int | None:
+        """Safely convert value to integer, returning None if not convertible."""
+        if value is None:
+            return None
+        try:
+            # Handle string values like "0000001" from fixed-width parsing
+            return int(str(value).strip())
+        except (ValueError, TypeError):
+            return None
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================
@@ -269,6 +279,16 @@ class AchExtractor(BaseExtractor):
         """Extract all Silver layer fields from ACH message."""
         trunc = self.trunc
 
+        # Handle raw text content - parse it first
+        if isinstance(msg_content, dict) and '_raw_text' in msg_content:
+            raw_text = msg_content['_raw_text']
+            # ACH/NACHA format has fixed-width records starting with record type codes
+            # Record type 1 = file header, 5 = batch header, 6 = entry detail
+            lines = raw_text.strip().split('\n')
+            if lines and lines[0] and lines[0][0] in '156789':
+                parser = AchFixedWidthParser()
+                msg_content = parser.parse(raw_text)
+
         return {
             'stg_id': stg_id,
             'raw_id': raw_id,
@@ -287,7 +307,7 @@ class AchExtractor(BaseExtractor):
             'company_entry_description': trunc(msg_content.get('companyEntryDescription'), 10),
             'effective_entry_date': msg_content.get('effectiveEntryDate'),
             'originating_dfi_id': trunc(msg_content.get('originatingDfiIdentification'), 8),
-            'batch_number': trunc(msg_content.get('batchNumber'), 7),
+            'batch_number': self._safe_int(msg_content.get('batchNumber')),
 
             # Entry Detail
             'transaction_code': trunc(msg_content.get('transactionCode'), 2),
@@ -327,67 +347,76 @@ class AchExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from ACH message."""
+        """Extract Gold layer entities from ACH Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
         # Originator (Company = Debtor for credits, Creditor for debits)
-        if msg_content.get('companyName'):
+        if silver_data.get('company_name'):
             # Transaction codes: 22, 23, 24 = credit, 27, 28, 29 = debit
-            tx_code = msg_content.get('transactionCode', '')
+            tx_code = silver_data.get('transaction_code') or ''
             is_credit = tx_code in ['22', '23', '24', '32', '33', '34']
 
             entities.parties.append(PartyData(
-                name=msg_content.get('companyName'),
+                name=silver_data.get('company_name'),
                 role="DEBTOR" if is_credit else "CREDITOR",
                 party_type='ORGANIZATION',
                 identification_type='EIN',
-                identification_number=msg_content.get('companyIdentification'),
+                identification_number=silver_data.get('company_identification'),
             ))
 
         # Receiver (Individual)
-        if msg_content.get('individualName'):
-            tx_code = msg_content.get('transactionCode', '')
+        if silver_data.get('individual_name'):
+            tx_code = silver_data.get('transaction_code') or ''
             is_credit = tx_code in ['22', '23', '24', '32', '33', '34']
 
             entities.parties.append(PartyData(
-                name=msg_content.get('individualName'),
+                name=silver_data.get('individual_name'),
                 role="CREDITOR" if is_credit else "DEBTOR",
                 party_type='INDIVIDUAL',
-                identification_number=msg_content.get('individualIdentificationNumber'),
+                identification_number=silver_data.get('individual_id'),
             ))
 
         # Receiver Account
-        if msg_content.get('dfiAccountNumber'):
-            tx_code = msg_content.get('transactionCode', '')
+        if silver_data.get('receiving_dfi_account'):
+            tx_code = silver_data.get('transaction_code') or ''
             is_credit = tx_code in ['22', '23', '24', '32', '33', '34']
+            account_type = 'CHECKING'
+            if tx_code and tx_code[0] == '3':
+                account_type = 'SAVINGS'
 
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('dfiAccountNumber'),
+                account_number=silver_data.get('receiving_dfi_account'),
                 role="CREDITOR" if is_credit else "DEBTOR",
-                account_type='CHECKING' if tx_code[0] == '2' else 'SAVINGS',
+                account_type=account_type,
                 currency='USD',
             ))
 
         # Originating DFI (Debtor Agent)
-        if msg_content.get('originatingDfiIdentification'):
+        if silver_data.get('originating_dfi_id'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                name=msg_content.get('immediateOriginName'),
-                clearing_code=msg_content.get('originatingDfiIdentification'),
+                name=silver_data.get('immediate_origin'),
+                clearing_code=silver_data.get('originating_dfi_id'),
                 clearing_system='USABA',
                 country='US',
             ))
 
         # Receiving DFI (Creditor Agent)
-        if msg_content.get('receivingDfiIdentification'):
+        if silver_data.get('receiving_dfi_id'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                name=msg_content.get('immediateDestinationName'),
-                clearing_code=msg_content.get('receivingDfiIdentification'),
+                name=silver_data.get('immediate_destination'),
+                clearing_code=silver_data.get('receiving_dfi_id'),
                 clearing_system='USABA',
                 country='US',
             ))

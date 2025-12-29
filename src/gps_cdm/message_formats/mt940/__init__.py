@@ -243,34 +243,40 @@ class Mt940Extractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from MT940 message."""
+        """Extract Gold layer entities from MT940 Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Statement Account
-        if msg_content.get('accountIdentification'):
+        # Statement Account - uses Silver column names
+        if silver_data.get('account_identification'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('accountIdentification'),
+                account_number=silver_data.get('account_identification'),
                 role="STATEMENT_ACCOUNT",
                 account_type='CACC',
-                currency=msg_content.get('openingBalanceCurrency') or 'XXX',
+                currency=silver_data.get('opening_balance_currency') or 'XXX',
             ))
 
         # Sender Bank
-        if msg_content.get('senderBic'):
+        if silver_data.get('sender_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="ACCOUNT_SERVICER",
-                bic=msg_content.get('senderBic'),
+                bic=silver_data.get('sender_bic'),
             ))
 
         # Receiver (Account Owner's Bank or Correspondent)
-        if msg_content.get('receiverBic'):
+        if silver_data.get('receiver_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="MESSAGE_RECIPIENT",
-                bic=msg_content.get('receiverBic'),
+                bic=silver_data.get('receiver_bic'),
             ))
 
         return entities

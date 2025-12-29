@@ -301,6 +301,14 @@ class SepaExtractor(BaseExtractor):
         """Extract all Silver layer fields from SEPA message."""
         trunc = self.trunc
 
+        # Handle raw text content - parse it first
+        if isinstance(msg_content, dict) and '_raw_text' in msg_content:
+            raw_text = msg_content['_raw_text']
+            # SEPA is XML-based (pain.001 variant for credit transfers)
+            if raw_text.strip().startswith('<?xml') or raw_text.strip().startswith('<'):
+                parser = SepaXmlParser()
+                msg_content = parser.parse(raw_text)
+
         # Extract nested objects
         initiating_party = msg_content.get('initiatingParty', {})
         pmt_info = msg_content.get('paymentInformation', {})
@@ -375,85 +383,75 @@ class SepaExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from SEPA message."""
+        """Extract Gold layer entities from SEPA Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        debtor = msg_content.get('debtor', {})
-        creditor = msg_content.get('creditor', {})
-        debtor_account = msg_content.get('debtorAccount', {})
-        creditor_account = msg_content.get('creditorAccount', {})
-        debtor_agent = msg_content.get('debtorAgent', {})
-        creditor_agent = msg_content.get('creditorAgent', {})
-        pmt_info = msg_content.get('paymentInformation', {})
-
-        # Debtor Party
-        if debtor.get('name'):
+        # Debtor Party - uses Silver column names
+        if silver_data.get('debtor_name'):
             entities.parties.append(PartyData(
-                name=debtor.get('name'),
+                name=silver_data.get('debtor_name'),
                 role="DEBTOR",
-                party_type='ORGANIZATION' if debtor.get('id') else 'UNKNOWN',
-                street_name=debtor.get('streetName'),
-                post_code=debtor.get('postalCode'),
-                town_name=debtor.get('townName'),
-                country=debtor.get('country'),
+                party_type='ORGANIZATION' if silver_data.get('creditor_id') else 'UNKNOWN',
+                country='XX',
             ))
 
         # Creditor Party
-        if creditor.get('name'):
+        if silver_data.get('creditor_name'):
             entities.parties.append(PartyData(
-                name=creditor.get('name'),
+                name=silver_data.get('creditor_name'),
                 role="CREDITOR",
-                party_type='ORGANIZATION' if creditor.get('id') else 'UNKNOWN',
-                street_name=creditor.get('streetName'),
-                post_code=creditor.get('postalCode'),
-                town_name=creditor.get('townName'),
-                country=creditor.get('country'),
+                party_type='ORGANIZATION' if silver_data.get('creditor_id') else 'UNKNOWN',
+                country='XX',
             ))
 
         # Debtor Account
-        if debtor_account.get('iban'):
+        if silver_data.get('debtor_iban'):
             entities.accounts.append(AccountData(
-                account_number=debtor_account.get('iban'),
+                account_number=silver_data.get('debtor_iban'),
                 role="DEBTOR",
-                iban=debtor_account.get('iban'),
+                iban=silver_data.get('debtor_iban'),
                 account_type='CACC',
-                currency=debtor_account.get('currency') or 'EUR',
+                currency=silver_data.get('instructed_currency') or 'EUR',
             ))
 
         # Creditor Account
-        if creditor_account.get('iban'):
+        if silver_data.get('creditor_iban'):
             entities.accounts.append(AccountData(
-                account_number=creditor_account.get('iban'),
+                account_number=silver_data.get('creditor_iban'),
                 role="CREDITOR",
-                iban=creditor_account.get('iban'),
+                iban=silver_data.get('creditor_iban'),
                 account_type='CACC',
                 currency='EUR',
             ))
 
         # Debtor Agent
-        if debtor_agent.get('bic'):
+        if silver_data.get('debtor_agent_bic') or silver_data.get('debtor_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                bic=debtor_agent.get('bic'),
-                country=debtor.get('country') or 'XX',
+                bic=silver_data.get('debtor_agent_bic') or silver_data.get('debtor_bic'),
+                country='XX',
             ))
 
         # Creditor Agent
-        if creditor_agent.get('bic'):
+        if silver_data.get('creditor_agent_bic') or silver_data.get('creditor_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                bic=creditor_agent.get('bic'),
-                country=creditor.get('country') or 'XX',
+                bic=silver_data.get('creditor_agent_bic') or silver_data.get('creditor_bic'),
+                country='XX',
             ))
 
         # SEPA-specific fields
-        entities.service_level = pmt_info.get('serviceLevel')
-        entities.local_instrument = pmt_info.get('localInstrument')
-        entities.category_purpose = pmt_info.get('categoryPurpose')
+        entities.category_purpose = silver_data.get('category_purpose')
 
         return entities
 

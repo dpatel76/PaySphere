@@ -147,7 +147,7 @@ class MedallionPipeline:
             "batch_id": workflow_batch_id,
             "execution_mode": "distributed",
             "partitions": (len(file_paths) + partition_size - 1) // partition_size,
-            "message": "Pipeline submitted to Celery. Monitor with Flower or check batch status.",
+            "message": "Pipeline submitted to Celery. Check batch status via API.",
         }
 
     def _run_local(

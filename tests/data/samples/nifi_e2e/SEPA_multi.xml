@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GPS CDM Multi-Record Test - SEPA Credit Transfer (3 transactions) -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>SEPA-MULTI-20251228-001</MsgId>
+      <CreDtTm>2025-12-28T10:00:00Z</CreDtTm>
+      <NbOfTxs>3</NbOfTxs>
+      <CtrlSum>7500.00</CtrlSum>
+      <InitgPty><Nm>SEPA Multi-Payment Corp</Nm></InitgPty>
+    </GrpHdr>
+
+    <PmtInf>
+      <PmtInfId>SEPA-PMT-MULTI-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <NbOfTxs>3</NbOfTxs>
+      <PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl></PmtTpInf>
+      <ReqdExctnDt><Dt>2025-12-28</Dt></ReqdExctnDt>
+
+      <Dbtr><Nm>EU Multi-Payer GmbH</Nm><PstlAdr><Ctry>DE</Ctry></PstlAdr></Dbtr>
+      <DbtrAcct><Id><IBAN>DE89370400440532013000</IBAN></Id><Ccy>EUR</Ccy></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>COBADEFFXXX</BICFI></FinInstnId></DbtrAgt>
+
+      <!-- Transaction 1: EUR 2,500 -->
+      <CdtTrfTxInf>
+        <PmtId><EndToEndId>SEPA-E2E-001</EndToEndId></PmtId>
+        <Amt><InstdAmt Ccy="EUR">2500.00</InstdAmt></Amt>
+        <CdtrAgt><FinInstnId><BICFI>BNPAFRPPXXX</BICFI></FinInstnId></CdtrAgt>
+        <Cdtr><Nm>French Beneficiary SA</Nm><PstlAdr><Ctry>FR</Ctry></PstlAdr></Cdtr>
+        <CdtrAcct><Id><IBAN>FR7630006000011234567890189</IBAN></Id></CdtrAcct>
+        <RmtInf><Ustrd>SEPA Payment 1 - Facture FAC-001</Ustrd></RmtInf>
+      </CdtTrfTxInf>
+
+      <!-- Transaction 2: EUR 3,000 -->
+      <CdtTrfTxInf>
+        <PmtId><EndToEndId>SEPA-E2E-002</EndToEndId></PmtId>
+        <Amt><InstdAmt Ccy="EUR">3000.00</InstdAmt></Amt>
+        <CdtrAgt><FinInstnId><BICFI>ABABORUAXXX</BICFI></FinInstnId></CdtrAgt>
+        <Cdtr><Nm>Italian Beneficiary SRL</Nm><PstlAdr><Ctry>IT</Ctry></PstlAdr></Cdtr>
+        <CdtrAcct><Id><IBAN>IT60X0542811101000000123456</IBAN></Id></CdtrAcct>
+        <RmtInf><Ustrd>SEPA Payment 2 - Fattura FAT-002</Ustrd></RmtInf>
+      </CdtTrfTxInf>
+
+      <!-- Transaction 3: EUR 2,000 -->
+      <CdtTrfTxInf>
+        <PmtId><EndToEndId>SEPA-E2E-003</EndToEndId></PmtId>
+        <Amt><InstdAmt Ccy="EUR">2000.00</InstdAmt></Amt>
+        <CdtrAgt><FinInstnId><BICFI>INGBNL2AXXX</BICFI></FinInstnId></CdtrAgt>
+        <Cdtr><Nm>Dutch Beneficiary BV</Nm><PstlAdr><Ctry>NL</Ctry></PstlAdr></Cdtr>
+        <CdtrAcct><Id><IBAN>NL91ABNA0417164300</IBAN></Id></CdtrAcct>
+        <RmtInf><Ustrd>SEPA Payment 3 - Rekening REK-003</Ustrd></RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

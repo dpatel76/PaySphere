@@ -61,20 +61,6 @@ On restart:
 
 ---
 
-## Legacy Architecture (v1.0 - Flower API)
-
-```
-NiFi (Flow Orchestration)
-    → Flower API (Celery Task Submission) [DEPRECATED - unstable]
-    → Redis (Message Broker)
-    → Celery Workers (Task Processing)
-    → PostgreSQL / Databricks (Persistence)
-    → Neo4j (Knowledge Graph)
-```
-
-**Note**: Flower API had reliability issues (HTTP 400 errors, JSON escaping).
-Use Kafka-based architecture (v2.0) for production.
-
 ## Key Learnings
 
 ### 1. Data Source Configuration
@@ -87,26 +73,51 @@ Use Kafka-based architecture (v2.0) for production.
 
 **Code Location**: `src/gps_cdm/orchestration/celery_tasks.py` (lines 688-709)
 
-### 2. NiFi InvokeHTTP Startup Timing
-
-**Issue**: First few files processed by NiFi failed at InvokeHTTP processor after container startup.
-
-**Root Cause**: HTTP connection pool not fully established when first files arrive. The Failure/No Retry/Retry relationships are auto-terminated, hiding errors.
-
-**Solution**:
-- Wait ~30 seconds after NiFi starts before sending files
-- Or restart the InvokeHTTP processor if seeing failures
-- Files processed after warmup period succeed at 100% rate
-
-**Debugging Tip**: To see InvokeHTTP errors, temporarily set `autoTerminate=false` for the Failure relationship and connect it to a LogAttribute processor.
-
-### 3. NiFi Input Directory
+### 2. NiFi Input Directory & File Permissions
 
 **Correct Path**: `/opt/nifi/nifi-current/input/`
 - GetFile processor polls every 30 seconds
 - Files are deleted after reading (Keep Source File = false)
 
 **Wrong Path**: `/opt/nifi/nifi-current/data/nifi_input/` - This was an old test directory with permission issues.
+
+**⚠️ CRITICAL: File Permission Issue (DO NOT WASTE TIME DEBUGGING THIS AGAIN)**
+
+When copying files to NiFi input via `docker cp`, files get permissions `-rw-------` (600) owned by host user (uid 501). NiFi runs as user `nifi` (uid 1000) and **CANNOT READ THESE FILES**.
+
+**ALWAYS use this command pattern when copying files to NiFi:**
+```bash
+# Best approach: Use tar to copy with correct permissions
+# 1. Create temp dir and copy files with world-readable permissions
+mkdir -p /tmp/nifi_input_test
+cp myfile.xml /tmp/nifi_input_test/
+chmod 644 /tmp/nifi_input_test/*
+
+# 2. Use tar to copy - this preserves permissions AND sets nifi as owner
+cd /tmp/nifi_input_test && tar cf - . | docker exec -i gps-cdm-nifi tar xf - -C /opt/nifi/nifi-current/input/
+
+# Note: Ignore tar warnings about "Cannot utime" or "Cannot change mode" - files still copy correctly
+# Clean up macOS metadata files if present
+docker exec gps-cdm-nifi bash -c 'rm -f /opt/nifi/nifi-current/input/._*' 2>/dev/null || true
+```
+
+**Why `docker cp` + `chmod` doesn't work:**
+- Files copied via `docker cp` are owned by host uid (501), not nifi (1000)
+- NiFi container runs as non-root and cannot chmod files it doesn't own
+- Only tar method works because it creates files as the nifi user
+
+**Symptoms of this issue:**
+- Files remain in input directory (not picked up by GetFile)
+- NiFi GetFile processor shows RUNNING but no files processed
+- `ls -la` shows files with `-rw-------` permissions
+
+**DO NOT:**
+- Spend time checking processor states
+- Investigate NiFi flow configuration
+- Check polling intervals
+- Debug Kafka/Celery connectivity
+
+**INSTEAD:** First check file permissions with `ls -la` and fix with `chmod 644`.
 
 ### 4. Celery Queue Routing
 
@@ -131,7 +142,6 @@ Containers needed:
 - `gps-cdm-postgres` - PostgreSQL database (port 5433)
 - `gps-cdm-redis` - Redis broker (port 6379)
 - `gps-cdm-nifi` - Apache NiFi (port 8080)
-- `gps-cdm-flower` - Celery Flower API (port 5555)
 - `gps-cdm-neo4j` - Neo4j graph database (ports 7474, 7687)
 
 ### Start Celery Worker
@@ -196,15 +206,6 @@ output = result.get(timeout=30)
 print(f"Status: {output['status']}, Persisted to: {output['persisted_to']}")
 ```
 
-### Manual Flower API Call (Test from NiFi container)
-
-```bash
-docker exec gps-cdm-nifi curl -s -u admin:flowerpassword \
-    -X POST "http://flower:5555/api/task/send-task/gps_cdm.orchestration.celery_tasks.process_bronze_partition" \
-    -H "Content-Type: application/json" \
-    -d '{"args": ["partition_001", [], "pain.001", "batch_001", {"message_content": {"test": true}}]}'
-```
-
 ## NiFi Flow Structure
 
 ```
@@ -213,11 +214,10 @@ GPS CDM Payment Pipeline/
 │   ├── Read Test Messages (GetFile) - /opt/nifi/nifi-current/input/
 │   ├── Detect Message Type from Filename (UpdateAttribute)
 │   ├── Route by Message Type (RouteOnAttribute)
-│   └── Output Ports: To Celery, To Celery Dispatch
-├── Celery Task Dispatch/
-│   ├── Prepare Celery Payload (UpdateAttribute) - Sets batch.id, celery.task
-│   ├── Format Task Body (ReplaceText) - Creates JSON args
-│   ├── Submit to Celery (InvokeHTTP) - POST to Flower API
+│   └── Output Ports: To Kafka Publish
+├── Kafka Publishing/
+│   ├── Set Message Attributes (UpdateAttribute) - Sets message.type
+│   ├── Publish to Kafka (PublishKafka) - Topic: gps-cdm-${message.type}
 │   └── Log Success (LogAttribute)
 └── Error Handling/
     ├── Log Error (LogAttribute)
@@ -242,15 +242,15 @@ Set `GPS_CDM_DATA_SOURCE=postgresql` when starting Celery worker.
 2. Check GetFile processor state: Should be RUNNING
 3. Wait for poll interval (30 seconds)
 
-### InvokeHTTP Failures (0 bytes sent)
-1. Verify Flower is reachable: `docker exec gps-cdm-nifi curl -s http://flower:5555/api/tasks`
-2. Check processor was recently restarted - first few requests may fail
+### Kafka Consumer Issues
+1. Check Kafka topics have messages: `docker exec gps-cdm-kafka kafka-get-offsets --bootstrap-server localhost:9092 --topic gps-cdm-pain.001`
+2. Check consumer logs: `tail -f /tmp/kafka_consumer_pain_001.log`
 3. Check NiFi logs: `docker logs gps-cdm-nifi --tail 50`
 
 ### Celery Tasks Not Received
 1. Verify worker is listening on correct queues: `-Q celery,bronze,silver,gold,dq,cdc`
 2. Check Redis connection: `redis-cli ping`
-3. Check Flower dashboard: http://localhost:5555
+3. Check queue depths: `redis-cli LLEN celery`
 
 ## Database Verification
 

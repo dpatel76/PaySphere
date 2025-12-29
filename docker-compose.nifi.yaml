@@ -1,20 +1,80 @@
-# GPS CDM - NiFi + Celery Integration Stack
+# GPS CDM - NiFi + Kafka + Celery Integration Stack
+#
+# Architecture: NiFi → Kafka (per-message-type topics) → Celery consumers
 #
 # Usage:
 #   docker-compose -f docker-compose.nifi.yaml up -d
 #
 # This starts:
-#   - NiFi (port 8080) - Flow orchestration
+#   - Zookeeper (port 2181) - Kafka coordination
+#   - Kafka (port 9092) - Message streaming with per-message-type topics
+#   - NiFi (port 8080) - Flow orchestration, publishes to Kafka
 #   - Redis (port 6379) - Celery broker
-#   - Flower (port 5555) - Celery monitoring & API
-#   - PostgreSQL (port 5432) - Data persistence
+#   - PostgreSQL (port 5433) - Data persistence
+#   - Neo4j (port 7474/7687) - Knowledge graph
 #
 # After startup:
-#   1. Import NiFi templates from nifi/templates/
-#   2. Start Celery workers: celery -A gps_cdm.orchestration.celery_tasks worker -Q bronze,silver,gold,dq,cdc -l info
-#   3. Run integration test: python tests/integration/test_nifi_celery_integration.py
+#   1. Create Kafka topics for each message type:
+#      for type in pain.001 pacs.008 MT103 FEDWIRE ACH RTP SEPA; do
+#        docker exec gps-cdm-kafka kafka-topics --create --topic gps-cdm-$type --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
+#      done
+#   2. Start Celery workers: celery -A gps_cdm.orchestration.celery_tasks worker -Q celery,bronze,silver,gold,dq,cdc -l info
+#   3. Start Kafka consumers: python -m gps_cdm.streaming.consumer_launcher
+#   4. Configure NiFi PublishKafka processor to send to gps-cdm-${message.type} topic
 
 services:
+  # Zookeeper - Kafka Coordination
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: gps-cdm-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - gps-cdm-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka - Message Streaming
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: gps-cdm-kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 6
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    networks:
+      - gps-cdm-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   # Apache NiFi - Flow Orchestration
   nifi:
     image: apache/nifi:1.25.0
@@ -54,22 +114,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-
-  # Flower - Celery Monitoring & HTTP API
-  flower:
-    image: mher/flower:2.0
-    container_name: gps-cdm-flower
-    ports:
-      - "5555:5555"
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - FLOWER_PORT=5555
-      - FLOWER_BASIC_AUTH=admin:flowerpassword
-    depends_on:
-      - redis
-    networks:
-      - gps-cdm-network
-    command: celery --broker=redis://redis:6379/0 flower
 
   # PostgreSQL - Data Persistence
   postgres:
@@ -126,6 +170,9 @@ networks:
     driver: bridge
 
 volumes:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
   nifi_data:
   nifi_logs:
   redis_data:

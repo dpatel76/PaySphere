@@ -109,65 +109,71 @@ class CnapsExtractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from CNAPS message."""
+        """Extract Gold layer entities from CNAPS Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Payer Party
-        if msg_content.get('payerName'):
+        # Payer Party (Debtor) - uses Silver column names
+        if silver_data.get('payer_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('payerName'),
+                name=silver_data.get('payer_name'),
                 role="DEBTOR",
                 party_type='UNKNOWN',
                 country='CN',
             ))
 
-        # Payee Party
-        if msg_content.get('payeeName'):
+        # Payee Party (Creditor)
+        if silver_data.get('payee_name'):
             entities.parties.append(PartyData(
-                name=msg_content.get('payeeName'),
+                name=silver_data.get('payee_name'),
                 role="CREDITOR",
                 party_type='UNKNOWN',
                 country='CN',
             ))
 
         # Payer Account
-        if msg_content.get('payerAccount'):
+        if silver_data.get('payer_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('payerAccount'),
+                account_number=silver_data.get('payer_account'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'CNY',
+                currency=silver_data.get('currency') or 'CNY',
             ))
 
         # Payee Account
-        if msg_content.get('payeeAccount'):
+        if silver_data.get('payee_account'):
             entities.accounts.append(AccountData(
-                account_number=msg_content.get('payeeAccount'),
+                account_number=silver_data.get('payee_account'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency=msg_content.get('currency') or 'CNY',
+                currency=silver_data.get('currency') or 'CNY',
             ))
 
         # Sending Bank (by CNAPS code)
-        if msg_content.get('sendingBankCode'):
+        if silver_data.get('sending_bank_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                name=msg_content.get('payerBankName'),
-                clearing_code=msg_content.get('sendingBankCode'),
+                name=silver_data.get('payer_bank_name'),
+                clearing_code=silver_data.get('sending_bank_code'),
                 clearing_system='CNCNAPS',  # CNAPS
                 country='CN',
             ))
 
         # Receiving Bank (by CNAPS code)
-        if msg_content.get('receivingBankCode'):
+        if silver_data.get('receiving_bank_code'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                name=msg_content.get('payeeBankName'),
-                clearing_code=msg_content.get('receivingBankCode'),
+                name=silver_data.get('payee_bank_name'),
+                clearing_code=silver_data.get('receiving_bank_code'),
                 clearing_system='CNCNAPS',
                 country='CN',
             ))

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GPS CDM Multi-Record Test - RTP (3 real-time payments) -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>RTP-MULTI-20251228-001</MsgId>
+      <CreDtTm>2025-12-28T10:00:00Z</CreDtTm>
+      <NbOfTxs>3</NbOfTxs>
+      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+    </GrpHdr>
+
+    <!-- RTP Transaction 1 -->
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>RTP-INSTR-001</InstrId>
+        <EndToEndId>RTP-E2E-001</EndToEndId>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="USD">1500.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-28</IntrBkSttlmDt>
+      <ChrgBr>SLEV</ChrgBr>
+      <InstgAgt><FinInstnId><BICFI>CHASUS33XXX</BICFI></FinInstnId></InstgAgt>
+      <InstdAgt><FinInstnId><BICFI>BOFAUS3NXXX</BICFI></FinInstnId></InstdAgt>
+      <Dbtr><Nm>RTP Sender One</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>111111111111</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>CHASUS33XXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>BOFAUS3NXXX</BICFI></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>RTP Receiver One</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>999999999991</Id></Othr></Id></CdtrAcct>
+      <RmtInf><Ustrd>RTP Payment 1 - Instant Transfer</Ustrd></RmtInf>
+    </CdtTrfTxInf>
+
+    <!-- RTP Transaction 2 -->
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>RTP-INSTR-002</InstrId>
+        <EndToEndId>RTP-E2E-002</EndToEndId>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="USD">2500.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-28</IntrBkSttlmDt>
+      <ChrgBr>SLEV</ChrgBr>
+      <InstgAgt><FinInstnId><BICFI>CITIUS33XXX</BICFI></FinInstnId></InstgAgt>
+      <InstdAgt><FinInstnId><BICFI>WFBIUS6SXXX</BICFI></FinInstnId></InstdAgt>
+      <Dbtr><Nm>RTP Sender Two</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>222222222222</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>CITIUS33XXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>WFBIUS6SXXX</BICFI></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>RTP Receiver Two</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>999999999992</Id></Othr></Id></CdtrAcct>
+      <RmtInf><Ustrd>RTP Payment 2 - Emergency Fund</Ustrd></RmtInf>
+    </CdtTrfTxInf>
+
+    <!-- RTP Transaction 3 -->
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>RTP-INSTR-003</InstrId>
+        <EndToEndId>RTP-E2E-003</EndToEndId>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="USD">750.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2025-12-28</IntrBkSttlmDt>
+      <ChrgBr>SLEV</ChrgBr>
+      <InstgAgt><FinInstnId><BICFI>PNCCUS33XXX</BICFI></FinInstnId></InstgAgt>
+      <InstdAgt><FinInstnId><BICFI>USLOYFCTXXX</BICFI></FinInstnId></InstdAgt>
+      <Dbtr><Nm>RTP Sender Three</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>333333333333</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>PNCCUS33XXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>USLOYFCTXXX</BICFI></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>RTP Receiver Three</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>999999999993</Id></Othr></Id></CdtrAcct>
+      <RmtInf><Ustrd>RTP Payment 3 - Bill Pay</Ustrd></RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

@@ -246,42 +246,48 @@ class Mt202Extractor(BaseExtractor):
 
     def extract_gold_entities(
         self,
-        msg_content: Dict[str, Any],
+        silver_data: Dict[str, Any],
         stg_id: str,
         batch_id: str
     ) -> GoldEntities:
-        """Extract Gold layer entities from MT202 message."""
+        """Extract Gold layer entities from MT202 Silver record.
+
+        Args:
+            silver_data: Dict with Silver table columns (snake_case field names)
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+        """
         entities = GoldEntities()
 
-        # Ordering Institution (Debtor Agent)
-        if msg_content.get('orderingInstitutionBic') or msg_content.get('senderBic'):
+        # Ordering Institution (Debtor Agent) - uses Silver column names
+        if silver_data.get('ordering_institution_bic') or silver_data.get('sender_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                bic=msg_content.get('orderingInstitutionBic') or msg_content.get('senderBic'),
+                bic=silver_data.get('ordering_institution_bic') or silver_data.get('sender_bic'),
                 country='XX',
             ))
 
         # Sender's Correspondent
-        if msg_content.get('sendersCorrespondentBic'):
+        if silver_data.get('senders_correspondent_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="INTERMEDIARY",
-                bic=msg_content.get('sendersCorrespondentBic'),
+                bic=silver_data.get('senders_correspondent_bic'),
                 country='XX',
             ))
 
         # Beneficiary Institution (Creditor Agent)
-        if msg_content.get('beneficiaryInstitutionBic') or msg_content.get('receiverBic'):
+        if silver_data.get('beneficiary_institution_bic') or silver_data.get('receiver_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                bic=msg_content.get('beneficiaryInstitutionBic') or msg_content.get('receiverBic'),
+                bic=silver_data.get('beneficiary_institution_bic') or silver_data.get('receiver_bic'),
                 country='XX',
             ))
 
         # Account with Institution
-        if msg_content.get('accountWithInstitutionBic'):
+        if silver_data.get('account_with_institution_bic'):
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                bic=msg_content.get('accountWithInstitutionBic'),
+                bic=silver_data.get('account_with_institution_bic'),
                 country='XX',
             ))
 
