@@ -46,6 +46,11 @@ class Mt202BlockParser:
             except json.JSONDecodeError:
                 pass
 
+        # Unescape literal \n and \r to actual newlines
+        # This handles content that was escaped during JSON serialization or Kafka transport
+        if '\\n' in raw_content or '\\r' in raw_content:
+            raw_content = raw_content.replace('\\r\\n', '\n').replace('\\n', '\n').replace('\\r', '\r')
+
         # Parse SWIFT block format
         for match in self.BLOCK_PATTERN.finditer(raw_content):
             block_num = match.group(1)
@@ -270,6 +275,7 @@ class Mt202Extractor(BaseExtractor):
         if ordering_bic:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
+                name=silver_data.get('ordering_institution_name') or f"Institution {ordering_bic[:4]}",
                 bic=ordering_bic,
                 country=self._country_from_bic(ordering_bic),
                 clearing_system='SWIFT',
@@ -280,6 +286,7 @@ class Mt202Extractor(BaseExtractor):
         if senders_corr_bic:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="INTERMEDIARY",
+                name=f"Institution {senders_corr_bic[:4]}" if senders_corr_bic else "Unknown Institution",
                 bic=senders_corr_bic,
                 country=self._country_from_bic(senders_corr_bic),
                 clearing_system='SWIFT',
@@ -290,6 +297,7 @@ class Mt202Extractor(BaseExtractor):
         if beneficiary_bic:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
+                name=silver_data.get('beneficiary_institution_name') or f"Institution {beneficiary_bic[:4]}",
                 bic=beneficiary_bic,
                 country=self._country_from_bic(beneficiary_bic),
                 clearing_system='SWIFT',
@@ -300,6 +308,7 @@ class Mt202Extractor(BaseExtractor):
         if account_with_bic:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="ACCOUNT_WITH_INSTITUTION",
+                name=f"Institution {account_with_bic[:4]}" if account_with_bic else "Unknown Institution",
                 bic=account_with_bic,
                 country=self._country_from_bic(account_with_bic),
                 clearing_system='SWIFT',

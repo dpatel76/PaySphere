@@ -257,6 +257,7 @@ class MessageSplitter:
             content['instructionId'] = cls._find_text_simple(pmt_id, 'InstrId')
             content['endToEndId'] = cls._find_text_simple(pmt_id, 'EndToEndId')
             content['uetr'] = cls._find_text_simple(pmt_id, 'UETR')
+            content['paymentId'] = cls._find_text_simple(pmt_id, 'TxId')
 
         # Amount
         amt = txn_elem.find('.//Amt')
@@ -278,32 +279,111 @@ class MessageSplitter:
         # Charge Bearer
         content['chargeBearer'] = cls._find_text_simple(txn_elem, 'ChrgBr')
 
-        # Creditor
+        # Debtor (Payer) - IMPORTANT for FPS, CHAPS, and UK payments
+        dbtr = txn_elem.find('.//Dbtr')
+        if dbtr is not None:
+            content['debtor'] = {
+                'name': cls._find_text_simple(dbtr, 'Nm'),
+                'country': cls._find_text_simple(dbtr, 'Ctry'),
+            }
+            # Also set flat fields for compatibility
+            content['payerName'] = cls._find_text_simple(dbtr, 'Nm')
+            content['debtorName'] = cls._find_text_simple(dbtr, 'Nm')
+            # Address
+            pstl_adr = dbtr.find('.//PstlAdr')
+            if pstl_adr is not None:
+                content['payerAddress'] = cls._find_text_simple(pstl_adr, 'AdrLine')
+
+        # Debtor Account
+        dbtr_acct = txn_elem.find('.//DbtrAcct')
+        if dbtr_acct is not None:
+            iban = cls._find_text_simple(dbtr_acct, 'IBAN')
+            # UK Sort Code + Account Number format (Othr/Id) - also used by RTP
+            othr_id = dbtr_acct.find('.//Othr/Id')
+            account_number = othr_id.text if othr_id is not None else None
+            content['debtorAccount'] = {
+                'iban': iban,
+                'accountNumber': account_number or iban,  # RTP uses accountNumber
+            }
+            if account_number:
+                content['payerAccount'] = account_number
+                content['debtorAccountNumber'] = account_number
+
+        # Debtor Agent (Payer's Bank)
+        dbtr_agt = txn_elem.find('.//DbtrAgt')
+        if dbtr_agt is not None:
+            bic = cls._find_text_simple(dbtr_agt, 'BICFI')
+            # UK Sort Code / RTP Member ID (ClrSysMmbId/MmbId)
+            member_id_elem = dbtr_agt.find('.//ClrSysMmbId/MmbId')
+            member_id = member_id_elem.text if member_id_elem is not None else None
+            content['debtorAgent'] = {
+                'bic': bic,
+                'memberId': member_id,  # RTP uses memberId
+            }
+            if member_id:
+                content['payerSortCode'] = member_id
+                content['debtorSortCode'] = member_id
+
+        # Creditor (Payee)
         cdtr = txn_elem.find('.//Cdtr')
         if cdtr is not None:
             content['creditor'] = {
                 'name': cls._find_text_simple(cdtr, 'Nm'),
                 'country': cls._find_text_simple(cdtr, 'Ctry'),
             }
+            # Also set flat fields for compatibility
+            content['payeeName'] = cls._find_text_simple(cdtr, 'Nm')
+            content['creditorName'] = cls._find_text_simple(cdtr, 'Nm')
+            # Address
+            pstl_adr = cdtr.find('.//PstlAdr')
+            if pstl_adr is not None:
+                content['payeeAddress'] = cls._find_text_simple(pstl_adr, 'AdrLine')
 
         # Creditor Account
         cdtr_acct = txn_elem.find('.//CdtrAcct')
         if cdtr_acct is not None:
+            iban = cls._find_text_simple(cdtr_acct, 'IBAN')
+            # UK Sort Code + Account Number format (Othr/Id) - also used by RTP
+            othr_id = cdtr_acct.find('.//Othr/Id')
+            account_number = othr_id.text if othr_id is not None else None
             content['creditorAccount'] = {
-                'iban': cls._find_text_simple(cdtr_acct, 'IBAN'),
+                'iban': iban,
+                'accountNumber': account_number or iban,  # RTP uses accountNumber
             }
+            if account_number:
+                content['payeeAccount'] = account_number
+                content['creditorAccountNumber'] = account_number
 
-        # Creditor Agent
+        # Creditor Agent (Payee's Bank)
         cdtr_agt = txn_elem.find('.//CdtrAgt')
         if cdtr_agt is not None:
+            bic = cls._find_text_simple(cdtr_agt, 'BICFI')
+            # UK Sort Code / RTP Member ID (ClrSysMmbId/MmbId)
+            member_id_elem = cdtr_agt.find('.//ClrSysMmbId/MmbId')
+            member_id = member_id_elem.text if member_id_elem is not None else None
             content['creditorAgent'] = {
-                'bic': cls._find_text_simple(cdtr_agt, 'BICFI'),
+                'bic': bic,
+                'memberId': member_id,  # RTP uses memberId
             }
+            if member_id:
+                content['payeeSortCode'] = member_id
+                content['creditorSortCode'] = member_id
+
+        # Purpose Code
+        purp = txn_elem.find('.//Purp')
+        if purp is not None:
+            content['purposeCode'] = cls._find_text_simple(purp, 'Cd')
 
         # Remittance Info
         rmt_inf = txn_elem.find('.//RmtInf')
         if rmt_inf is not None:
-            content['remittanceInfo'] = cls._find_text_simple(rmt_inf, 'Ustrd')
+            unstructured = cls._find_text_simple(rmt_inf, 'Ustrd')
+            content['remittanceInfo'] = unstructured  # Flat field for compatibility
+            content['remittanceInformation'] = {'unstructured': unstructured}  # RTP uses nested structure
+            # Structured reference
+            strd = rmt_inf.find('.//Strd/CdtrRefInf/Ref')
+            if strd is not None and strd.text:
+                content['paymentReference'] = strd.text
 
         return content
 
@@ -576,10 +656,25 @@ class MessageSplitter:
         for line in lines:
             line = line.ljust(100)
 
-            # Extract header info
+            # Extract header info from UHL1 record
+            # UHL1 format: UHL1 DDDDDD SUNNNNN SSSSS....
+            # Positions: 1-4: UHL1, 5-10: Processing date (space + YYMMDD), 11-16: SU Number, 17+: SU Name
             if line.startswith('UHL1'):
-                header_context['processingDate'] = line[4:10].strip()
-                header_context['userNumber'] = line[10:16].strip()
+                # Parse processing date (YYMMDD format)
+                raw_date = line[5:11].strip()
+                if len(raw_date) == 6:
+                    try:
+                        year = int(raw_date[:2])
+                        month = int(raw_date[2:4])
+                        day = int(raw_date[4:6])
+                        if 1 <= month <= 12 and 1 <= day <= 31:
+                            full_year = 2000 + year if year < 50 else 1900 + year
+                            header_context['processingDate'] = f"{full_year}-{month:02d}-{day:02d}"
+                    except ValueError:
+                        pass
+                # Service user number and name - use camelCase to match parser output
+                header_context['serviceUserNumber'] = line[11:17].strip()
+                header_context['serviceUserName'] = line[17:].strip()[:18]
 
             # Payment records (typically start with a numeric record type indicator)
             # Standard BACS payment record format

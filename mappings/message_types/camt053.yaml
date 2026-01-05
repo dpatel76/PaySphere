@@ -1,0 +1,380 @@
+# GPS CDM - camt.053 Full Mapping
+# ISO 20022 Bank to Customer Statement
+#
+# This file defines the complete transformation:
+#   Bronze (raw XML) -> Silver (stg_camt053) -> Gold (cdm_payment_extension_iso20022)
+#
+# Note: camt.053 is a STATEMENT message, not a payment initiation.
+# It maps to Account, Party (Account Owner), and Financial Institution (Account Servicer)
+# rather than Payment Instruction entities.
+
+version: "2.0"
+
+mapping:
+  id: CAMT053_FULL
+  name: "ISO 20022 camt.053 Bank to Customer Statement"
+  message_type: "camt.053"
+  message_version: "001.001.08"
+  description: |
+    Complete Bronze->Silver->Gold transformation for ISO 20022 camt.053 messages.
+    Bank to Customer Statement containing account balances and transaction entries.
+
+  # ============================================================================
+  # STAGE 1: BRONZE -> SILVER (Parse raw XML to structured staging)
+  # ============================================================================
+  bronze_to_silver:
+    source:
+      layer: bronze
+      table: raw_payment_messages
+      content_column: raw_content
+      format: XML
+      parser: iso20022
+      namespace: "urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"
+      root_element: Document/BkToCstmrStmt
+      filter:
+        message_type: "camt.053"
+
+    target:
+      layer: silver
+      table: stg_camt053
+
+    fields:
+      # --- Group Header ---
+      - source: GrpHdr/MsgId
+        target: msg_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: GrpHdr/CreDtTm
+        target: creation_date_time
+        type: timestamp
+        required: true
+
+      # --- Statement Identification ---
+      - source: Stmt/Id
+        target: statement_id
+        type: string
+        required: true
+        max_length: 35
+
+      - source: Stmt/ElctrncSeqNb
+        target: sequence_number
+        type: string
+        max_length: 35
+
+      - source: Stmt/FrToDt/FrDtTm
+        target: from_date
+        type: date
+
+      - source: Stmt/FrToDt/ToDtTm
+        target: to_date
+        type: date
+
+      # --- Account Information ---
+      - source: Stmt/Acct/Id/IBAN
+        target: account_iban
+        type: string
+        max_length: 34
+
+      - source: Stmt/Acct/Id/Othr/Id
+        target: account_number
+        type: string
+        max_length: 34
+
+      - source: Stmt/Acct/Ccy
+        target: account_currency
+        type: string
+        max_length: 3
+
+      - source: Stmt/Acct/Ownr/Nm
+        target: account_owner_name
+        type: string
+        max_length: 140
+
+      - source: Stmt/Acct/Svcr/FinInstnId/BICFI
+        target: account_servicer_bic
+        type: string
+        max_length: 11
+
+      # --- Opening Balance (OPBD) ---
+      - source: Stmt/Bal[Tp/CdOrPrtry/Cd="OPBD"]/Amt
+        target: opening_balance_amount
+        type: decimal
+        precision: 18
+        scale: 4
+
+      - source: Stmt/Bal[Tp/CdOrPrtry/Cd="OPBD"]/Amt/@Ccy
+        target: opening_balance_currency
+        type: string
+        max_length: 3
+
+      - source: Stmt/Bal[Tp/CdOrPrtry/Cd="OPBD"]/CdtDbtInd
+        target: opening_balance_credit_debit
+        type: string
+        max_length: 4
+
+      - source: Stmt/Bal[Tp/CdOrPrtry/Cd="OPBD"]/Dt/Dt
+        target: opening_balance_date
+        type: date
+
+      # --- Closing Balance (CLBD) ---
+      - source: Stmt/Bal[Tp/CdOrPrtry/Cd="CLBD"]/Amt
+        target: closing_balance_amount
+        type: decimal
+        precision: 18
+        scale: 4
+
+      - source: Stmt/Bal[Tp/CdOrPrtry/Cd="CLBD"]/Amt/@Ccy
+        target: closing_balance_currency
+        type: string
+        max_length: 3
+
+      - source: Stmt/Bal[Tp/CdOrPrtry/Cd="CLBD"]/CdtDbtInd
+        target: closing_balance_credit_debit
+        type: string
+        max_length: 4
+
+      - source: Stmt/Bal[Tp/CdOrPrtry/Cd="CLBD"]/Dt/Dt
+        target: closing_balance_date
+        type: date
+
+      # --- Transaction Summary ---
+      - source: Stmt/TxsSummry/TtlNtries/NbOfNtries
+        target: number_of_entries
+        type: integer
+
+      - source: Stmt/TxsSummry/TtlNtries/Sum
+        target: sum_of_entries
+        type: decimal
+        precision: 18
+        scale: 4
+
+      # --- First Entry Details ---
+      - source: Stmt/Ntry[1]/NtryRef
+        target: entries_reference
+        type: string
+        max_length: 35
+
+      - source: Stmt/Ntry[1]/Amt
+        target: entries_amount
+        type: string
+        max_length: 50
+
+      - source: Stmt/Ntry[1]/Amt/@Ccy
+        target: entries_currency
+        type: string
+        max_length: 3
+
+      - source: Stmt/Ntry[1]/CdtDbtInd
+        target: entries_credit_debit_indicator
+        type: string
+        max_length: 4
+
+      - source: Stmt/Ntry[1]/Sts/Cd
+        target: entries_status
+        type: string
+        max_length: 4
+
+      - source: Stmt/Ntry[1]/BookgDt/Dt
+        target: entries_booking_date
+        type: string
+        max_length: 10
+
+      - source: Stmt/Ntry[1]/ValDt/Dt
+        target: entries_value_date
+        type: string
+        max_length: 10
+
+  # ============================================================================
+  # STAGE 2: SILVER -> GOLD (Structured staging to unified CDM)
+  # ============================================================================
+  silver_to_gold:
+    source:
+      layer: silver
+      table: stg_camt053
+      filter:
+        processing_status: "PENDING"
+
+    # --- Party Entity (Account Owner) ---
+    party_mappings:
+      - role: account_owner
+        target_table: cdm_party
+        fields:
+          - source: account_owner_name
+            target: name
+          - source: "'UNKNOWN'"
+            target: party_type
+
+    # --- Account Entity ---
+    account_mappings:
+      - role: statement_account
+        target_table: cdm_account
+        fields:
+          - source: account_iban
+            target: iban
+          - source: account_number
+            target: account_number
+          - source: "'CACC'"
+            target: account_type
+          - source: account_currency
+            target: currency
+
+    # --- Financial Institution Entity (Account Servicer) ---
+    fi_mappings:
+      - role: account_servicer
+        target_table: cdm_financial_institution
+        fields:
+          - source: account_servicer_bic
+            target: bic
+          - source: "SUBSTRING(account_servicer_bic, 5, 2)"
+            target: country
+
+    # --- Extension Table (Statement-specific) ---
+    extension_target:
+      layer: gold
+      table: cdm_payment_extension_iso20022
+
+    extension_fields:
+      - source: "'camt.053'"
+        target: message_type
+        type: string
+
+      - source: "'BankToCustomerStatement'"
+        target: message_definition
+        type: string
+
+      - source: statement_id
+        target: statement_id
+        type: string
+
+      - source: sequence_number
+        target: sequence_number
+        type: string
+
+      - source: from_date
+        target: from_date
+        type: date
+
+      - source: to_date
+        target: to_date
+        type: date
+
+      - source: opening_balance_credit_debit
+        target: opening_balance_credit_debit
+        type: string
+
+      - source: opening_balance_date
+        target: opening_balance_date
+        type: date
+
+      - source: closing_balance_credit_debit
+        target: closing_balance_credit_debit
+        type: string
+
+      - source: closing_balance_date
+        target: closing_balance_date
+        type: date
+
+      - source: number_of_entries
+        target: number_of_entries
+        type: integer
+
+      - source: sum_of_entries
+        target: sum_of_entries
+        type: decimal
+
+      - source: entries_reference
+        target: entries_reference
+        type: string
+
+      - source: entries_status
+        target: entries_status
+        type: string
+
+      - source: entries_booking_date
+        target: entries_booking_date
+        type: string
+
+      - source: entries_value_date
+        target: entries_value_date
+        type: string
+
+      - source: entries_credit_debit_indicator
+        target: entries_credit_debit_indicator
+        type: string
+
+  # ============================================================================
+  # VALIDATION RULES (Applied at Silver layer)
+  # ============================================================================
+  validations:
+    - id: CAMT053_VAL001
+      stage: silver
+      rule: "statement_id IS NOT NULL"
+      severity: ERROR
+      message: "Statement ID is required"
+      error_code: ST01
+      dimension: completeness
+
+    - id: CAMT053_VAL002
+      stage: silver
+      rule: "account_iban IS NOT NULL OR account_number IS NOT NULL"
+      severity: ERROR
+      message: "Account IBAN or Account Number is required"
+      error_code: AC01
+      dimension: completeness
+
+    - id: CAMT053_VAL003
+      stage: silver
+      rule: "account_servicer_bic IS NULL OR account_servicer_bic ~ '^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$'"
+      severity: ERROR
+      message: "Invalid Account Servicer BIC format"
+      error_code: RC01
+      dimension: accuracy
+
+    - id: CAMT053_VAL004
+      stage: silver
+      rule: "account_iban IS NULL OR account_iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$'"
+      severity: WARNING
+      message: "Invalid IBAN format"
+      error_code: AC02
+      dimension: accuracy
+
+    - id: CAMT053_VAL005
+      stage: silver
+      rule: "opening_balance_credit_debit IS NULL OR opening_balance_credit_debit IN ('CRDT', 'DBIT')"
+      severity: ERROR
+      message: "Invalid credit/debit indicator"
+      error_code: CD01
+      dimension: validity
+
+  # ============================================================================
+  # DATA QUALITY CONFIGURATION
+  # ============================================================================
+  quality:
+    completeness:
+      - field: statement_id
+        weight: 1.0
+        required: true
+      - field: account_iban
+        weight: 0.9
+      - field: account_owner_name
+        weight: 0.8
+      - field: account_servicer_bic
+        weight: 0.7
+      - field: opening_balance_amount
+        weight: 0.8
+      - field: closing_balance_amount
+        weight: 0.8
+
+    accuracy:
+      - field: account_iban
+        validation: validate_iban
+      - field: account_servicer_bic
+        validation: validate_bic
+
+    thresholds:
+      overall_pass: 0.80
+      completeness_pass: 0.85
+      accuracy_pass: 0.90
+      validity_pass: 0.95

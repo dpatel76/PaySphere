@@ -48,16 +48,30 @@ class KftcExtractor(BaseExtractor):
         stg_id: str,
         batch_id: str
     ) -> Dict[str, Any]:
-        """Extract all Silver layer fields from KFTC message."""
+        """Extract all Silver layer fields from KFTC message.
+
+        Supports multiple field naming conventions:
+        - payerName/payerAccount or senderName/senderAccount
+        - payeeName/payeeAccount or receiverName/receiverAccount
+        - sendingBankCode/senderBankCode, receivingBankCode/receiverBankCode
+        """
         trunc = self.trunc
+
+        # Handle field name variations (payer/sender, payee/receiver)
+        payer_name = msg_content.get('payerName') or msg_content.get('senderName')
+        payer_account = msg_content.get('payerAccount') or msg_content.get('senderAccount')
+        payee_name = msg_content.get('payeeName') or msg_content.get('receiverName')
+        payee_account = msg_content.get('payeeAccount') or msg_content.get('receiverAccount')
+        sending_bank = msg_content.get('sendingBankCode') or msg_content.get('senderBankCode')
+        receiving_bank = msg_content.get('receivingBankCode') or msg_content.get('receiverBankCode')
 
         return {
             'stg_id': stg_id,
             'raw_id': raw_id,
             '_batch_id': batch_id,
 
-            # Message Type
-            'message_type': 'KFTC',
+            # Message Type and Identification
+            'message_type': msg_content.get('messageType') or 'KFTC',
             'message_id': trunc(msg_content.get('messageId'), 35),
             'creation_date_time': msg_content.get('creationDateTime'),
             'settlement_date': msg_content.get('settlementDate'),
@@ -66,34 +80,51 @@ class KftcExtractor(BaseExtractor):
             'amount': msg_content.get('amount'),
             'currency': msg_content.get('currency') or 'KRW',
 
-            # Bank Codes
-            'sending_bank_code': trunc(msg_content.get('sendingBankCode'), 11),
-            'receiving_bank_code': trunc(msg_content.get('receivingBankCode'), 11),
+            # Bank Codes (both naming conventions)
+            'sending_bank_code': trunc(sending_bank, 11),
+            'receiving_bank_code': trunc(receiving_bank, 11),
 
             # Transaction Details
             'transaction_reference': trunc(msg_content.get('transactionReference'), 35),
+            'transaction_id': trunc(msg_content.get('transactionId'), 35),
 
-            # Payer
-            'payer_name': trunc(msg_content.get('payerName'), 140),
-            'payer_account': trunc(msg_content.get('payerAccount'), 34),
+            # Payer/Sender (primary fields)
+            'payer_name': trunc(payer_name, 140),
+            'payer_account': trunc(payer_account, 34),
 
-            # Payee
-            'payee_name': trunc(msg_content.get('payeeName'), 140),
-            'payee_account': trunc(msg_content.get('payeeAccount'), 34),
+            # Payee/Receiver (primary fields)
+            'payee_name': trunc(payee_name, 140),
+            'payee_account': trunc(payee_account, 34),
+
+            # Sender fields (alternate naming)
+            'sender_name': trunc(msg_content.get('senderName'), 140),
+            'sender_account': trunc(msg_content.get('senderAccount'), 34),
+            'sender_bank_code': trunc(msg_content.get('senderBankCode'), 11),
+
+            # Receiver fields (alternate naming)
+            'receiver_name': trunc(msg_content.get('receiverName'), 140),
+            'receiver_account': trunc(msg_content.get('receiverAccount'), 34),
+            'receiver_bank_code': trunc(msg_content.get('receiverBankCode'), 11),
 
             # Purpose
             'purpose': msg_content.get('purpose'),
         }
 
     def get_silver_columns(self) -> List[str]:
-        """Return ordered list of Silver table columns for INSERT."""
+        """Return ordered list of Silver table columns for INSERT.
+
+        Matches the silver.stg_kftc table schema exactly.
+        """
         return [
             'stg_id', 'raw_id', '_batch_id',
             'message_type', 'message_id', 'creation_date_time',
             'settlement_date', 'amount', 'currency',
             'sending_bank_code', 'receiving_bank_code', 'transaction_reference',
+            'transaction_id',
             'payer_name', 'payer_account',
             'payee_name', 'payee_account',
+            'sender_name', 'sender_account', 'sender_bank_code',
+            'receiver_name', 'receiver_account', 'receiver_bank_code',
             'purpose',
         ]
 

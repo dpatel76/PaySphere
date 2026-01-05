@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_payment_extension_swift (
     sender_charges_currency VARCHAR(3),
     receiver_charges_amount DECIMAL(18,4),
     receiver_charges_currency VARCHAR(3),
+    senders_charges TEXT,                          -- Raw charges field from MT103
 
     -- Additional Info
     sender_to_receiver_information TEXT,           -- Field 72
@@ -205,6 +206,21 @@ CREATE TABLE IF NOT EXISTS gold.cdm_payment_extension_swift (
 
     -- Instruction Codes
     instruction_codes VARCHAR(100),                -- Field 23E codes
+
+    -- Beneficiary/Ordering Party Details
+    beneficiary_id VARCHAR(35),                    -- Beneficiary identification
+    ordering_customer_id VARCHAR(35),              -- Ordering customer ID
+    ordering_customer_party_id VARCHAR(35),        -- Ordering customer party ID
+
+    -- Intermediary Institution Details
+    intermediary_account VARCHAR(34),              -- Intermediary account number
+    intermediary_institution_bic VARCHAR(11),      -- Intermediary BIC
+
+    -- Sending Institution
+    sending_institution_bic VARCHAR(11),           -- Sending institution BIC
+
+    -- Time/Date Fields
+    time_indication VARCHAR(35),                   -- Time indication field
 
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -217,6 +233,17 @@ CREATE INDEX IF NOT EXISTS idx_swift_ext_sender ON gold.cdm_payment_extension_sw
 CREATE INDEX IF NOT EXISTS idx_swift_ext_receiver ON gold.cdm_payment_extension_swift(receiver_bic);
 
 COMMENT ON TABLE gold.cdm_payment_extension_swift IS 'SWIFT MT message-specific payment attributes';
+
+-- Migration: Add new columns for existing databases
+ALTER TABLE gold.cdm_payment_extension_swift
+    ADD COLUMN IF NOT EXISTS senders_charges TEXT,
+    ADD COLUMN IF NOT EXISTS beneficiary_id VARCHAR(35),
+    ADD COLUMN IF NOT EXISTS ordering_customer_id VARCHAR(35),
+    ADD COLUMN IF NOT EXISTS ordering_customer_party_id VARCHAR(35),
+    ADD COLUMN IF NOT EXISTS intermediary_account VARCHAR(34),
+    ADD COLUMN IF NOT EXISTS intermediary_institution_bic VARCHAR(11),
+    ADD COLUMN IF NOT EXISTS sending_institution_bic VARCHAR(11),
+    ADD COLUMN IF NOT EXISTS time_indication VARCHAR(35);
 
 
 -- =====================================================

@@ -128,6 +128,9 @@ class ChipsExtractor(BaseExtractor):
     MESSAGE_TYPE = "CHIPS"
     SILVER_TABLE = "stg_chips"
 
+    def __init__(self):
+        self.parser = ChipsXmlParser()
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================
@@ -155,6 +158,9 @@ class ChipsExtractor(BaseExtractor):
     ) -> Dict[str, Any]:
         """Extract all Silver layer fields from CHIPS message."""
         trunc = self.trunc
+
+        # Generate message_id from sequence number if not provided
+        message_id = msg_content.get('messageId') or msg_content.get('sequenceNumber')
 
         return {
             'stg_id': stg_id,
@@ -196,6 +202,11 @@ class ChipsExtractor(BaseExtractor):
 
             # Additional Info
             'payment_details': msg_content.get('paymentDetails'),
+
+            # Additional mandatory fields
+            'message_id': trunc(message_id, 35),
+            'sender_participant_id': trunc(msg_content.get('sendingParticipant'), 6),
+            'receiver_participant_id': trunc(msg_content.get('receivingParticipant'), 6),
         }
 
     def get_silver_columns(self) -> List[str]:
@@ -210,6 +221,7 @@ class ChipsExtractor(BaseExtractor):
             'beneficiary_name', 'beneficiary_address', 'beneficiary_account',
             'originator_bank', 'beneficiary_bank', 'intermediary_bank',
             'payment_details',
+            'message_id', 'sender_participant_id', 'receiver_participant_id',
         ]
 
     def get_silver_values(self, silver_record: Dict[str, Any]) -> tuple:

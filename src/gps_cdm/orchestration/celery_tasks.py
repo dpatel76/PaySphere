@@ -1030,11 +1030,15 @@ def process_bronze_partition(
                 raw_content_str = str(message_content)
 
             # Parse using format-specific parser
-            # First check if content is wrapped in {"_raw_text": "..."} and unwrap it for parsing
+            # First check if content is wrapped in {"_raw_text": "..."} or {"raw": "..."} and unwrap it for parsing
             content_to_parse = raw_content_str
-            if isinstance(message_content, dict) and '_raw_text' in message_content:
-                # Extract the actual message content for parsing
-                content_to_parse = message_content['_raw_text']
+            if isinstance(message_content, dict):
+                if '_raw_text' in message_content:
+                    # Extract the actual message content for parsing
+                    content_to_parse = message_content['_raw_text']
+                elif 'raw' in message_content and len(message_content) == 1:
+                    # ACH/fixed-width content is wrapped in {"raw": "..."}
+                    content_to_parse = message_content['raw']
             msg_content = MessageProcessor.parse_raw_content(content_to_parse, message_type)
 
             # Extract message ID from parsed content (no fallback to generated ID)

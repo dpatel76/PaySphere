@@ -48,6 +48,7 @@ class AccountData:
     iban: Optional[str] = None
     account_type: str = "UNKNOWN"
     currency: str = "XXX"
+    account_status: str = "ACTIVE"  # Required field for cdm_account
 
 
 @dataclass

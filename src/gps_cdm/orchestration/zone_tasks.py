@@ -613,16 +613,29 @@ def process_silver_records(
                     except (json.JSONDecodeError, TypeError):
                         # Check if it's SWIFT MT format (starts with {1: or {2:)
                         if raw_text.strip().startswith('{1:') or raw_text.strip().startswith('{2:'):
-                            # SWIFT MT block format - always use ChapsSwiftParser
-                            # (works for MT103, MT202, CHAPS, BACS, FPS, etc.)
-                            try:
-                                from gps_cdm.message_formats.chaps import ChapsSwiftParser
-                                swift_parser = ChapsSwiftParser()
-                                msg_content = swift_parser.parse(raw_text)
-                                logger.info(f"Parsed SWIFT MT for {raw_id}: {list(msg_content.keys())}")
-                            except Exception as swift_err:
-                                logger.warning(f"Failed to parse SWIFT MT for {raw_id}: {swift_err}")
-                                msg_content = {'_raw_text': raw_text, '_format': 'swift_mt'}
+                            # SWIFT MT block format - use format-specific parser if available
+                            # Each format has its own parser that extracts fields correctly
+                            parsed_successfully = False
+
+                            # Try extractor's native parser first (e.g., MT103SwiftParser for MT103)
+                            if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                try:
+                                    msg_content = extractor.parser.parse(raw_text)
+                                    parsed_successfully = True
+                                    logger.info(f"Parsed SWIFT MT using {type(extractor.parser).__name__} for {raw_id}")
+                                except Exception as parse_err:
+                                    logger.warning(f"Format-specific parser failed for {raw_id}: {parse_err}")
+
+                            # Fall back to ChapsSwiftParser (generic SWIFT parser)
+                            if not parsed_successfully:
+                                try:
+                                    from gps_cdm.message_formats.chaps import ChapsSwiftParser
+                                    swift_parser = ChapsSwiftParser()
+                                    msg_content = swift_parser.parse(raw_text)
+                                    logger.info(f"Parsed SWIFT MT using ChapsSwiftParser for {raw_id}: {list(msg_content.keys())}")
+                                except Exception as swift_err:
+                                    logger.warning(f"Failed to parse SWIFT MT for {raw_id}: {swift_err}")
+                                    msg_content = {'_raw_text': raw_text, '_format': 'swift_mt'}
                         elif raw_text.strip().startswith('<'):
                             # XML format - use extractor's parser if available
                             if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
@@ -632,6 +645,49 @@ def process_silver_records(
                                     msg_content = {'_raw_text': raw_text, '_format': 'xml'}
                             else:
                                 msg_content = {'_raw_text': raw_text, '_format': 'xml'}
+                        elif raw_text.strip().startswith('UHL1') or message_type.upper() == 'BACS':
+                            # BACS Standard 18 fixed-width format
+                            # Preserve header context fields before parsing
+                            header_context = {k: v for k, v in msg_content.items()
+                                             if k in ('processingDate', 'serviceUserNumber', 'serviceUserName')}
+                            if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                try:
+                                    parsed = extractor.parser.parse(raw_text)
+                                    # Merge header context back into parsed output
+                                    msg_content = parsed
+                                    for k, v in header_context.items():
+                                        if k not in msg_content or msg_content.get(k) is None:
+                                            msg_content[k] = v
+                                    logger.info(f"Parsed BACS for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                except Exception as parse_err:
+                                    logger.warning(f"Failed to parse BACS for {raw_id}: {parse_err}")
+                                    msg_content = {'_raw_text': raw_text, '_format': 'bacs'}
+                                    msg_content.update(header_context)
+                            else:
+                                msg_content = {'_raw_text': raw_text, '_format': 'bacs'}
+                                msg_content.update(header_context)
+                        elif raw_text.strip().startswith('{1') and len(raw_text.strip()) > 2 and raw_text.strip()[2:3].isdigit():
+                            # FEDWIRE tag-value format (e.g., {1500}00, {1510}1000)
+                            if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                try:
+                                    msg_content = extractor.parser.parse(raw_text)
+                                    logger.info(f"Parsed FEDWIRE for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                except Exception as parse_err:
+                                    logger.warning(f"Failed to parse FEDWIRE for {raw_id}: {parse_err}")
+                                    msg_content = {'_raw_text': raw_text, '_format': 'fedwire'}
+                            else:
+                                msg_content = {'_raw_text': raw_text, '_format': 'fedwire'}
+                        elif raw_text.strip()[:3] == '101' or msg_type.upper() in ('ACH', 'NACHA'):
+                            # ACH/NACHA fixed-width format (starts with 101 for file header)
+                            if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                try:
+                                    msg_content = extractor.parser.parse(raw_text)
+                                    logger.info(f"Parsed ACH for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                except Exception as parse_err:
+                                    logger.warning(f"Failed to parse ACH for {raw_id}: {parse_err}")
+                                    msg_content = {'_raw_text': raw_text, '_format': 'ach'}
+                            else:
+                                msg_content = {'_raw_text': raw_text, '_format': 'ach'}
                         else:
                             msg_content = {'_raw_text': raw_text, '_format': 'raw'}
 
@@ -1373,16 +1429,28 @@ def process_medallion_pipeline(
                         except (json.JSONDecodeError, TypeError):
                             # Check if it's SWIFT MT format (starts with {1: or {2:)
                             if raw_text.strip().startswith('{1:') or raw_text.strip().startswith('{2:'):
-                                # ALWAYS use ChapsSwiftParser for SWIFT MT block format
-                                # This handles MT103, MT202, CHAPS, BACS, FPS, etc.
-                                try:
-                                    from gps_cdm.message_formats.chaps import ChapsSwiftParser
-                                    swift_parser = ChapsSwiftParser()
-                                    msg_content = swift_parser.parse(raw_text)
-                                    logger.info(f"[{batch_id}] Parsed SWIFT MT for {raw_id}: keys={list(msg_content.keys())[:5]}")
-                                except Exception as parse_err:
-                                    logger.warning(f"[{batch_id}] Failed to parse SWIFT MT for {raw_id}: {parse_err}")
-                                    msg_content = {'_raw_text': raw_text, '_format': 'swift_mt'}
+                                # SWIFT MT block format - use format-specific parser if available
+                                parsed_successfully = False
+
+                                # Try extractor's native parser first (e.g., MT103SwiftParser for MT103)
+                                if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                    try:
+                                        msg_content = extractor.parser.parse(raw_text)
+                                        parsed_successfully = True
+                                        logger.info(f"[{batch_id}] Parsed SWIFT MT using {type(extractor.parser).__name__} for {raw_id}")
+                                    except Exception as parse_err:
+                                        logger.warning(f"[{batch_id}] Format-specific parser failed for {raw_id}: {parse_err}")
+
+                                # Fall back to ChapsSwiftParser (generic SWIFT parser)
+                                if not parsed_successfully:
+                                    try:
+                                        from gps_cdm.message_formats.chaps import ChapsSwiftParser
+                                        swift_parser = ChapsSwiftParser()
+                                        msg_content = swift_parser.parse(raw_text)
+                                        logger.info(f"[{batch_id}] Parsed SWIFT MT using ChapsSwiftParser for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                    except Exception as parse_err:
+                                        logger.warning(f"[{batch_id}] Failed to parse SWIFT MT for {raw_id}: {parse_err}")
+                                        msg_content = {'_raw_text': raw_text, '_format': 'swift_mt'}
                             elif raw_text.strip().startswith('<'):
                                 # XML format - use extractor's parser if available
                                 if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
@@ -1416,6 +1484,27 @@ def process_medallion_pipeline(
                                         msg_content = {'_raw_text': raw_text, '_format': 'ach'}
                                 else:
                                     msg_content = {'_raw_text': raw_text, '_format': 'ach'}
+                            elif raw_text.strip().startswith('UHL1') or message_type.upper() == 'BACS':
+                                # BACS Standard 18 fixed-width format (starts with UHL1 header)
+                                # Preserve header context fields before parsing
+                                header_context = {k: v for k, v in msg_content.items()
+                                                 if k in ('processingDate', 'serviceUserNumber', 'serviceUserName')}
+                                if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                    try:
+                                        parsed = extractor.parser.parse(raw_text)
+                                        # Merge header context back into parsed output
+                                        msg_content = parsed
+                                        for k, v in header_context.items():
+                                            if k not in msg_content or msg_content.get(k) is None:
+                                                msg_content[k] = v
+                                        logger.info(f"[{batch_id}] Parsed BACS for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                    except Exception as parse_err:
+                                        logger.warning(f"[{batch_id}] Failed to parse BACS for {raw_id}: {parse_err}")
+                                        msg_content = {'_raw_text': raw_text, '_format': 'bacs'}
+                                        msg_content.update(header_context)
+                                else:
+                                    msg_content = {'_raw_text': raw_text, '_format': 'bacs'}
+                                    msg_content.update(header_context)
                             else:
                                 # Unknown format - pass raw text to extractor
                                 msg_content = {'_raw_text': raw_text, '_format': 'raw'}
@@ -1575,7 +1664,11 @@ def process_medallion_pipeline(
                     # Extract amount/currency from Silver data (already parsed)
                     # Silver tables use standardized column names
                     amount = silver_data.get('amount') or silver_data.get('instructed_amount') or 0
-                    currency = silver_data.get('currency') or silver_data.get('instructed_currency') or 'XXX'
+                    currency = silver_data.get('currency') or silver_data.get('instructed_currency')
+                    # Default currencies by scheme (BACS/CHAPS/FPS are GBP, SEPA is EUR)
+                    if not currency or currency == 'XXX':
+                        scheme_currencies = {'bacs': 'GBP', 'chaps': 'GBP', 'fps': 'GBP', 'sepa': 'EUR'}
+                        currency = scheme_currencies.get(message_type.lower(), 'XXX')
                     end_to_end_id = silver_data.get('end_to_end_id') or silver_data.get('message_id')
                     uetr = silver_data.get('uetr')
 
@@ -1584,6 +1677,7 @@ def process_medallion_pipeline(
                         'pacs.008': 'CREDIT_TRANSFER', 'pacs008': 'CREDIT_TRANSFER',
                         'mt103': 'CREDIT_TRANSFER', 'fedwire': 'WIRE_TRANSFER',
                         'ach': 'ACH_TRANSFER', 'rtp': 'REAL_TIME', 'sepa': 'CREDIT_TRANSFER',
+                        'bacs': 'BATCH_PAYMENT', 'chaps': 'CREDIT_TRANSFER', 'fps': 'INSTANT_PAYMENT',
                     }
                     payment_type = payment_type_map.get(message_type.lower().replace('.', '').replace('-', ''), 'TRANSFER')
 
@@ -1592,6 +1686,7 @@ def process_medallion_pipeline(
                         'pacs.008': 'ISO20022', 'pacs008': 'ISO20022',
                         'mt103': 'SWIFT_MT', 'fedwire': 'FEDWIRE',
                         'ach': 'ACH', 'rtp': 'RTP', 'sepa': 'SEPA',
+                        'bacs': 'BACS', 'chaps': 'CHAPS', 'fps': 'FPS',
                     }
                     scheme_code = scheme_map.get(message_type.lower().replace('.', '').replace('-', ''), 'OTHER')
 

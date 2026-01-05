@@ -204,6 +204,7 @@ class AchFixedWidthParser:
         result['immediateDestinationName'] = file_header.get('immediateDestinationName')
         result['immediateOriginName'] = file_header.get('immediateOriginName')
         result['fileCreationDate'] = file_header.get('fileCreationDate')
+        result['fileCreationTime'] = file_header.get('fileCreationTime')
 
         # Copy batch header fields
         result['companyName'] = batch.get('companyName')

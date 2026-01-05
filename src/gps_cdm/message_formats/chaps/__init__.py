@@ -385,6 +385,9 @@ class ChapsExtractor(BaseExtractor):
     def __init__(self):
         self.swift_parser = ChapsSwiftParser()
         self.xml_parser = ChapsXmlParser()
+        # Set parser attribute for zone_tasks.py compatibility - use self as the parser
+        # since ChapsExtractor.parse() auto-detects format (XML vs SWIFT MT)
+        self.parser = self
 
     def parse(self, raw_content: str) -> Dict[str, Any]:
         """Parse raw CHAPS content - auto-detect SWIFT MT vs XML format."""
@@ -462,6 +465,10 @@ class ChapsExtractor(BaseExtractor):
             'debtor_sort_code': trunc(msg_content.get('debtorSortCode'), 10),
             'debtor_account': trunc(msg_content.get('debtorAccount'), 34),  # IBAN max length
             'debtor_agent_bic': trunc(msg_content.get('debtorAgentBic'), 11),
+            'debtor_street_name': trunc(msg_content.get('debtorStreetName'), 70),
+            'debtor_town_name': trunc(msg_content.get('debtorTownName'), 35),
+            'debtor_post_code': trunc(msg_content.get('debtorPostCode'), 16),
+            'debtor_country': trunc(msg_content.get('debtorCountry'), 2) or 'GB',
 
             # Creditor
             'creditor_name': trunc(msg_content.get('creditorName'), 140),
@@ -469,18 +476,30 @@ class ChapsExtractor(BaseExtractor):
             'creditor_sort_code': trunc(msg_content.get('creditorSortCode'), 10),
             'creditor_account': trunc(msg_content.get('creditorAccount'), 34),  # IBAN max length
             'creditor_agent_bic': trunc(msg_content.get('creditorAgentBic'), 11),
+            'creditor_street_name': trunc(msg_content.get('creditorStreetName'), 70),
+            'creditor_town_name': trunc(msg_content.get('creditorTownName'), 35),
+            'creditor_post_code': trunc(msg_content.get('creditorPostCode'), 16),
+            'creditor_country': trunc(msg_content.get('creditorCountry'), 2) or 'GB',
 
             # Payment IDs
             'instruction_id': trunc(msg_content.get('instructionId'), 35),
             'end_to_end_id': trunc(msg_content.get('endToEndId'), 35),
             'uetr': msg_content.get('uetr'),
+            'senders_reference': trunc(msg_content.get('senders_reference') or msg_content.get('instructionId'), 35),
+            'value_date': msg_content.get('settlementDate'),
 
             # Remittance
             'remittance_info': msg_content.get('remittanceInfo'),
+
+            # Processing status
+            'processing_status': 'PENDING',
         }
 
     def get_silver_columns(self) -> List[str]:
-        """Return ordered list of Silver table columns for INSERT."""
+        """Return ordered list of Silver table columns for INSERT.
+
+        MUST match silver.stg_chaps table columns exactly.
+        """
         return [
             'stg_id', 'raw_id', '_batch_id',
             'message_type', 'message_id', 'creation_date_time',
@@ -488,10 +507,13 @@ class ChapsExtractor(BaseExtractor):
             'amount', 'currency',
             'debtor_name', 'debtor_address', 'debtor_sort_code',
             'debtor_account', 'debtor_agent_bic',
+            'debtor_street_name', 'debtor_town_name', 'debtor_post_code', 'debtor_country',
             'creditor_name', 'creditor_address', 'creditor_sort_code',
             'creditor_account', 'creditor_agent_bic',
+            'creditor_street_name', 'creditor_town_name', 'creditor_post_code', 'creditor_country',
             'instruction_id', 'end_to_end_id', 'uetr',
-            'remittance_info',
+            'senders_reference', 'value_date',
+            'remittance_info', 'processing_status',
         ]
 
     def get_silver_values(self, silver_record: Dict[str, Any]) -> tuple:

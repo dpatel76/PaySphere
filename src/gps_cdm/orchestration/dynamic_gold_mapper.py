@@ -147,8 +147,16 @@ class DynamicGoldMapper:
         elif transform == 'TRIM':
             return str(value).strip() if value else value
         elif transform.startswith('COALESCE:'):
-            # COALESCE:default_value
+            # COALESCE:default_value - returns literal default if value is NULL
             return value if value else transform[9:]
+        elif transform.startswith('COALESCE_FIELD:'):
+            # COALESCE_FIELD:other_field - looks up other_field from silver_data if value is NULL
+            if value:
+                return value
+            fallback_field = transform[15:]  # Remove 'COALESCE_FIELD:' prefix
+            if silver_data and fallback_field:
+                return silver_data.get(fallback_field)
+            return None
         elif transform == 'COALESCE_IBAN':
             # For account_number, fall back to IBAN if account_number is NULL
             if value:
@@ -161,20 +169,27 @@ class DynamicGoldMapper:
             # For institution_name, derive from BIC if name is NULL
             if value:
                 return value
-            # Try to derive from BIC
+            # Try to derive from BIC - support multiple naming conventions
             if silver_data and entity_role:
-                role_to_bic = {
-                    'DEBTOR_AGENT': 'debtor_agent_bic',
-                    'CREDITOR_AGENT': 'creditor_agent_bic',
-                    'INTERMEDIARY_AGENT1': 'intermediary_agent1_bic',
-                    'INTERMEDIARY_AGENT2': 'intermediary_agent2_bic',
+                # Map entity roles to possible BIC field names across formats
+                role_to_bic_fields = {
+                    'DEBTOR_AGENT': ['debtor_agent_bic', 'ordering_institution_bic', 'sender_bic'],
+                    'CREDITOR_AGENT': ['creditor_agent_bic', 'account_with_institution_bic', 'receiver_bic'],
+                    'INTERMEDIARY': ['intermediary_bic', 'intermediary_institution_bic'],
+                    'INTERMEDIARY_AGENT1': ['intermediary_agent1_bic', 'intermediary_bic'],
+                    'INTERMEDIARY_AGENT2': ['intermediary_agent2_bic'],
+                    'SENDERS_CORRESPONDENT': ['senders_correspondent_bic'],
+                    'RECEIVERS_CORRESPONDENT': ['receivers_correspondent_bic'],
+                    'ACCOUNT_SERVICER': ['sender_bic', 'account_servicer_bic'],  # MT940 sender
+                    'MESSAGE_RECIPIENT': ['receiver_bic', 'message_recipient_bic'],  # MT940 receiver
                 }
-                bic_field = role_to_bic.get(entity_role)
-                bic = silver_data.get(bic_field) if bic_field else None
-                if bic:
-                    return f"Institution ({bic})"
-            # Return a non-None value so default doesn't override
-            return None  # This will trigger default_value application
+                bic_fields = role_to_bic_fields.get(entity_role, [])
+                for bic_field in bic_fields:
+                    bic = silver_data.get(bic_field)
+                    if bic:
+                        return f"Institution ({bic})"
+            # Return None to trigger default_value if set
+            return None
         elif transform == 'TO_ARRAY':
             # Wrap a single value in an array for PostgreSQL array columns
             if value is None:
@@ -195,6 +210,34 @@ class DynamicGoldMapper:
                 except ValueError:
                     return value
             return value
+        elif transform == 'COUNTRY_FROM_BIC':
+            # Extract country code (chars 5-6) from BIC
+            # BIC format: AAAABBCC where BB is country code (positions 5-6, 1-indexed)
+            # First, try to extract from the value directly if it looks like a BIC
+            if value and isinstance(value, str) and len(value) >= 6:
+                # BIC country code is at positions 5-6 (0-indexed: 4-5)
+                return value[4:6].upper()
+            # Next, try to look up BIC field based on entity_role
+            if silver_data and entity_role:
+                # Map entity roles to possible BIC field names across formats
+                role_to_bic_fields = {
+                    'DEBTOR_AGENT': ['debtor_agent_bic', 'ordering_institution_bic', 'sender_bic'],
+                    'CREDITOR_AGENT': ['creditor_agent_bic', 'account_with_institution_bic', 'receiver_bic'],
+                    'INTERMEDIARY': ['intermediary_bic', 'intermediary_institution_bic'],
+                    'INTERMEDIARY_AGENT1': ['intermediary_agent1_bic', 'intermediary_bic'],
+                    'INTERMEDIARY_AGENT2': ['intermediary_agent2_bic'],
+                    'SENDERS_CORRESPONDENT': ['senders_correspondent_bic'],
+                    'RECEIVERS_CORRESPONDENT': ['receivers_correspondent_bic'],
+                    'ACCOUNT_SERVICER': ['sender_bic', 'account_servicer_bic'],  # MT940 sender
+                    'MESSAGE_RECIPIENT': ['receiver_bic', 'message_recipient_bic'],  # MT940 receiver
+                }
+                bic_fields = role_to_bic_fields.get(entity_role, [])
+                for bic_field in bic_fields:
+                    bic = silver_data.get(bic_field)
+                    if bic and len(bic) >= 6:
+                        # BIC country code is at positions 5-6 (0-indexed: 4-5)
+                        return bic[4:6].upper()
+            return None
 
         return value
 
@@ -469,6 +512,145 @@ class DynamicGoldMapper:
     def clear_cache(cls) -> None:
         """Clear mappings cache."""
         cls._mappings_cache = {}
+
+    @staticmethod
+    def persist_extension_data(cursor, silver_data: Dict[str, Any],
+                               format_id: str, instruction_id: str) -> Optional[str]:
+        """
+        Persist extension data to format-specific Gold extension table.
+
+        Uses database mappings from mapping.gold_field_mappings to determine
+        which Silver columns map to which extension table columns.
+
+        Args:
+            cursor: Database cursor
+            silver_data: Dict of Silver column -> value
+            format_id: Message format (e.g., 'MT103', 'pain.001')
+            instruction_id: The instruction_id to link extension to
+
+        Returns:
+            extension_id if created, None otherwise
+        """
+        # Determine extension table based on format
+        format_lower = format_id.lower().replace('.', '').replace('-', '_')
+
+        # Map format to extension table
+        format_to_extension = {
+            'pain001': 'cdm_payment_extension_iso20022',
+            'pacs008': 'cdm_payment_extension_iso20022',
+            'camt053': 'cdm_payment_extension_iso20022',
+            'mt103': 'cdm_payment_extension_swift',
+            'mt202': 'cdm_payment_extension_swift',
+            'mt940': 'cdm_payment_extension_swift',
+            'fedwire': 'cdm_payment_extension_fedwire',
+            'ach': 'cdm_payment_extension_ach',
+            'sepa': 'cdm_payment_extension_sepa',
+            'rtp': 'cdm_payment_extension_rtp',
+            'bacs': 'cdm_payment_extension_bacs',
+            'chaps': 'cdm_payment_extension_chaps',
+            'fps': 'cdm_payment_extension_fps',
+            'target2': 'cdm_payment_extension_target2',
+            'fednow': 'cdm_payment_extension_fednow',
+            'npp': 'cdm_payment_extension_npp',
+            'chips': 'cdm_payment_extension_chips',
+            'pix': 'cdm_payment_extension_pix',
+            'upi': 'cdm_payment_extension_upi',
+            'cnaps': 'cdm_payment_extension_cnaps',
+            'bojnet': 'cdm_payment_extension_bojnet',
+            'kftc': 'cdm_payment_extension_kftc',
+            'meps_plus': 'cdm_payment_extension_meps_plus',
+            'rtgs_hk': 'cdm_payment_extension_rtgs_hk',
+            'sarie': 'cdm_payment_extension_sarie',
+            'uaefts': 'cdm_payment_extension_uaefts',
+            'promptpay': 'cdm_payment_extension_promptpay',
+            'paynow': 'cdm_payment_extension_paynow',
+            'instapay': 'cdm_payment_extension_instapay',
+        }
+
+        extension_table = format_to_extension.get(format_lower)
+        if not extension_table:
+            # No extension table for this format
+            return None
+
+        # Load extension mappings from database
+        cursor.execute("""
+            SELECT gold_column, source_expression, transform_expression
+            FROM mapping.gold_field_mappings
+            WHERE format_id = %s
+              AND gold_table = %s
+              AND is_active = TRUE
+            ORDER BY ordinal_position
+        """, (format_id, extension_table))
+
+        mappings = cursor.fetchall()
+        if not mappings:
+            # No mappings defined for this extension table
+            return None
+
+        # Build extension record from mappings
+        extension_id = f"ext_{uuid.uuid4().hex[:12]}"
+        columns = {
+            'extension_id': extension_id,
+            'instruction_id': instruction_id,
+            'created_at': datetime.utcnow(),
+        }
+
+        for gold_column, source_expr, transform_expr in mappings:
+            if gold_column in ('extension_id', 'instruction_id', 'created_at'):
+                continue  # Skip system columns
+
+            # Get value from silver data
+            value = None
+            if source_expr and source_expr not in ('NULL', '', '_GENERATED_UUID'):
+                if source_expr.startswith("'") and source_expr.endswith("'"):
+                    # Literal value
+                    value = source_expr[1:-1]
+                else:
+                    # Column reference
+                    value = silver_data.get(source_expr)
+
+            # Apply transforms if any
+            if transform_expr and value is not None:
+                if transform_expr == 'UPPER':
+                    value = str(value).upper() if value else None
+                elif transform_expr == 'LOWER':
+                    value = str(value).lower() if value else None
+                elif transform_expr == 'TRIM':
+                    value = str(value).strip() if value else None
+                elif transform_expr == 'TO_ARRAY':
+                    value = [value] if value else None
+                elif transform_expr.startswith('COALESCE:'):
+                    if value is None:
+                        value = transform_expr[9:]
+
+            if value is not None:
+                columns[gold_column] = value
+
+        # Only insert if we have data beyond system columns
+        if len(columns) <= 3:  # extension_id, instruction_id, created_at
+            return None
+
+        # Build INSERT statement
+        col_names = list(columns.keys())
+        placeholders = ', '.join(['%s'] * len(col_names))
+        col_list = ', '.join(col_names)
+        values = [columns[c] for c in col_names]
+
+        try:
+            cursor.execute(f"""
+                INSERT INTO gold.{extension_table} ({col_list})
+                VALUES ({placeholders})
+                ON CONFLICT (extension_id) DO NOTHING
+                RETURNING extension_id
+            """, values)
+
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+        except Exception as e:
+            logger.warning(f"Failed to insert extension data into {extension_table}: {e}")
+
+        return None
 
 
 def process_silver_to_gold(cursor, silver_data: Dict[str, Any], format_id: str,

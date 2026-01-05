@@ -31,45 +31,48 @@ class DynamicMapper:
         self._format_cache: Dict[str, Dict] = {}
 
     def _get_format_info(self, format_id: str) -> Dict[str, Any]:
-        """Get message format metadata from database."""
-        if format_id not in self._format_cache:
+        """Get message format metadata from database (case-insensitive lookup)."""
+        # Normalize to uppercase for cache key and database lookup
+        format_id_upper = format_id.upper()
+        if format_id_upper not in self._format_cache:
             cursor = self.conn.cursor()
             cursor.execute("""
                 SELECT format_id, format_name, format_category, silver_table, is_active
                 FROM mapping.message_formats
-                WHERE format_id = %s AND is_active = TRUE
-            """, (format_id,))
+                WHERE UPPER(format_id) = %s AND is_active = TRUE
+            """, (format_id_upper,))
             row = cursor.fetchone()
             if not row:
                 raise ValueError(f"Unknown or inactive format_id: {format_id}")
-            self._format_cache[format_id] = {
+            self._format_cache[format_id_upper] = {
                 'format_id': row[0],
                 'format_name': row[1],
                 'format_category': row[2],
                 'silver_table': row[3],
                 'is_active': row[4]
             }
-        return self._format_cache[format_id]
+        return self._format_cache[format_id_upper]
 
     def _get_silver_mappings(self, format_id: str) -> List[Dict[str, Any]]:
-        """Get Silver field mappings from database.
+        """Get Silver field mappings from database (case-insensitive lookup).
 
         Returns mappings with both source_path (XPath for documentation) and
         parser_path (dot-notation for extraction). If parser_path is not set,
         falls back to source_path.
         """
-        if format_id not in self._mapping_cache:
+        format_id_upper = format_id.upper()
+        if format_id_upper not in self._mapping_cache:
             cursor = self.conn.cursor()
             cursor.execute("""
                 SELECT target_column, source_path, data_type, max_length,
                        is_required, default_value, transform_function, ordinal_position,
                        parser_path
                 FROM mapping.silver_field_mappings
-                WHERE format_id = %s AND is_active = TRUE
+                WHERE UPPER(format_id) = %s AND is_active = TRUE
                 ORDER BY ordinal_position
-            """, (format_id,))
+            """, (format_id_upper,))
             rows = cursor.fetchall()
-            self._mapping_cache[format_id] = [
+            self._mapping_cache[format_id_upper] = [
                 {
                     'target_column': row[0],
                     'source_path': row[1],  # XPath for documentation/lineage
@@ -83,7 +86,7 @@ class DynamicMapper:
                 }
                 for row in rows
             ]
-        return self._mapping_cache[format_id]
+        return self._mapping_cache[format_id_upper]
 
     def _resolve_path(self, data: Dict[str, Any], path: str) -> Any:
         """

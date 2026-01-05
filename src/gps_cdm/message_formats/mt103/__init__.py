@@ -195,6 +195,15 @@ class MT103SwiftParser:
             result['senderToReceiverInformation'] = value.replace('\n', ' ')
         elif tag == '77B':
             result['regulatoryReporting'] = value.replace('\n', ' ')
+        elif tag == '13C':
+            # Time Indication field: /CODE/HHMM+/-OFFSET format
+            result['timeIndication'] = value
+        elif tag == '26T':
+            # Transaction Type Code
+            result['transactionTypeCode'] = value
+        elif tag == '77T':
+            # Envelope Contents
+            result['envelopeContents'] = value.replace('\n', ' ')
 
     def _parse_party_field(self, value: str, tag: str) -> Dict[str, Any]:
         """Parse ordering/beneficiary customer field with full address extraction.
@@ -442,8 +451,12 @@ class MT103Extractor(BaseExtractor):
             'value_date': msg_content.get('valueDate') or msg_content.get('settlementDate'),
             'currency': msg_content.get('currencyCode') or msg_content.get('currency'),
 
-            # Amount
+            # Amount (Field 32A)
             'amount': msg_content.get('amount'),
+
+            # Instructed Amount (Field 33B) - original currency/amount if different from settlement
+            'instructed_currency': msg_content.get('instructedCurrency'),
+            'instructed_amount': msg_content.get('instructedAmount'),
 
             # Ordering Customer (Field 50) - fallback to ChapsSwiftParser debtor fields
             'ordering_customer_name': trunc(ordering_cust.get('name') or chaps_debtor_name, 140),
@@ -506,6 +519,15 @@ class MT103Extractor(BaseExtractor):
 
             # Regulatory Reporting (Field 77B)
             'regulatory_reporting': trunc(regulatory.get('code') if isinstance(regulatory, dict) else regulatory, 140),
+
+            # Time Indication (Field 13C) - /CODE/HHMM+OFFSET format
+            'time_indication': trunc(msg_content.get('timeIndication'), 255),
+
+            # Transaction Type Code (Field 26T)
+            'transaction_type_code': trunc(msg_content.get('transactionTypeCode'), 3),
+
+            # Envelope Contents (Field 77T)
+            'envelope_contents': trunc(msg_content.get('envelopeContents'), 10000),
         }
 
     def get_silver_columns(self) -> List[str]:
@@ -514,6 +536,7 @@ class MT103Extractor(BaseExtractor):
             'stg_id', 'raw_id', '_batch_id',
             'senders_reference', 'transaction_reference_number', 'bank_operation_code', 'instruction_codes',
             'value_date', 'currency', 'amount',
+            'instructed_currency', 'instructed_amount',
             'ordering_customer_name', 'ordering_customer_account', 'ordering_customer_address',
             'ordering_customer_street_name', 'ordering_customer_town_name', 'ordering_customer_post_code',
             'ordering_customer_country', 'ordering_customer_party_id', 'ordering_customer_national_id',
@@ -527,7 +550,7 @@ class MT103Extractor(BaseExtractor):
             'beneficiary_street_name', 'beneficiary_town_name', 'beneficiary_post_code',
             'beneficiary_country', 'beneficiary_party_id',
             'remittance_information', 'details_of_charges', 'sender_to_receiver_info',
-            'regulatory_reporting',
+            'regulatory_reporting', 'time_indication', 'transaction_type_code', 'envelope_contents',
         ]
 
     def get_silver_values(self, silver_record: Dict[str, Any]) -> tuple:

@@ -184,6 +184,10 @@ class BacsExtractor(BaseExtractor):
     MESSAGE_TYPE = "BACS"
     SILVER_TABLE = "stg_bacs"
 
+    def __init__(self):
+        """Initialize BACS extractor with parser."""
+        self.parser = BacsFixedWidthParser()
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================

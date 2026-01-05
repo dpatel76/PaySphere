@@ -286,6 +286,12 @@ class RtpExtractor(BaseExtractor):
         creditor_agent = msg_content.get('creditorAgent', {})
         remittance_info = msg_content.get('remittanceInformation', {})
 
+        # Get account number and RTN values
+        debtor_acct_num = trunc(debtor_account.get('accountNumber'), 34)
+        creditor_acct_num = trunc(creditor_account.get('accountNumber'), 34)
+        debtor_rtn = trunc(debtor_agent.get('memberId'), 9)
+        creditor_rtn = trunc(creditor_agent.get('memberId'), 9)
+
         return {
             'stg_id': stg_id,
             'raw_id': raw_id,
@@ -300,6 +306,7 @@ class RtpExtractor(BaseExtractor):
             'end_to_end_id': trunc(msg_content.get('endToEndId'), 35),
             'transaction_id': trunc(msg_content.get('transactionId'), 35),
             'uetr': msg_content.get('uetr'),
+            'clearing_system_reference': msg_content.get('clearingSystemReference'),
 
             # Amounts
             'instructed_amount': msg_content.get('instructedAmount') or msg_content.get('interbankSettlementAmount'),
@@ -307,13 +314,17 @@ class RtpExtractor(BaseExtractor):
 
             # Debtor (matching DB columns)
             'debtor_name': trunc(debtor.get('name'), 140),
-            'debtor_account': trunc(debtor_account.get('accountNumber'), 34),
-            'debtor_agent_id': trunc(debtor_agent.get('memberId'), 9),
+            'debtor_account': debtor_acct_num,
+            'debtor_agent_id': debtor_rtn,
+            'debtor_account_number': debtor_acct_num,  # Alternate column
+            'debtor_routing_number': debtor_rtn,  # Alternate column
 
             # Creditor (matching DB columns)
             'creditor_name': trunc(creditor.get('name'), 140),
-            'creditor_account': trunc(creditor_account.get('accountNumber'), 34),
-            'creditor_agent_id': trunc(creditor_agent.get('memberId'), 9),
+            'creditor_account': creditor_acct_num,
+            'creditor_agent_id': creditor_rtn,
+            'creditor_account_number': creditor_acct_num,  # Alternate column
+            'creditor_routing_number': creditor_rtn,  # Alternate column
 
             # Purpose
             'purpose_code': msg_content.get('purposeCode'),
@@ -323,14 +334,20 @@ class RtpExtractor(BaseExtractor):
         }
 
     def get_silver_columns(self) -> List[str]:
-        """Return ordered list of Silver table columns for INSERT."""
+        """Return ordered list of Silver table columns for INSERT.
+
+        Column order matches silver.stg_rtp table schema.
+        """
         return [
             'stg_id', 'raw_id', '_batch_id',
             'msg_id', 'creation_date_time',
             'instruction_id', 'end_to_end_id', 'transaction_id', 'uetr',
+            'clearing_system_reference',
             'instructed_amount', 'instructed_currency',
             'debtor_name', 'debtor_account', 'debtor_agent_id',
+            'debtor_account_number', 'debtor_routing_number',
             'creditor_name', 'creditor_account', 'creditor_agent_id',
+            'creditor_account_number', 'creditor_routing_number',
             'purpose_code', 'remittance_info',
         ]
 

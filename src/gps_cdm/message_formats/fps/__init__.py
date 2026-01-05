@@ -1,9 +1,22 @@
-"""UK Faster Payments Service (FPS) Extractor - ISO 20022 based."""
+"""UK Faster Payments Service (FPS) Extractor - ISO 20022 pacs.008 based.
+
+FPS uses the ISO 20022 pacs.008 FIToFICstmrCdtTrf message format with UK-specific
+Sort Code + Account Number identification. This is the standard for UK domestic
+real-time payments.
+
+Key characteristics:
+- Sort Code: 6 digits identifying the bank branch (e.g., 20-00-00)
+- Account Number: 8 digits (e.g., 12345678)
+- Currency: GBP (UK Pounds Sterling)
+- Clearing System: GBDSC (Great Britain Domestic Sort Code)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
 import logging
+import re
+import xml.etree.ElementTree as ET
 
 from ..base import (
     BaseExtractor,
@@ -17,23 +30,199 @@ from ..base import (
 logger = logging.getLogger(__name__)
 
 
+class FpsParser:
+    """Parser for FPS ISO 20022 pacs.008 XML messages."""
+
+    @staticmethod
+    def strip_namespaces(xml_string: str) -> str:
+        """Remove XML namespaces for easier parsing."""
+        # Remove xmlns declarations
+        xml_string = re.sub(r'\sxmlns[^"]*"[^"]*"', '', xml_string)
+        # Remove namespace prefixes
+        xml_string = re.sub(r'<(/?)[\w]+:', r'<\1', xml_string)
+        return xml_string
+
+    @staticmethod
+    def parse(content: str) -> Dict[str, Any]:
+        """Parse FPS XML message to dictionary.
+
+        Args:
+            content: Raw XML string or JSON string
+
+        Returns:
+            Dictionary with normalized field names (camelCase)
+        """
+        # If already JSON/dict, just return normalized
+        if isinstance(content, dict):
+            return content
+
+        try:
+            parsed = json.loads(content)
+            return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Try XML parsing
+        try:
+            clean_xml = FpsParser.strip_namespaces(content)
+            root = ET.fromstring(clean_xml)
+            return FpsParser._parse_xml_to_dict(root)
+        except ET.ParseError as e:
+            logger.warning(f"Failed to parse FPS XML: {e}")
+            return {}
+
+    @staticmethod
+    def _parse_xml_to_dict(root: ET.Element) -> Dict[str, Any]:
+        """Parse FPS pacs.008 XML structure to normalized dict."""
+        result = {}
+
+        # Find the FIToFICstmrCdtTrf element (may be root or nested)
+        fi_to_fi = root.find('.//FIToFICstmrCdtTrf') or root
+
+        # Group Header
+        grp_hdr = fi_to_fi.find('.//GrpHdr')
+        if grp_hdr is not None:
+            result['messageId'] = FpsParser._get_text(grp_hdr, 'MsgId')
+            result['creationDateTime'] = FpsParser._get_text(grp_hdr, 'CreDtTm')
+            result['numberOfTransactions'] = FpsParser._get_text(grp_hdr, 'NbOfTxs')
+            result['settlementDate'] = FpsParser._get_text(grp_hdr, 'IntrBkSttlmDt')
+
+        # Credit Transfer Transaction Info
+        cdt_trf = fi_to_fi.find('.//CdtTrfTxInf')
+        if cdt_trf is not None:
+            # Payment Identification
+            pmt_id = cdt_trf.find('PmtId')
+            if pmt_id is not None:
+                result['instructionId'] = FpsParser._get_text(pmt_id, 'InstrId')
+                result['endToEndId'] = FpsParser._get_text(pmt_id, 'EndToEndId')
+                result['paymentId'] = FpsParser._get_text(pmt_id, 'TxId')
+                result['uetr'] = FpsParser._get_text(pmt_id, 'UETR')
+
+            # Amount
+            amt = cdt_trf.find('IntrBkSttlmAmt')
+            if amt is not None:
+                result['amount'] = amt.text
+                result['currency'] = amt.get('Ccy', 'GBP')
+
+            # Debtor (Payer)
+            dbtr = cdt_trf.find('Dbtr')
+            if dbtr is not None:
+                result['payerName'] = FpsParser._get_text(dbtr, 'Nm')
+                result['debtorName'] = result['payerName']
+                pstl_adr = dbtr.find('PstlAdr')
+                if pstl_adr is not None:
+                    result['payerAddress'] = FpsParser._get_text(pstl_adr, 'AdrLine')
+
+            # Debtor Account
+            dbtr_acct = cdt_trf.find('DbtrAcct')
+            if dbtr_acct is not None:
+                acct_id = dbtr_acct.find('.//Id/Othr/Id')
+                if acct_id is not None:
+                    result['payerAccount'] = acct_id.text
+                    result['debtorAccountNumber'] = acct_id.text
+                iban = dbtr_acct.find('.//Id/IBAN')
+                if iban is not None:
+                    result['payerIban'] = iban.text
+
+            # Debtor Agent (Payer's Bank - Sort Code)
+            dbtr_agt = cdt_trf.find('DbtrAgt')
+            if dbtr_agt is not None:
+                sort_code = dbtr_agt.find('.//ClrSysMmbId/MmbId')
+                if sort_code is not None:
+                    result['payerSortCode'] = sort_code.text
+                    result['debtorSortCode'] = sort_code.text
+                bic = dbtr_agt.find('.//BICFI')
+                if bic is not None:
+                    result['payerBic'] = bic.text
+
+            # Creditor (Payee)
+            cdtr = cdt_trf.find('Cdtr')
+            if cdtr is not None:
+                result['payeeName'] = FpsParser._get_text(cdtr, 'Nm')
+                result['creditorName'] = result['payeeName']
+                pstl_adr = cdtr.find('PstlAdr')
+                if pstl_adr is not None:
+                    result['payeeAddress'] = FpsParser._get_text(pstl_adr, 'AdrLine')
+
+            # Creditor Account
+            cdtr_acct = cdt_trf.find('CdtrAcct')
+            if cdtr_acct is not None:
+                acct_id = cdtr_acct.find('.//Id/Othr/Id')
+                if acct_id is not None:
+                    result['payeeAccount'] = acct_id.text
+                    result['creditorAccountNumber'] = acct_id.text
+                iban = cdtr_acct.find('.//Id/IBAN')
+                if iban is not None:
+                    result['payeeIban'] = iban.text
+
+            # Creditor Agent (Payee's Bank - Sort Code)
+            cdtr_agt = cdt_trf.find('CdtrAgt')
+            if cdtr_agt is not None:
+                sort_code = cdtr_agt.find('.//ClrSysMmbId/MmbId')
+                if sort_code is not None:
+                    result['payeeSortCode'] = sort_code.text
+                    result['creditorSortCode'] = sort_code.text
+                bic = cdtr_agt.find('.//BICFI')
+                if bic is not None:
+                    result['payeeBic'] = bic.text
+
+            # Remittance Information
+            rmt_inf = cdt_trf.find('RmtInf')
+            if rmt_inf is not None:
+                result['remittanceInfo'] = FpsParser._get_text(rmt_inf, 'Ustrd')
+                strd = rmt_inf.find('Strd')
+                if strd is not None:
+                    result['paymentReference'] = FpsParser._get_text(strd, './/CdtrRefInf/Ref')
+
+        return result
+
+    @staticmethod
+    def _get_text(element: ET.Element, path: str) -> Optional[str]:
+        """Get text from an element at the given path."""
+        if element is None:
+            return None
+        found = element.find(path)
+        return found.text if found is not None else None
+
+
 class FpsExtractor(BaseExtractor):
-    """Extractor for UK Faster Payments Service messages."""
+    """Extractor for UK Faster Payments Service messages.
+
+    FPS is the UK's real-time payment system using ISO 20022 pacs.008 format.
+    Key features:
+    - UK Sort Code (6 digits) identifies the bank/branch
+    - Account Number (8 digits)
+    - Clearing system: GBDSC (Great Britain Domestic Sort Code)
+    """
 
     MESSAGE_TYPE = "FPS"
-    SILVER_TABLE = "stg_faster_payments"
+    SILVER_TABLE = "stg_fps"
 
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================
 
     def extract_bronze(self, raw_content: Dict[str, Any], batch_id: str) -> Dict[str, Any]:
-        """Extract Bronze layer record from raw FPS content."""
-        msg_id = raw_content.get('paymentId', '') or raw_content.get('endToEndId', '')
+        """Extract Bronze layer record from raw FPS content.
+
+        Accepts both pre-parsed dict and raw XML/JSON strings.
+        """
+        # Parse if string content
+        if isinstance(raw_content, str):
+            parsed = FpsParser.parse(raw_content)
+        else:
+            parsed = raw_content
+
+        msg_id = (
+            parsed.get('paymentId') or
+            parsed.get('endToEndId') or
+            parsed.get('messageId') or
+            ''
+        )
         return {
             'raw_id': self.generate_raw_id(msg_id),
             'message_type': self.MESSAGE_TYPE,
-            'raw_content': json.dumps(raw_content) if isinstance(raw_content, dict) else raw_content,
+            'raw_content': json.dumps(parsed) if isinstance(parsed, dict) else raw_content,
             'batch_id': batch_id,
         }
 
@@ -48,53 +237,127 @@ class FpsExtractor(BaseExtractor):
         stg_id: str,
         batch_id: str
     ) -> Dict[str, Any]:
-        """Extract all Silver layer fields from FPS message."""
+        """Extract all Silver layer fields from FPS message.
+
+        This method maps to ALL columns in silver.stg_fps table.
+        """
         trunc = self.trunc
 
+        # Parse content if needed
+        if isinstance(msg_content, str):
+            msg_content = FpsParser.parse(msg_content)
+
+        # Extract values with proper fallbacks for None
+        payer_name = msg_content.get('payerName') or msg_content.get('debtorName')
+        payer_account = msg_content.get('payerAccount') or msg_content.get('debtorAccountNumber')
+        payer_sort_code = msg_content.get('payerSortCode') or msg_content.get('debtorSortCode')
+
+        payee_name = msg_content.get('payeeName') or msg_content.get('creditorName')
+        payee_account = msg_content.get('payeeAccount') or msg_content.get('creditorAccountNumber')
+        payee_sort_code = msg_content.get('payeeSortCode') or msg_content.get('creditorSortCode')
+
         return {
+            # System columns (must match DB exactly)
             'stg_id': stg_id,
-            'raw_id': raw_id,
+            '_raw_id': raw_id,
             '_batch_id': batch_id,
 
-            # Message Type
+            # Message identification
+            'message_id': trunc(msg_content.get('messageId'), 35),
             'message_type': 'FPS',
-            'payment_id': trunc(msg_content.get('paymentId'), 35),
             'creation_date_time': msg_content.get('creationDateTime'),
 
             # Amount
             'amount': msg_content.get('amount'),
             'currency': msg_content.get('currency') or 'GBP',
 
-            # Payer (Debtor)
-            'payer_sort_code': trunc(msg_content.get('payerSortCode'), 6),
-            'payer_account': trunc(msg_content.get('payerAccount'), 8),
-            'payer_name': trunc(msg_content.get('payerName'), 140),
+            # Debtor (ISO 20022 terminology) - maps to DB columns
+            'debtor_name': trunc(payer_name, 140),
+            'debtor_account_account_number': trunc(payer_account, 8),
+            'debtor_account_sort_code': trunc(payer_sort_code, 6),
+
+            # Payer (FPS terminology) - also maps to DB columns
+            'payer_name': trunc(payer_name, 140),
+            'payer_account': trunc(payer_account, 8),
             'payer_address': msg_content.get('payerAddress'),
+            'payer_sort_code': trunc(payer_sort_code, 6),
 
-            # Payee (Creditor)
-            'payee_sort_code': trunc(msg_content.get('payeeSortCode'), 6),
-            'payee_account': trunc(msg_content.get('payeeAccount'), 8),
-            'payee_name': trunc(msg_content.get('payeeName'), 140),
+            # Creditor (ISO 20022 terminology)
+            'creditor_name': trunc(payee_name, 140),
+            'creditor_account_account_number': trunc(payee_account, 8),
+            'creditor_account_sort_code': trunc(payee_sort_code, 6),
+
+            # Payee (FPS terminology)
+            'payee_name': trunc(payee_name, 140),
+            'payee_account': trunc(payee_account, 8),
             'payee_address': msg_content.get('payeeAddress'),
+            'payee_sort_code': trunc(payee_sort_code, 6),
 
-            # Payment Details
+            # Payment identification
+            'payment_id': trunc(msg_content.get('paymentId'), 35),
+            'instruction_id': trunc(msg_content.get('instructionId'), 35),
             'end_to_end_id': trunc(msg_content.get('endToEndId'), 35),
+
+            # Remittance
             'payment_reference': trunc(msg_content.get('paymentReference'), 35),
-            'requested_execution_date': msg_content.get('requestedExecutionDate'),
-            'settlement_datetime': msg_content.get('settlementDatetime'),
             'remittance_info': msg_content.get('remittanceInfo'),
+
+            # Settlement
+            'requested_execution_date': msg_content.get('requestedExecutionDate') or msg_content.get('settlementDate'),
+            'settlement_datetime': msg_content.get('settlementDatetime') or msg_content.get('settlementDate'),
+
+            # Lineage
+            'raw_id': raw_id,
         }
 
     def get_silver_columns(self) -> List[str]:
-        """Return ordered list of Silver table columns for INSERT."""
+        """Return ordered list of Silver table columns for INSERT.
+
+        MUST match actual silver.stg_fps table columns exactly.
+        System-managed columns (_ingested_at, _processed_at, etc.) are excluded.
+        """
         return [
-            'stg_id', 'raw_id', '_batch_id',
-            'message_type', 'payment_id', 'creation_date_time',
-            'amount', 'currency',
-            'payer_sort_code', 'payer_account', 'payer_name', 'payer_address',
-            'payee_sort_code', 'payee_account', 'payee_name', 'payee_address',
-            'end_to_end_id', 'payment_reference',
-            'requested_execution_date', 'settlement_datetime', 'remittance_info',
+            # System columns
+            'stg_id',
+            '_raw_id',
+            '_batch_id',
+
+            # Message identification
+            'message_id',
+            'message_type',
+            'creation_date_time',
+
+            # Amount
+            'amount',
+            'currency',
+
+            # Debtor/Payer
+            'debtor_name',
+            'debtor_account_account_number',
+            'debtor_account_sort_code',
+            'payer_name',
+            'payer_account',
+            'payer_address',
+            'payer_sort_code',
+
+            # Creditor/Payee
+            'creditor_name',
+            'creditor_account_account_number',
+            'creditor_account_sort_code',
+            'payee_name',
+            'payee_account',
+            'payee_address',
+            'payee_sort_code',
+
+            # Payment details
+            'payment_id',
+            'instruction_id',
+            'end_to_end_id',
+            'payment_reference',
+            'remittance_info',
+            'requested_execution_date',
+            'settlement_datetime',
+            'raw_id',
         ]
 
     def get_silver_values(self, silver_record: Dict[str, Any]) -> tuple:
@@ -118,59 +381,92 @@ class FpsExtractor(BaseExtractor):
             silver_data: Dict with Silver table columns (snake_case field names)
             stg_id: Silver staging ID
             batch_id: Batch identifier
+
+        Returns:
+            GoldEntities containing parties, accounts, and financial institutions
         """
         entities = GoldEntities()
 
-        # Payer Party (Debtor) - uses Silver column names
-        if silver_data.get('payer_name'):
+        # Get payer/debtor fields (may be in either naming convention)
+        payer_name = silver_data.get('payer_name') or silver_data.get('debtor_name')
+        payer_account = silver_data.get('payer_account') or silver_data.get('debtor_account_account_number')
+        payer_sort_code = silver_data.get('payer_sort_code') or silver_data.get('debtor_account_sort_code')
+        payer_address = silver_data.get('payer_address')
+
+        # Get payee/creditor fields
+        payee_name = silver_data.get('payee_name') or silver_data.get('creditor_name')
+        payee_account = silver_data.get('payee_account') or silver_data.get('creditor_account_account_number')
+        payee_sort_code = silver_data.get('payee_sort_code') or silver_data.get('creditor_account_sort_code')
+        payee_address = silver_data.get('payee_address')
+
+        # ---------------------------------------------------------------
+        # PARTIES
+        # ---------------------------------------------------------------
+
+        # Payer Party (Debtor)
+        if payer_name:
             entities.parties.append(PartyData(
-                name=silver_data.get('payer_name'),
+                name=payer_name,
                 role="DEBTOR",
-                party_type='UNKNOWN',
+                party_type='UNKNOWN',  # FPS doesn't distinguish person/org
                 country='GB',
+                street_name=payer_address,  # Use street_name for address
             ))
 
         # Payee Party (Creditor)
-        if silver_data.get('payee_name'):
+        if payee_name:
             entities.parties.append(PartyData(
-                name=silver_data.get('payee_name'),
+                name=payee_name,
                 role="CREDITOR",
                 party_type='UNKNOWN',
                 country='GB',
+                street_name=payee_address,  # Use street_name for address
             ))
 
-        # Payer Account
-        if silver_data.get('payer_account'):
+        # ---------------------------------------------------------------
+        # ACCOUNTS
+        # ---------------------------------------------------------------
+
+        # Payer Account (UK Sort Code + Account Number)
+        # Note: Sort code is stored in the account number as prefix (sort_code + account_number)
+        if payer_account:
+            # UK accounts use sort code + account number format
+            full_account = f"{payer_sort_code}-{payer_account}" if payer_sort_code else payer_account
             entities.accounts.append(AccountData(
-                account_number=silver_data.get('payer_account'),
+                account_number=full_account,
                 role="DEBTOR",
-                account_type='CACC',
+                account_type='CACC',  # Current Account
                 currency='GBP',
             ))
 
         # Payee Account
-        if silver_data.get('payee_account'):
+        if payee_account:
+            full_account = f"{payee_sort_code}-{payee_account}" if payee_sort_code else payee_account
             entities.accounts.append(AccountData(
-                account_number=silver_data.get('payee_account'),
+                account_number=full_account,
                 role="CREDITOR",
                 account_type='CACC',
                 currency='GBP',
             ))
 
-        # Payer Bank (by Sort Code)
-        if silver_data.get('payer_sort_code'):
+        # ---------------------------------------------------------------
+        # FINANCIAL INSTITUTIONS (Banks identified by Sort Code)
+        # ---------------------------------------------------------------
+
+        # Payer's Bank (Debtor Agent)
+        if payer_sort_code:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                clearing_code=silver_data.get('payer_sort_code'),
-                clearing_system='GBDSC',
+                clearing_code=payer_sort_code,
+                clearing_system='GBDSC',  # Great Britain Domestic Sort Code
                 country='GB',
             ))
 
-        # Payee Bank (by Sort Code)
-        if silver_data.get('payee_sort_code'):
+        # Payee's Bank (Creditor Agent)
+        if payee_sort_code:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                clearing_code=silver_data.get('payee_sort_code'),
+                clearing_code=payee_sort_code,
                 clearing_system='GBDSC',
                 country='GB',
             ))
@@ -178,7 +474,9 @@ class FpsExtractor(BaseExtractor):
         return entities
 
 
-# Register the extractor
+# Register the extractor with all aliases
 ExtractorRegistry.register('FPS', FpsExtractor())
 ExtractorRegistry.register('fps', FpsExtractor())
 ExtractorRegistry.register('FASTER_PAYMENTS', FpsExtractor())
+ExtractorRegistry.register('faster_payments', FpsExtractor())
+ExtractorRegistry.register('UK_FPS', FpsExtractor())
