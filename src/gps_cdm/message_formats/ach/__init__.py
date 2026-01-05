@@ -75,6 +75,11 @@ class AchFixedWidthParser:
             elif record_type == '9' and not line[1:].strip().replace('9', '') == '':
                 result['fileControl'] = self._parse_file_control(line)
 
+        # Handle incomplete file (no batch control) - save current batch if exists
+        if current_batch and current_batch not in result['batches']:
+            current_batch['entries'] = current_entries
+            result['batches'].append(current_batch)
+
         # Convert to flat structure for first batch/entry (most common case)
         if result['batches']:
             batch = result['batches'][0]
@@ -241,6 +246,9 @@ class AchExtractor(BaseExtractor):
     MESSAGE_TYPE = "ACH"
     SILVER_TABLE = "stg_ach"
 
+    def __init__(self):
+        self.parser = AchFixedWidthParser()
+
     def _safe_int(self, value) -> int | None:
         """Safely convert value to integer, returning None if not convertible."""
         if value is None:
@@ -278,6 +286,7 @@ class AchExtractor(BaseExtractor):
     ) -> Dict[str, Any]:
         """Extract all Silver layer fields from ACH message."""
         trunc = self.trunc
+        parser = AchFixedWidthParser()
 
         # Handle raw text content - parse it first
         if isinstance(msg_content, dict) and '_raw_text' in msg_content:
@@ -286,8 +295,34 @@ class AchExtractor(BaseExtractor):
             # Record type 1 = file header, 5 = batch header, 6 = entry detail
             lines = raw_text.strip().split('\n')
             if lines and lines[0] and lines[0][0] in '156789':
-                parser = AchFixedWidthParser()
-                msg_content = parser.parse(raw_text)
+                parsed = parser.parse(raw_text)
+
+                # If parser returned data, use it
+                if parsed.get('immediateDestination') or parsed.get('companyName'):
+                    msg_content = parsed
+                else:
+                    # NiFi may have split the file - check for pre-parsed headers
+                    if 'file_header' in msg_content:
+                        fh = parser._parse_file_header(msg_content['file_header'].ljust(94))
+                        msg_content.update(fh)
+                    if 'batch_header' in msg_content:
+                        bh = parser._parse_batch_header(msg_content['batch_header'].ljust(94))
+                        msg_content.update(bh)
+                    # Parse entry detail from _raw_text (look for record type 6)
+                    for line in lines:
+                        if line and line[0] == '6':
+                            ed = parser._parse_entry_detail(line.ljust(94))
+                            msg_content.update(ed)
+                            break
+
+        # Also handle case where file_header/batch_header are provided without _raw_text parsing
+        elif isinstance(msg_content, dict):
+            if 'file_header' in msg_content and not msg_content.get('immediateDestination'):
+                fh = parser._parse_file_header(msg_content['file_header'].ljust(94))
+                msg_content.update(fh)
+            if 'batch_header' in msg_content and not msg_content.get('companyName'):
+                bh = parser._parse_batch_header(msg_content['batch_header'].ljust(94))
+                msg_content.update(bh)
 
         return {
             'stg_id': stg_id,

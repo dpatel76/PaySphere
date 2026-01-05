@@ -390,6 +390,8 @@ export const pipelineApi = {
     bronze: any;
     silver: any;
     gold: any;
+    bronze_parsed?: Record<string, any>;  // Extractor-parsed Bronze fields
+    bronze_silver_equivalent?: Record<string, any>;  // Bronze parsed as Silver fields
     gold_entities?: {
       debtor_party?: Record<string, any>;
       debtor_account?: Record<string, any>;
@@ -402,6 +404,7 @@ export const pipelineApi = {
       ultimate_debtor?: Record<string, any>;
       ultimate_creditor?: Record<string, any>;
     };
+    gold_extension?: Record<string, any>;  // Format-specific extension data
     field_mappings: any[];
   }> => {
     const { data } = await api.get(`/pipeline/records/${layer}/${recordId}/lineage`);
@@ -457,6 +460,30 @@ export const pipelineApi = {
   // Throughput
   getThroughput: async (hoursBack: number = 24, intervalMinutes: number = 60): Promise<any> => {
     const { data } = await api.get(`/pipeline/throughput?hours_back=${hoursBack}&interval_minutes=${intervalMinutes}`);
+    return data;
+  },
+
+  // Field Mappings - get Bronze→Silver→Gold mappings from database
+  getFieldMappings: async (messageType: string): Promise<{
+    message_type: string;
+    bronze_to_silver: {
+      silver_column: string;
+      bronze_path: string;
+      data_type: string;
+      is_required: boolean;
+      default_value: string | null;
+    }[];
+    silver_to_gold: {
+      gold_table: string;
+      gold_column: string;
+      silver_column: string;
+      entity_role: string | null;
+      data_type: string;
+      is_required: boolean;
+      default_value: string | null;
+    }[];
+  }> => {
+    const { data } = await api.get(`/pipeline/mappings/${messageType}`);
     return data;
   },
 };
@@ -716,6 +743,317 @@ export const errorsApi = {
 
   getErrorCode: async (errorCode: string): Promise<ErrorCode> => {
     const { data } = await api.get(`/errors/codes/${errorCode}`);
+    return data;
+  },
+};
+
+// =====================
+// Mappings Documentation API
+// =====================
+export interface MessageFormatSummary {
+  format_id: string;
+  format_name: string;
+  format_category: string;
+  standard_name: string | null;
+  country: string | null;
+  governing_body: string | null;
+  bronze_table: string;
+  silver_table: string;
+  total_standard_fields: number;
+  mapped_to_silver: number;
+  mapped_to_gold: number;
+  silver_coverage_pct: number | null;
+  gold_coverage_pct: number | null;
+  unmapped_fields: number;
+  is_active: boolean;
+}
+
+export interface StandardField {
+  standard_field_id: number;
+  format_id: string;
+  field_name: string;
+  field_path: string;
+  field_tag: string | null;
+  field_description: string | null;
+  data_type: string;
+  min_length: number | null;
+  max_length: number | null;
+  allowed_values: string | null;
+  is_mandatory: boolean;
+  field_category: string | null;
+  is_active: boolean;
+}
+
+export interface MappingDocumentationRow {
+  // Standard/Format Info
+  standard_name: string | null;
+  country: string | null;
+  message_format: string;
+  message_format_description: string;
+  format_category: string;
+
+  // Standard Field Info
+  standard_field_id: number | null;
+  standard_field_name: string | null;
+  standard_field_description: string | null;
+  standard_field_data_type: string | null;
+  standard_field_allowed_values: string | null;
+  standard_field_path: string | null;
+  standard_field_tag: string | null;
+  standard_field_mandatory: boolean | null;
+  field_category: string | null;
+
+  // Bronze Info
+  bronze_table: string | null;
+  bronze_column: string | null;
+
+  // Silver Mapping Info
+  silver_mapping_id: number | null;
+  silver_table: string | null;
+  silver_column: string | null;
+  silver_data_type: string | null;
+  silver_max_length: number | null;
+  silver_source_path: string | null;
+  silver_transform: string | null;
+  is_mapped_to_silver: boolean;
+
+  // Gold Mapping Info
+  gold_mapping_id: number | null;
+  gold_table: string | null;
+  gold_column: string | null;
+  gold_data_type: string | null;
+  gold_entity_role: string | null;
+  gold_purpose_code: string | null;
+  gold_source_expression: string | null;
+  is_mapped_to_gold: boolean;
+
+  // Metadata
+  is_active: boolean | null;
+  last_updated: string | null;
+}
+
+export interface CoverageStats {
+  format_id: string;
+  format_name: string;
+  total_standard_fields: number;
+  mandatory_fields: number;
+  mapped_to_silver: number;
+  mapped_to_gold: number;
+  silver_coverage_pct: number | null;
+  gold_coverage_pct: number | null;
+  unmapped_fields: number;
+}
+
+export interface UnmappedField {
+  format_id: string;
+  format_name: string;
+  field_name: string;
+  field_path: string;
+  field_description: string | null;
+  data_type: string | null;
+  is_mandatory: boolean | null;
+  field_category: string | null;
+  gap_type: string;
+}
+
+export interface SilverMapping {
+  mapping_id: number;
+  format_id: string;
+  target_column: string;
+  source_path: string;
+  data_type: string;
+  max_length: number | null;
+  is_required: boolean;
+  default_value: string | null;
+  transform_function: string | null;
+  transform_expression: string | null;
+  ordinal_position: number;
+  standard_field_id: number | null;
+  field_description: string | null;
+  is_user_modified: boolean;
+  is_active: boolean;
+}
+
+export interface GoldMapping {
+  mapping_id: number;
+  format_id: string;
+  gold_table: string;
+  gold_column: string;
+  source_expression: string;
+  entity_role: string | null;
+  data_type: string;
+  is_required: boolean;
+  default_value: string | null;
+  transform_expression: string | null;
+  ordinal_position: number;
+  purpose_code: string | null;
+  field_description: string | null;
+  is_user_modified: boolean;
+  is_active: boolean;
+}
+
+export interface FieldCategory {
+  field_category: string;
+  field_count: number;
+}
+
+export const mappingsApi = {
+  // Message Formats
+  getFormats: async (filters?: {
+    category?: string;
+    country?: string;
+    active_only?: boolean;
+  }): Promise<MessageFormatSummary[]> => {
+    const params = new URLSearchParams();
+    if (filters?.category) params.append('category', filters.category);
+    if (filters?.country) params.append('country', filters.country);
+    if (filters?.active_only !== undefined) params.append('active_only', filters.active_only.toString());
+    const { data } = await api.get(`/mappings/formats?${params}`);
+    return data;
+  },
+
+  getFormat: async (formatId: string): Promise<MessageFormatSummary> => {
+    const { data } = await api.get(`/mappings/formats/${formatId}`);
+    return data;
+  },
+
+  // Mappings Documentation
+  getDocumentation: async (
+    formatId: string,
+    filters?: {
+      field_category?: string;
+      mapped_only?: boolean;
+      unmapped_only?: boolean;
+    }
+  ): Promise<MappingDocumentationRow[]> => {
+    const params = new URLSearchParams();
+    if (filters?.field_category) params.append('field_category', filters.field_category);
+    if (filters?.mapped_only) params.append('mapped_only', 'true');
+    if (filters?.unmapped_only) params.append('unmapped_only', 'true');
+    const { data } = await api.get(`/mappings/documentation/${formatId}?${params}`);
+    return data;
+  },
+
+  getCoverage: async (formatId?: string): Promise<CoverageStats[]> => {
+    const params = formatId ? `?format_id=${formatId}` : '';
+    const { data } = await api.get(`/mappings/coverage${params}`);
+    return data;
+  },
+
+  getUnmapped: async (filters?: {
+    format_id?: string;
+    gap_type?: string;
+    mandatory_only?: boolean;
+  }): Promise<UnmappedField[]> => {
+    const params = new URLSearchParams();
+    if (filters?.format_id) params.append('format_id', filters.format_id);
+    if (filters?.gap_type) params.append('gap_type', filters.gap_type);
+    if (filters?.mandatory_only) params.append('mandatory_only', 'true');
+    const { data } = await api.get(`/mappings/unmapped?${params}`);
+    return data;
+  },
+
+  // Field Categories
+  getFieldCategories: async (formatId: string): Promise<FieldCategory[]> => {
+    const { data } = await api.get(`/mappings/field-categories/${formatId}`);
+    return data;
+  },
+
+  // Standard Fields CRUD
+  getStandardFields: async (
+    formatId: string,
+    filters?: { category?: string; active_only?: boolean }
+  ): Promise<StandardField[]> => {
+    const params = new URLSearchParams();
+    if (filters?.category) params.append('category', filters.category);
+    if (filters?.active_only !== undefined) params.append('active_only', filters.active_only.toString());
+    const { data } = await api.get(`/mappings/standard-fields/${formatId}?${params}`);
+    return data;
+  },
+
+  createStandardField: async (field: Omit<StandardField, 'standard_field_id' | 'is_active'>): Promise<StandardField> => {
+    const { data } = await api.post('/mappings/standard-fields', field);
+    return data;
+  },
+
+  updateStandardField: async (
+    fieldId: number,
+    updates: Partial<StandardField>,
+    updatedBy?: string
+  ): Promise<StandardField> => {
+    const params = updatedBy ? `?updated_by=${updatedBy}` : '';
+    const { data } = await api.put(`/mappings/standard-fields/${fieldId}${params}`, updates);
+    return data;
+  },
+
+  deleteStandardField: async (fieldId: number, softDelete = true): Promise<void> => {
+    await api.delete(`/mappings/standard-fields/${fieldId}?soft_delete=${softDelete}`);
+  },
+
+  // Silver Mappings CRUD
+  getSilverMappings: async (formatId: string, activeOnly = true): Promise<SilverMapping[]> => {
+    const { data } = await api.get(`/mappings/silver-mappings/${formatId}?active_only=${activeOnly}`);
+    return data;
+  },
+
+  createSilverMapping: async (mapping: Omit<SilverMapping, 'mapping_id' | 'is_user_modified' | 'is_active'>): Promise<SilverMapping> => {
+    const { data } = await api.post('/mappings/silver-mappings', mapping);
+    return data;
+  },
+
+  updateSilverMapping: async (
+    mappingId: number,
+    updates: Partial<SilverMapping>,
+    updatedBy?: string
+  ): Promise<SilverMapping> => {
+    const params = updatedBy ? `?updated_by=${updatedBy}` : '';
+    const { data } = await api.put(`/mappings/silver-mappings/${mappingId}${params}`, updates);
+    return data;
+  },
+
+  deleteSilverMapping: async (mappingId: number, softDelete = true): Promise<void> => {
+    await api.delete(`/mappings/silver-mappings/${mappingId}?soft_delete=${softDelete}`);
+  },
+
+  // Gold Mappings CRUD
+  getGoldMappings: async (
+    formatId: string,
+    filters?: { gold_table?: string; entity_role?: string; active_only?: boolean }
+  ): Promise<GoldMapping[]> => {
+    const params = new URLSearchParams();
+    if (filters?.gold_table) params.append('gold_table', filters.gold_table);
+    if (filters?.entity_role) params.append('entity_role', filters.entity_role);
+    if (filters?.active_only !== undefined) params.append('active_only', filters.active_only.toString());
+    const { data } = await api.get(`/mappings/gold-mappings/${formatId}?${params}`);
+    return data;
+  },
+
+  createGoldMapping: async (mapping: Omit<GoldMapping, 'mapping_id' | 'is_user_modified' | 'is_active'>): Promise<GoldMapping> => {
+    const { data } = await api.post('/mappings/gold-mappings', mapping);
+    return data;
+  },
+
+  updateGoldMapping: async (
+    mappingId: number,
+    updates: Partial<GoldMapping>,
+    updatedBy?: string
+  ): Promise<GoldMapping> => {
+    const params = updatedBy ? `?updated_by=${updatedBy}` : '';
+    const { data } = await api.put(`/mappings/gold-mappings/${mappingId}${params}`, updates);
+    return data;
+  },
+
+  deleteGoldMapping: async (mappingId: number, softDelete = true): Promise<void> => {
+    await api.delete(`/mappings/gold-mappings/${mappingId}?soft_delete=${softDelete}`);
+  },
+
+  // Export
+  exportMappings: async (formatId: string, formatType: 'json' | 'csv' = 'json'): Promise<{
+    format: string;
+    data: MappingDocumentationRow[] | string;
+    row_count: number;
+  }> => {
+    const { data } = await api.get(`/mappings/export/${formatId}?format_type=${formatType}`);
     return data;
   },
 };

@@ -330,6 +330,9 @@ class Pacs008Extractor(BaseExtractor):
     MESSAGE_TYPE = "pacs.008"
     SILVER_TABLE = "stg_pacs008"
 
+    def __init__(self):
+        self.parser = Pacs008XmlParser()
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================

@@ -323,6 +323,9 @@ class Pain001Extractor(BaseExtractor):
     MESSAGE_TYPE = "pain.001"
     SILVER_TABLE = "stg_pain001"
 
+    def __init__(self):
+        self.parser = Pain001XmlParser()
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================

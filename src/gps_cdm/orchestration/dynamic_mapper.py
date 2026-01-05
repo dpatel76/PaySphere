@@ -52,12 +52,18 @@ class DynamicMapper:
         return self._format_cache[format_id]
 
     def _get_silver_mappings(self, format_id: str) -> List[Dict[str, Any]]:
-        """Get Silver field mappings from database."""
+        """Get Silver field mappings from database.
+
+        Returns mappings with both source_path (XPath for documentation) and
+        parser_path (dot-notation for extraction). If parser_path is not set,
+        falls back to source_path.
+        """
         if format_id not in self._mapping_cache:
             cursor = self.conn.cursor()
             cursor.execute("""
                 SELECT target_column, source_path, data_type, max_length,
-                       is_required, default_value, transform_function, ordinal_position
+                       is_required, default_value, transform_function, ordinal_position,
+                       parser_path
                 FROM mapping.silver_field_mappings
                 WHERE format_id = %s AND is_active = TRUE
                 ORDER BY ordinal_position
@@ -66,13 +72,14 @@ class DynamicMapper:
             self._mapping_cache[format_id] = [
                 {
                     'target_column': row[0],
-                    'source_path': row[1],
+                    'source_path': row[1],  # XPath for documentation/lineage
                     'data_type': row[2],
                     'max_length': row[3],
                     'is_required': row[4],
                     'default_value': row[5],
                     'transform_function': row[6],
-                    'ordinal_position': row[7]
+                    'ordinal_position': row[7],
+                    'parser_path': row[8]  # Dot-notation for extraction
                 }
                 for row in rows
             ]
@@ -200,7 +207,10 @@ class DynamicMapper:
 
         for mapping in mappings:
             col = mapping['target_column']
-            path = mapping['source_path']
+            # Use parser_path if available, otherwise fall back to source_path
+            # parser_path: dot-notation matching parser output (e.g., debtor.name)
+            # source_path: XPath for documentation (e.g., CstmrCdtTrfInitn/PmtInf/Dbtr/Nm)
+            path = mapping.get('parser_path') or mapping['source_path']
             data_type = mapping['data_type']
             max_length = mapping['max_length']
             transform = mapping['transform_function']
@@ -216,7 +226,7 @@ class DynamicMapper:
             elif path == '_TIMESTAMP':
                 value = datetime.utcnow()
             else:
-                # Resolve from raw content
+                # Resolve from raw content using parser_path (dot-notation)
                 value = self._resolve_path(raw_content, path)
 
             # Apply default if value is None

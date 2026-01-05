@@ -35,6 +35,7 @@ import {
   Logout as LogoutIcon,
   MonitorHeart as MonitoringIcon,
   ErrorOutline as ErrorIcon,
+  Description as MappingsIcon,
 } from '@mui/icons-material';
 import { colors } from '../../styles/design-system';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,6 +50,7 @@ const navItems = [
   { path: '/data-quality', label: 'Data Quality', icon: <CheckCircleIcon /> },
   { path: '/reconciliation', label: 'Reconciliation', icon: <CompareArrowsIcon /> },
   { path: '/lineage', label: 'Data Lineage', icon: <AccountTreeIcon /> },
+  { path: '/mappings', label: 'Mappings Documentation', icon: <MappingsIcon /> },
   { path: '/process', label: 'Process File', icon: <UploadIcon /> },
   { path: '/reprocess', label: 'Reprocess', icon: <RefreshIcon /> },
 ];

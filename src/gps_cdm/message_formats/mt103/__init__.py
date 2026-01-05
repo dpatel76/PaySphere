@@ -197,38 +197,87 @@ class MT103SwiftParser:
             result['regulatoryReporting'] = value.replace('\n', ' ')
 
     def _parse_party_field(self, value: str, tag: str) -> Dict[str, Any]:
-        """Parse ordering/beneficiary customer field."""
+        """Parse ordering/beneficiary customer field with full address extraction.
+
+        SWIFT MT format for field 50K/59:
+        Line 1: /account_number (optional)
+        Line 2: Party name
+        Line 3+: Address lines (street, city/postcode, country)
+        """
         result = {}
-        lines = value.split('\n')
+        lines = [line.strip() for line in value.split('\n') if line.strip()]
+        address_lines = []
+        name_set = False
 
         for i, line in enumerate(lines):
-            line = line.strip()
             if not line:
                 continue
 
             # First line may have account
-            if i == 0:
-                if line.startswith('/'):
-                    # Account number
-                    result['account'] = line[1:].split('\n')[0]
-                    continue
-                elif '/' in line and not line.startswith('/'):
-                    # Party identifier format: /CODE/value
-                    pass
+            if i == 0 and line.startswith('/'):
+                # Account number - extract and check for IBAN
+                result['account'] = line[1:].split('\n')[0][:34]
+                # Extract sort code from IBAN if present (e.g., /GB33BANK12345678)
+                if line.startswith('/') and len(line) > 6:
+                    iban_part = line[1:23]
+                    if len(iban_part) >= 8 and iban_part[:2].isalpha():
+                        # Extract sort code from positions 5-10 for UK IBANs
+                        if iban_part.startswith('GB') and len(iban_part) >= 10:
+                            result['sortCode'] = iban_part[4:10]
+                continue
 
-            # Check for name vs address
-            if i == 0 or (i == 1 and result.get('account')):
-                result['name'] = line
+            # Name is the first non-account line
+            if not name_set:
+                result['name'] = line[:140]
+                name_set = True
             else:
-                # Build address
-                if 'address' not in result:
-                    result['address'] = {}
-                if 'streetName' not in result['address']:
-                    result['address']['streetName'] = line
-                elif 'townName' not in result['address']:
-                    result['address']['townName'] = line
-                elif 'country' not in result['address']:
-                    result['address']['country'] = line[:2] if len(line) >= 2 else line
+                # Remaining lines are address
+                address_lines.append(line)
+
+        # Parse address lines for street, city, postcode, country
+        if address_lines:
+            result['address'] = {}
+
+            # Street address (first address line)
+            if len(address_lines) >= 1:
+                result['address']['streetName'] = address_lines[0][:70]
+
+            # City/Town and Post code (second address line)
+            if len(address_lines) >= 2:
+                city_line = address_lines[1]
+                # Try to extract post code patterns
+                # UK: AA9A 9AA, A9A 9AA, A9 9AA, A99 9AA, AA9 9AA, AA99 9AA
+                uk_postcode = re.search(r'([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})', city_line.upper())
+                # US: 5 digits or 5+4 format
+                us_zipcode = re.search(r'(\d{5}(?:-\d{4})?)', city_line)
+
+                if uk_postcode:
+                    result['address']['postCode'] = uk_postcode.group(1)
+                    # Town is everything before the postcode
+                    town = city_line[:city_line.upper().find(uk_postcode.group(1))].strip().rstrip(',')
+                    result['address']['townName'] = town[:35] if town else city_line[:35]
+                elif us_zipcode:
+                    result['address']['postCode'] = us_zipcode.group(1)
+                    town = city_line[:city_line.find(us_zipcode.group(1))].strip().rstrip(',')
+                    result['address']['townName'] = town[:35] if town else city_line[:35]
+                else:
+                    result['address']['townName'] = city_line[:35]
+
+            # Country (last address line if it looks like a country)
+            if len(address_lines) >= 3:
+                country_line = address_lines[-1].upper().strip()
+                # Map common country names to ISO codes
+                country_map = {
+                    'UNITED KINGDOM': 'GB', 'UK': 'GB', 'GREAT BRITAIN': 'GB', 'ENGLAND': 'GB',
+                    'UNITED STATES': 'US', 'USA': 'US', 'AMERICA': 'US', 'UNITED STATES OF AMERICA': 'US',
+                    'GERMANY': 'DE', 'DEUTSCHLAND': 'DE', 'FRANCE': 'FR', 'SPAIN': 'ES',
+                    'ITALY': 'IT', 'NETHERLANDS': 'NL', 'BELGIUM': 'BE', 'SWITZERLAND': 'CH',
+                    'IRELAND': 'IE', 'AUSTRALIA': 'AU', 'CANADA': 'CA', 'JAPAN': 'JP',
+                    'CHINA': 'CN', 'HONG KONG': 'HK', 'SINGAPORE': 'SG', 'INDIA': 'IN',
+                    'BRAZIL': 'BR', 'MEXICO': 'MX', 'SOUTH AFRICA': 'ZA',
+                    'UNITED ARAB EMIRATES': 'AE', 'UAE': 'AE', 'SAUDI ARABIA': 'SA',
+                }
+                result['address']['country'] = country_map.get(country_line, country_line[:2])
 
         return result
 
@@ -298,6 +347,9 @@ class MT103Extractor(BaseExtractor):
     MESSAGE_TYPE = "MT103"
     SILVER_TABLE = "stg_mt103"
 
+    def __init__(self):
+        self.parser = MT103SwiftParser()
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================
@@ -334,7 +386,11 @@ class MT103Extractor(BaseExtractor):
                 parser = MT103SwiftParser()
                 msg_content = parser.parse(raw_text)
 
-        # Extract nested objects
+        # Support both MT103SwiftParser format (orderingCustomer, beneficiaryCustomer)
+        # AND ChapsSwiftParser format (debtorName, creditorName, etc.)
+        # This handles messages already parsed by ChapsSwiftParser in zone_tasks
+
+        # Extract nested objects - MT103SwiftParser format
         ordering_cust = msg_content.get('orderingCustomer', {})
         ordering_cust_addr = ordering_cust.get('address', {}) if ordering_cust else {}
         ordering_inst = msg_content.get('orderingInstitution', {})
@@ -346,6 +402,19 @@ class MT103Extractor(BaseExtractor):
         beneficiary_addr = beneficiary.get('address', {}) if beneficiary else {}
         details_of_charges = msg_content.get('detailsOfCharges', {})
         regulatory = msg_content.get('regulatoryReporting', {})
+
+        # ChapsSwiftParser flat fields (fallback if nested objects are empty)
+        # These are set when ChapsSwiftParser was used in zone_tasks.py
+        chaps_debtor_name = msg_content.get('debtorName')
+        chaps_debtor_account = msg_content.get('debtorAccount')
+        chaps_debtor_address = msg_content.get('debtorAddress')
+        chaps_debtor_street = msg_content.get('debtorStreetName')
+        chaps_creditor_name = msg_content.get('creditorName')
+        chaps_creditor_account = msg_content.get('creditorAccount')
+        chaps_creditor_address = msg_content.get('creditorAddress')
+        chaps_creditor_street = msg_content.get('creditorStreetName')
+        chaps_debtor_agent_bic = msg_content.get('debtorAgentBic')
+        chaps_creditor_agent_bic = msg_content.get('creditorAgentBic')
 
         # Instruction codes can be an array - join them
         instruction_codes = msg_content.get('instructionCode', [])
@@ -360,28 +429,35 @@ class MT103Extractor(BaseExtractor):
             '_batch_id': batch_id,
 
             # Message References (matching actual table columns)
-            'senders_reference': trunc(msg_content.get('senderReference') or msg_content.get('transactionReferenceNumber'), 16),
-            'transaction_reference_number': trunc(msg_content.get('transactionReferenceNumber'), 16),
+            # Support both MT103SwiftParser (transactionReferenceNumber) and ChapsSwiftParser (instructionId)
+            'senders_reference': trunc(
+                msg_content.get('senderReference') or msg_content.get('transactionReferenceNumber') or
+                msg_content.get('messageId') or msg_content.get('instructionId'), 16),
+            'transaction_reference_number': trunc(
+                msg_content.get('transactionReferenceNumber') or msg_content.get('instructionId'), 16),
             'bank_operation_code': trunc(msg_content.get('bankOperationCode'), 4),
             'instruction_codes': trunc(instruction_code_str, 35),
 
-            # Dates & Currency
-            'value_date': msg_content.get('valueDate'),
-            'currency': msg_content.get('currencyCode'),
+            # Dates & Currency - ChapsSwiftParser uses 'currency' and 'settlementDate'
+            'value_date': msg_content.get('valueDate') or msg_content.get('settlementDate'),
+            'currency': msg_content.get('currencyCode') or msg_content.get('currency'),
 
             # Amount
             'amount': msg_content.get('amount'),
 
-            # Ordering Customer (Field 50)
-            'ordering_customer_name': trunc(ordering_cust.get('name'), 140),
-            'ordering_customer_account': trunc(ordering_cust.get('account'), 35),
-            'ordering_customer_address': trunc(ordering_cust_addr.get('streetName'), 140),
+            # Ordering Customer (Field 50) - fallback to ChapsSwiftParser debtor fields
+            'ordering_customer_name': trunc(ordering_cust.get('name') or chaps_debtor_name, 140),
+            'ordering_customer_account': trunc(ordering_cust.get('account') or chaps_debtor_account, 35),
+            'ordering_customer_address': trunc(ordering_cust_addr.get('streetName') or chaps_debtor_address, 140),
+            'ordering_customer_street_name': trunc(ordering_cust_addr.get('streetName') or chaps_debtor_street, 70),
+            'ordering_customer_town_name': trunc(ordering_cust_addr.get('townName'), 35),
+            'ordering_customer_post_code': trunc(ordering_cust_addr.get('postCode'), 16),
             'ordering_customer_country': ordering_cust_addr.get('country'),
             'ordering_customer_party_id': trunc(ordering_cust.get('partyIdentifier'), 35),
             'ordering_customer_national_id': trunc(ordering_cust.get('nationalId'), 35),
 
-            # Ordering Institution (Field 52)
-            'ordering_institution_bic': ordering_inst.get('bic'),
+            # Ordering Institution (Field 52) - fallback to ChapsSwiftParser debtorAgentBic
+            'ordering_institution_bic': ordering_inst.get('bic') or chaps_debtor_agent_bic,
             'ordering_institution_name': trunc(ordering_inst.get('name'), 140),
             'ordering_institution_clearing_code': trunc(ordering_inst.get('clearingCode'), 35),
             'ordering_institution_country': ordering_inst.get('country'),
@@ -401,23 +477,29 @@ class MT103Extractor(BaseExtractor):
             'intermediary_account': trunc(intermediary.get('account'), 35),
             'intermediary_name': trunc(intermediary.get('name'), 140),
 
-            # Account With Institution (Field 57) - column names match DB schema
-            'account_with_institution_bic': acct_with_inst.get('bic'),
+            # Account With Institution (Field 57) - fallback to ChapsSwiftParser creditorAgentBic
+            'account_with_institution_bic': acct_with_inst.get('bic') or chaps_creditor_agent_bic,
             'account_with_institution_account': trunc(acct_with_inst.get('account'), 35),
             'account_with_institution_name': trunc(acct_with_inst.get('name'), 140),
 
-            # Beneficiary Customer (Field 59)
-            'beneficiary_name': trunc(beneficiary.get('name'), 140),
-            'beneficiary_account': trunc(beneficiary.get('account'), 35),
-            'beneficiary_address': trunc(beneficiary_addr.get('streetName'), 140),
+            # Beneficiary Customer (Field 59) - fallback to ChapsSwiftParser creditor fields
+            'beneficiary_name': trunc(beneficiary.get('name') or chaps_creditor_name, 140),
+            'beneficiary_account': trunc(beneficiary.get('account') or chaps_creditor_account, 35),
+            'beneficiary_address': trunc(beneficiary_addr.get('streetName') or chaps_creditor_address, 140),
+            'beneficiary_street_name': trunc(beneficiary_addr.get('streetName') or chaps_creditor_street, 70),
+            'beneficiary_town_name': trunc(beneficiary_addr.get('townName'), 35),
+            'beneficiary_post_code': trunc(beneficiary_addr.get('postCode'), 16),
             'beneficiary_country': beneficiary_addr.get('country'),
             'beneficiary_party_id': trunc(beneficiary.get('partyIdentifier'), 35),
 
-            # Remittance Information (Field 70)
-            'remittance_information': trunc(msg_content.get('remittanceInformation'), 140),
+            # Remittance Information (Field 70) - ChapsSwiftParser uses 'remittanceInfo'
+            'remittance_information': trunc(
+                msg_content.get('remittanceInformation') or msg_content.get('remittanceInfo'), 140),
 
-            # Details of Charges (Field 71)
-            'details_of_charges': trunc(details_of_charges.get('chargeBearer') if isinstance(details_of_charges, dict) else details_of_charges, 3),
+            # Details of Charges (Field 71) - ChapsSwiftParser uses 'chargeBearer'
+            'details_of_charges': trunc(
+                (details_of_charges.get('chargeBearer') if isinstance(details_of_charges, dict) else details_of_charges) or
+                msg_content.get('chargeBearer'), 3),
 
             # Sender to Receiver Information (Field 72) - matches DB column name
             'sender_to_receiver_info': trunc(msg_content.get('senderToReceiverInformation'), 210),
@@ -433,6 +515,7 @@ class MT103Extractor(BaseExtractor):
             'senders_reference', 'transaction_reference_number', 'bank_operation_code', 'instruction_codes',
             'value_date', 'currency', 'amount',
             'ordering_customer_name', 'ordering_customer_account', 'ordering_customer_address',
+            'ordering_customer_street_name', 'ordering_customer_town_name', 'ordering_customer_post_code',
             'ordering_customer_country', 'ordering_customer_party_id', 'ordering_customer_national_id',
             'ordering_institution_bic', 'ordering_institution_name', 'ordering_institution_clearing_code',
             'ordering_institution_country',
@@ -440,8 +523,9 @@ class MT103Extractor(BaseExtractor):
             'receivers_correspondent_bic', 'receivers_correspondent_account', 'receivers_correspondent_name',
             'intermediary_bic', 'intermediary_account', 'intermediary_name',
             'account_with_institution_bic', 'account_with_institution_account', 'account_with_institution_name',
-            'beneficiary_name', 'beneficiary_account', 'beneficiary_address', 'beneficiary_country',
-            'beneficiary_party_id',
+            'beneficiary_name', 'beneficiary_account', 'beneficiary_address',
+            'beneficiary_street_name', 'beneficiary_town_name', 'beneficiary_post_code',
+            'beneficiary_country', 'beneficiary_party_id',
             'remittance_information', 'details_of_charges', 'sender_to_receiver_info',
             'regulatory_reporting',
         ]
@@ -475,8 +559,10 @@ class MT103Extractor(BaseExtractor):
             entities.parties.append(PartyData(
                 name=silver_data.get('ordering_customer_name'),
                 role="DEBTOR",
-                party_type='UNKNOWN',
-                street_name=silver_data.get('ordering_customer_address'),
+                party_type='INDIVIDUAL',
+                street_name=silver_data.get('ordering_customer_street_name') or silver_data.get('ordering_customer_address'),
+                town_name=silver_data.get('ordering_customer_town_name'),
+                post_code=silver_data.get('ordering_customer_post_code'),
                 country=silver_data.get('ordering_customer_country'),
                 identification_type='CUST' if silver_data.get('ordering_customer_party_id') else ('NATL' if silver_data.get('ordering_customer_national_id') else None),
                 identification_number=silver_data.get('ordering_customer_party_id') or silver_data.get('ordering_customer_national_id'),
@@ -487,8 +573,10 @@ class MT103Extractor(BaseExtractor):
             entities.parties.append(PartyData(
                 name=silver_data.get('beneficiary_name'),
                 role="CREDITOR",
-                party_type='UNKNOWN',
-                street_name=silver_data.get('beneficiary_address'),
+                party_type='INDIVIDUAL',
+                street_name=silver_data.get('beneficiary_street_name') or silver_data.get('beneficiary_address'),
+                town_name=silver_data.get('beneficiary_town_name'),
+                post_code=silver_data.get('beneficiary_post_code'),
                 country=silver_data.get('beneficiary_country'),
                 identification_type='CUST' if silver_data.get('beneficiary_party_id') else None,
                 identification_number=silver_data.get('beneficiary_party_id'),
@@ -513,31 +601,41 @@ class MT103Extractor(BaseExtractor):
             ))
 
         # Ordering Institution (Debtor Agent)
-        if silver_data.get('ordering_institution_bic'):
+        ordering_bic = silver_data.get('ordering_institution_bic')
+        if ordering_bic:
+            # Derive country from BIC (positions 5-6) if not provided
+            bic_country = ordering_bic[4:6] if len(ordering_bic) >= 6 else 'XX'
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                name=silver_data.get('ordering_institution_name'),
-                bic=silver_data.get('ordering_institution_bic'),
+                name=silver_data.get('ordering_institution_name') or f"FI_{ordering_bic}",
+                bic=ordering_bic,
                 clearing_code=silver_data.get('ordering_institution_clearing_code'),
-                country=silver_data.get('ordering_institution_country') or 'XX',
+                clearing_system='SWIFT',
+                country=silver_data.get('ordering_institution_country') or bic_country,
             ))
 
         # Account With Institution (Creditor Agent)
-        if silver_data.get('account_with_institution_bic'):
+        acct_with_bic = silver_data.get('account_with_institution_bic')
+        if acct_with_bic:
+            bic_country = acct_with_bic[4:6] if len(acct_with_bic) >= 6 else 'XX'
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                name=silver_data.get('account_with_institution_name'),
-                bic=silver_data.get('account_with_institution_bic'),
-                country=silver_data.get('account_with_institution_country') or 'XX',
+                name=silver_data.get('account_with_institution_name') or f"FI_{acct_with_bic}",
+                bic=acct_with_bic,
+                clearing_system='SWIFT',
+                country=silver_data.get('account_with_institution_country') or bic_country,
             ))
 
         # Intermediary Institution
-        if silver_data.get('intermediary_institution_bic') or silver_data.get('intermediary_bic'):
+        intermediary_bic = silver_data.get('intermediary_institution_bic') or silver_data.get('intermediary_bic')
+        if intermediary_bic:
+            bic_country = intermediary_bic[4:6] if len(intermediary_bic) >= 6 else 'XX'
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="INTERMEDIARY",
-                name=silver_data.get('intermediary_institution_name') or silver_data.get('intermediary_name'),
-                bic=silver_data.get('intermediary_institution_bic') or silver_data.get('intermediary_bic'),
-                country=silver_data.get('intermediary_institution_country') or 'XX',
+                name=silver_data.get('intermediary_institution_name') or silver_data.get('intermediary_name') or f"FI_{intermediary_bic}",
+                bic=intermediary_bic,
+                clearing_system='SWIFT',
+                country=silver_data.get('intermediary_institution_country') or bic_country,
             ))
 
         return entities

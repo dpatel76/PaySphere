@@ -244,6 +244,12 @@ class Mt202Extractor(BaseExtractor):
     # GOLD ENTITY EXTRACTION
     # =========================================================================
 
+    def _country_from_bic(self, bic: Optional[str]) -> str:
+        """Extract country code from BIC (positions 5-6)."""
+        if bic and len(bic) >= 6:
+            return bic[4:6].upper()
+        return 'XX'
+
     def extract_gold_entities(
         self,
         silver_data: Dict[str, Any],
@@ -260,35 +266,43 @@ class Mt202Extractor(BaseExtractor):
         entities = GoldEntities()
 
         # Ordering Institution (Debtor Agent) - uses Silver column names
-        if silver_data.get('ordering_institution_bic') or silver_data.get('sender_bic'):
+        ordering_bic = silver_data.get('ordering_institution_bic') or silver_data.get('sender_bic')
+        if ordering_bic:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                bic=silver_data.get('ordering_institution_bic') or silver_data.get('sender_bic'),
-                country='XX',
+                bic=ordering_bic,
+                country=self._country_from_bic(ordering_bic),
+                clearing_system='SWIFT',
             ))
 
         # Sender's Correspondent
-        if silver_data.get('senders_correspondent_bic'):
+        senders_corr_bic = silver_data.get('senders_correspondent_bic')
+        if senders_corr_bic:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="INTERMEDIARY",
-                bic=silver_data.get('senders_correspondent_bic'),
-                country='XX',
+                bic=senders_corr_bic,
+                country=self._country_from_bic(senders_corr_bic),
+                clearing_system='SWIFT',
             ))
 
         # Beneficiary Institution (Creditor Agent)
-        if silver_data.get('beneficiary_institution_bic') or silver_data.get('receiver_bic'):
+        beneficiary_bic = silver_data.get('beneficiary_institution_bic') or silver_data.get('receiver_bic')
+        if beneficiary_bic:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                bic=silver_data.get('beneficiary_institution_bic') or silver_data.get('receiver_bic'),
-                country='XX',
+                bic=beneficiary_bic,
+                country=self._country_from_bic(beneficiary_bic),
+                clearing_system='SWIFT',
             ))
 
         # Account with Institution
-        if silver_data.get('account_with_institution_bic'):
+        account_with_bic = silver_data.get('account_with_institution_bic')
+        if account_with_bic:
             entities.financial_institutions.append(FinancialInstitutionData(
-                role="CREDITOR_AGENT",
-                bic=silver_data.get('account_with_institution_bic'),
-                country='XX',
+                role="ACCOUNT_WITH_INSTITUTION",
+                bic=account_with_bic,
+                country=self._country_from_bic(account_with_bic),
+                clearing_system='SWIFT',
             ))
 
         return entities

@@ -273,6 +273,9 @@ class SepaExtractor(BaseExtractor):
     MESSAGE_TYPE = "SEPA"
     SILVER_TABLE = "stg_sepa"
 
+    def __init__(self):
+        self.parser = SepaXmlParser()
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================

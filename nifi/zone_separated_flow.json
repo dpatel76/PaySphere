@@ -1,0 +1,214 @@
+{
+  "flow_name": "GPS CDM Zone-Separated Payment Pipeline",
+  "description": "NiFi flow that publishes raw payment messages to zone-specific Kafka topics",
+  "version": "2.0",
+  "architecture": "zone_separated",
+
+  "overview": {
+    "purpose": "Read payment files, detect message type, publish raw content to bronze.{message_type} Kafka topics",
+    "data_flow": [
+      "1. GetFile reads payment files from input directory",
+      "2. UpdateAttribute extracts message_type from filename and generates batch_id",
+      "3. PublishKafkaRecord_2_6 publishes raw content to bronze.{message_type} topic",
+      "4. Success logged, failures routed to DLQ"
+    ]
+  },
+
+  "processors": [
+    {
+      "name": "Read Payment Files",
+      "type": "GetFile",
+      "config": {
+        "Input Directory": "/opt/nifi/nifi-current/input",
+        "File Filter": "[^\\.].*\\.(xml|json|txt|mt103|mt202|nacha)$",
+        "Keep Source File": "false",
+        "Recurse Subdirectories": "false",
+        "Polling Interval": "10 sec",
+        "Batch Size": "100"
+      },
+      "relationships": {
+        "success": "Extract Message Metadata"
+      }
+    },
+
+    {
+      "name": "Extract Message Metadata",
+      "type": "UpdateAttribute",
+      "config": {
+        "properties": {
+          "batch_id": "${UUID()}",
+          "message_type": "${filename:substringBefore('_'):toUpper():replace('.','.')}",
+          "source_file": "${filename}",
+          "ingest_timestamp": "${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'')}",
+          "kafka_topic": "bronze.${message_type:toLower()}"
+        }
+      },
+      "relationships": {
+        "success": "Publish to Bronze Kafka"
+      },
+      "notes": [
+        "Message type extracted from filename: pain.001_test.xml -> pain.001",
+        "MT103_sample.txt -> MT103",
+        "FEDWIRE_001.txt -> FEDWIRE"
+      ]
+    },
+
+    {
+      "name": "Publish to Bronze Kafka",
+      "type": "PublishKafka_2_6",
+      "config": {
+        "Kafka Brokers": "${kafka.brokers:gps-cdm-kafka:9092}",
+        "Topic Name": "${kafka_topic}",
+        "Delivery Guarantee": "Guarantee Replicated Delivery",
+        "Message Key": "${batch_id}",
+        "Use Transactions": "false",
+        "Attributes to Send as Headers": "batch_id, message_type, source_file, ingest_timestamp",
+        "Max Request Size": "10 MB",
+        "Acknowledgment Wait Time": "5 secs",
+        "Compression Type": "none"
+      },
+      "relationships": {
+        "success": "Log Success",
+        "failure": "Route to DLQ"
+      },
+      "notes": [
+        "Publishes raw content AS-IS (no transformation)",
+        "Kafka headers carry metadata for downstream consumers",
+        "Topic determined by message_type: bronze.pain.001, bronze.MT103, etc."
+      ]
+    },
+
+    {
+      "name": "Log Success",
+      "type": "LogAttribute",
+      "config": {
+        "Log Level": "info",
+        "Log Prefix": "BRONZE_PUBLISHED",
+        "Attributes to Log": "batch_id, message_type, kafka_topic, fileSize"
+      },
+      "relationships": {
+        "success": "Auto-terminate"
+      }
+    },
+
+    {
+      "name": "Route to DLQ",
+      "type": "PublishKafka_2_6",
+      "config": {
+        "Kafka Brokers": "${kafka.brokers:gps-cdm-kafka:9092}",
+        "Topic Name": "dlq.bronze",
+        "Delivery Guarantee": "Guarantee Replicated Delivery",
+        "Message Key": "${batch_id}",
+        "Attributes to Send as Headers": "batch_id, message_type, source_file, error_reason"
+      },
+      "relationships": {
+        "success": "Log DLQ Entry",
+        "failure": "Log DLQ Failure"
+      }
+    },
+
+    {
+      "name": "Log DLQ Entry",
+      "type": "LogAttribute",
+      "config": {
+        "Log Level": "warn",
+        "Log Prefix": "DLQ_ENTRY",
+        "Attributes to Log": "batch_id, message_type, error_reason"
+      },
+      "relationships": {
+        "success": "Auto-terminate"
+      }
+    },
+
+    {
+      "name": "Log DLQ Failure",
+      "type": "PutFile",
+      "config": {
+        "Directory": "/opt/nifi/nifi-current/dlq",
+        "Conflict Resolution Strategy": "replace",
+        "Create Missing Directories": "true"
+      },
+      "relationships": {
+        "success": "Auto-terminate",
+        "failure": "Auto-terminate"
+      }
+    }
+  ],
+
+  "controller_services": [
+    {
+      "name": "Kafka Connection Pool",
+      "type": "StandardKafkaProducerService",
+      "config": {
+        "Bootstrap Servers": "gps-cdm-kafka:9092",
+        "Security Protocol": "PLAINTEXT",
+        "Max Request Size": "10485760"
+      }
+    }
+  ],
+
+  "variables": {
+    "kafka.brokers": "gps-cdm-kafka:9092",
+    "input.directory": "/opt/nifi/nifi-current/input",
+    "dlq.directory": "/opt/nifi/nifi-current/dlq"
+  },
+
+  "message_type_patterns": {
+    "description": "Filename patterns to message type mappings",
+    "patterns": [
+      {"pattern": "pain.001*", "message_type": "pain.001", "format": "XML"},
+      {"pattern": "pain.002*", "message_type": "pain.002", "format": "XML"},
+      {"pattern": "pain.008*", "message_type": "pain.008", "format": "XML"},
+      {"pattern": "pacs.002*", "message_type": "pacs.002", "format": "XML"},
+      {"pattern": "pacs.003*", "message_type": "pacs.003", "format": "XML"},
+      {"pattern": "pacs.004*", "message_type": "pacs.004", "format": "XML"},
+      {"pattern": "pacs.008*", "message_type": "pacs.008", "format": "XML"},
+      {"pattern": "pacs.009*", "message_type": "pacs.009", "format": "XML"},
+      {"pattern": "camt.052*", "message_type": "camt.052", "format": "XML"},
+      {"pattern": "camt.053*", "message_type": "camt.053", "format": "XML"},
+      {"pattern": "camt.054*", "message_type": "camt.054", "format": "XML"},
+      {"pattern": "MT103*", "message_type": "MT103", "format": "SWIFT_MT"},
+      {"pattern": "MT202*", "message_type": "MT202", "format": "SWIFT_MT"},
+      {"pattern": "MT940*", "message_type": "MT940", "format": "SWIFT_MT"},
+      {"pattern": "MT101*", "message_type": "MT101", "format": "SWIFT_MT"},
+      {"pattern": "MT199*", "message_type": "MT199", "format": "SWIFT_MT"},
+      {"pattern": "FEDWIRE*", "message_type": "FEDWIRE", "format": "TAG_VALUE"},
+      {"pattern": "ACH*", "message_type": "ACH", "format": "FIXED"},
+      {"pattern": "CHIPS*", "message_type": "CHIPS", "format": "XML"},
+      {"pattern": "RTP*", "message_type": "RTP", "format": "XML"},
+      {"pattern": "FEDNOW*", "message_type": "FEDNOW", "format": "XML"},
+      {"pattern": "CHAPS*", "message_type": "CHAPS", "format": "SWIFT_MT"},
+      {"pattern": "BACS*", "message_type": "BACS", "format": "SWIFT_MT"},
+      {"pattern": "FPS*", "message_type": "FPS", "format": "XML"},
+      {"pattern": "SEPA*", "message_type": "SEPA", "format": "XML"},
+      {"pattern": "TARGET2*", "message_type": "TARGET2", "format": "XML"},
+      {"pattern": "NPP*", "message_type": "NPP", "format": "XML"},
+      {"pattern": "UPI*", "message_type": "UPI", "format": "JSON"},
+      {"pattern": "PIX*", "message_type": "PIX", "format": "JSON"},
+      {"pattern": "INSTAPAY*", "message_type": "INSTAPAY", "format": "XML"},
+      {"pattern": "PAYNOW*", "message_type": "PAYNOW", "format": "XML"},
+      {"pattern": "PROMPTPAY*", "message_type": "PROMPTPAY", "format": "XML"},
+      {"pattern": "MEPS_PLUS*", "message_type": "MEPS_PLUS", "format": "XML"},
+      {"pattern": "CNAPS*", "message_type": "CNAPS", "format": "XML"},
+      {"pattern": "BOJNET*", "message_type": "BOJNET", "format": "XML"},
+      {"pattern": "KFTC*", "message_type": "KFTC", "format": "XML"},
+      {"pattern": "RTGS_HK*", "message_type": "RTGS_HK", "format": "XML"},
+      {"pattern": "SARIE*", "message_type": "SARIE", "format": "SWIFT_MT"},
+      {"pattern": "UAEFTS*", "message_type": "UAEFTS", "format": "XML"}
+    ]
+  },
+
+  "deployment_notes": [
+    "1. Import this template into NiFi",
+    "2. Update kafka.brokers variable if needed",
+    "3. Ensure input directory is accessible",
+    "4. Start all processors",
+    "5. Zone consumers (Bronze, Silver, Gold) must be running to process messages"
+  ],
+
+  "testing": {
+    "test_command": "docker cp test_file.xml gps-cdm-nifi:/opt/nifi/nifi-current/input/pain.001_test.xml",
+    "verify_kafka": "docker exec gps-cdm-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic bronze.pain.001 --from-beginning --max-messages 1",
+    "verify_bronze": "docker exec gps-cdm-postgres psql -U gps_cdm_svc -d gps_cdm -c \"SELECT raw_id, message_type FROM bronze.raw_payment_messages ORDER BY _ingested_at DESC LIMIT 5;\""
+  }
+}

@@ -646,8 +646,14 @@ app = Celery(
     "gps_cdm",
     broker=BROKER_URL,
     backend=RESULT_BACKEND,
-    include=["gps_cdm.orchestration.celery_tasks"],
+    include=[
+        "gps_cdm.orchestration.celery_tasks",
+        "gps_cdm.orchestration.zone_separated_tasks",
+    ],
 )
+
+# Alias for backwards compatibility
+celery_app = app
 
 # Celery configuration for high throughput
 app.conf.update(
@@ -683,12 +689,17 @@ app.conf.update(
         "gps_cdm.orchestration.celery_tasks.process_gold_aggregate": {"queue": "gold"},
         "gps_cdm.orchestration.celery_tasks.run_dq_evaluation": {"queue": "dq"},
         "gps_cdm.orchestration.celery_tasks.sync_cdc_to_neo4j": {"queue": "cdc"},
-        # New zone-separated tasks (preferred)
+        # Zone-separated tasks (zone_tasks module)
         "gps_cdm.zone_tasks.process_bronze_records": {"queue": "bronze"},
         "gps_cdm.zone_tasks.process_silver_records": {"queue": "silver"},
         "gps_cdm.zone_tasks.process_gold_records": {"queue": "gold"},
+        "gps_cdm.zone_tasks.process_medallion_pipeline": {"queue": "bronze"},
         "gps_cdm.zone_tasks.retry_error": {"queue": "celery"},
         "gps_cdm.zone_tasks.bulk_retry_errors": {"queue": "celery"},
+        # New zone-separated tasks (zone_separated_tasks module)
+        "gps_cdm.orchestration.zone_separated_tasks.process_bronze_message": {"queue": "bronze"},
+        "gps_cdm.orchestration.zone_separated_tasks.process_silver_message": {"queue": "silver"},
+        "gps_cdm.orchestration.zone_separated_tasks.process_gold_message": {"queue": "gold"},
     },
 
     # Beat scheduler for periodic tasks
@@ -1010,13 +1021,21 @@ def process_bronze_partition(
                     raw_content_str = message_content['raw_xml']
                 elif 'raw_content' in message_content:
                     raw_content_str = message_content['raw_content']
+                elif '_raw_text' in message_content:
+                    # NiFi sends raw SWIFT/XML content wrapped in {"_raw_text": "..."}
+                    raw_content_str = json.dumps(message_content)  # Store as-is for Bronze
                 else:
                     raw_content_str = json.dumps(message_content)
             else:
                 raw_content_str = str(message_content)
 
             # Parse using format-specific parser
-            msg_content = MessageProcessor.parse_raw_content(raw_content_str, message_type)
+            # First check if content is wrapped in {"_raw_text": "..."} and unwrap it for parsing
+            content_to_parse = raw_content_str
+            if isinstance(message_content, dict) and '_raw_text' in message_content:
+                # Extract the actual message content for parsing
+                content_to_parse = message_content['_raw_text']
+            msg_content = MessageProcessor.parse_raw_content(content_to_parse, message_type)
 
             # Extract message ID from parsed content (no fallback to generated ID)
             msg_id = (msg_content.get('messageId') or

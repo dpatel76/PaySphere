@@ -1,0 +1,75 @@
+============================================================================================================================================
+COMPREHENSIVE FIELD COVERAGE REPORT: Bronze → Silver → Gold
+Generated: 2026-01-01T19:36:40.882955
+============================================================================================================================================
+
+Standard     Country                Std   S→Slv   Silver   S→Gold   CDM Core  Extension   Coverage
+--------------------------------------------------------------------------------------------------------------------------------------------
+ACH          United States           33    100%       33     100%          2         31     ✓ 100%
+BACS         United Kingdom          18    100%       18     100%          3         15     ✓ 100%
+BOJNET       Japan                   20    100%       20     100%          6         14     ✓ 100%
+CHAPS        United Kingdom          32    100%       32     100%         17         15     ✓ 100%
+CHIPS        United States           24    100%       24     100%          7         17     ✓ 100%
+CNAPS        China                   25    100%       25     100%         12         13     ✓ 100%
+FEDNOW       United States           28    100%       31     100%         14         17     ✓ 100%
+FEDWIRE      United States           80    100%       80     100%          9         71     ✓ 100%
+FPS          United Kingdom          27    100%       27     100%         19          8     ✓ 100%
+INSTAPAY     Philippines             15    100%       15     100%          9          6     ✓ 100%
+KFTC         South Korea             22    100%       22     100%         12         10     ✓ 100%
+MEPS_PLUS    Singapore               22    100%       22     100%         12         10     ✓ 100%
+MT103        Global                  71    100%       71     100%          5         66     ✓ 100%
+MT202        Global                  23    100%       23     100%          3         20     ✓ 100%
+MT940        Global                  25    100%       25     100%          1         24     ✓ 100%
+NPP          Australia               27    100%       27     100%         15         12     ✓ 100%
+PAYNOW       Singapore               25    100%       25     100%         12         13     ✓ 100%
+PIX          Brazil                  35    100%       36     100%         10         26     ✓ 100%
+PROMPTPAY    Thailand                26    100%       26     100%         12         14     ✓ 100%
+RTGS_HK      Hong Kong               22    100%       22     100%         10         12     ✓ 100%
+RTP          United States           22    100%       22     100%         14          8     ✓ 100%
+SARIE        Saudi Arabia            24    100%       24     100%         12         12     ✓ 100%
+SEPA         European Union          36    100%       36     100%         17         19     ✓ 100%
+TARGET2      European Union          24    100%       24     100%         12         12     ✓ 100%
+UAEFTS       UAE                     23    100%       23     100%         10         13     ✓ 100%
+UPI          India                   24    100%       24     100%          9         15     ✓ 100%
+camt.053     Global                  36    100%       36     100%          2         34     ✓ 100%
+pacs.008     Global                  16    100%       84     100%         22         62     ✓ 100%
+pain.001     Global                  72    100%       72     100%         18         54     ✓ 100%
+--------------------------------------------------------------------------------------------------------------------------------------------
+TOTAL                               877    100%      949     100%        306        643
+============================================================================================================================================
+
+================================================================================
+SUMMARY
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────┐
+│  LAYER COVERAGE                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│  Standards Covered:           29 payment message formats            │
+│  Standard → Bronze:          100% (raw content preserved)           │
+│  Standard → Silver:          100% (877 standard fields mapped)      │
+│  Silver → Gold:              100% (949 Silver → 949 Gold)           │
+├─────────────────────────────────────────────────────────────────────┤
+│  GOLD FIELD DISTRIBUTION                                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  CDM Core Tables:             306 fields (normalized entities)       │
+│  Extension Tables:            643 fields (format-specific data)     │
+│  Total Gold Fields:           949 fields                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  CDM CORE TABLES                                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│  • cdm_payment_instruction - Payment transaction details            │
+│  • cdm_party - Debtor/Creditor party information                    │
+│  • cdm_account - Account identifiers                                │
+│  • cdm_financial_institution - Bank/Agent information               │
+├─────────────────────────────────────────────────────────────────────┤
+│  EXTENSION TABLES (Format-Specific)                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│  • cdm_payment_extension_ach                                       │
+│  • cdm_payment_extension_bacs                                      │
+│  • cdm_payment_extension_bojnet                                    │
+│  • cdm_payment_extension_chaps                                     │
+│  • cdm_payment_extension_chips                                     │
+│  • cdm_payment_extension_cnaps                                     │
+│  ... and 19 more extension tables                                │
+└─────────────────────────────────────────────────────────────────────┘

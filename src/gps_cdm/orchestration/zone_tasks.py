@@ -22,6 +22,9 @@ import os
 
 logger = logging.getLogger(__name__)
 
+# Flag to control whether to use database-driven mappings or hardcoded extractors
+USE_DYNAMIC_MAPPINGS = os.environ.get('GPS_CDM_USE_DYNAMIC_MAPPINGS', 'true').lower() == 'true'
+
 
 # =============================================================================
 # LINEAGE AND OBSERVABILITY HELPERS
@@ -211,6 +214,7 @@ def update_neo4j_lineage(
 
 # Import extractors and common persistence
 from gps_cdm.message_formats.base import ExtractorRegistry, GoldEntityPersister
+from gps_cdm.orchestration.dynamic_gold_mapper import DynamicGoldMapper
 
 # Import ALL extractor modules to trigger registration
 # Each module registers its extractor when imported
@@ -311,15 +315,56 @@ def publish_error(
 
 def get_message_format(message_type: str) -> str:
     """Determine message format from message type."""
-    msg_type_lower = message_type.lower()
-    if msg_type_lower.startswith('pain') or msg_type_lower.startswith('pacs') or msg_type_lower.startswith('camt'):
+    msg_type_lower = message_type.lower().replace('.', '').replace('-', '').replace('_', '')
+
+    # ISO 20022 XML formats
+    iso20022_types = {
+        'pain001', 'pain002', 'pain008',
+        'pacs002', 'pacs003', 'pacs004', 'pacs008', 'pacs009',
+        'camt052', 'camt053', 'camt054',
+        'acmt', 'sepa', 'sepasct', 'sepasdd', 'sepainst',
+        'rtp', 'fednow', 'npp',
+        'chaps', 'fps', 'fasterpaymentsuk',
+        'target2', 'rtgshk', 'rtgs',
+        'mepsplus', 'meps',
+        'uaefts',
+        'promptpay', 'paynow', 'instapay',
+    }
+    if msg_type_lower in iso20022_types:
         return 'ISO20022'
-    elif msg_type_lower.startswith('mt'):
+
+    # SWIFT MT formats (start with 'mt' and have 3 digits)
+    if msg_type_lower.startswith('mt'):
         return 'SWIFT_MT'
-    elif msg_type_lower == 'fedwire':
+
+    # US formats
+    if msg_type_lower == 'fedwire':
         return 'FEDWIRE'
-    elif msg_type_lower == 'ach':
+    if msg_type_lower == 'ach' or msg_type_lower == 'nacha':
         return 'ACH'
+    if msg_type_lower == 'chips':
+        return 'CHIPS'
+
+    # UK formats
+    if msg_type_lower == 'bacs':
+        return 'BACS'
+
+    # Asian formats
+    if msg_type_lower in ('cnaps', 'cnaps2'):
+        return 'CNAPS'
+    if msg_type_lower == 'bojnet':
+        return 'BOJNET'
+    if msg_type_lower == 'kftc':
+        return 'KFTC'
+
+    # Middle East formats
+    if msg_type_lower == 'sarie':
+        return 'SARIE'
+
+    # JSON formats
+    if msg_type_lower in ('pix', 'upi'):
+        return 'JSON'
+
     return 'UNKNOWN'
 
 
@@ -553,16 +598,67 @@ def process_silver_records(
                 # Parse content
                 msg_content = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
 
+                # Unwrap raw content if it was stored with {"raw": "..."} or {"_raw_text": "..."}
+                raw_text = None
+                if isinstance(msg_content, dict):
+                    if 'raw' in msg_content and len(msg_content) == 1:
+                        raw_text = msg_content['raw']
+                    elif '_raw_text' in msg_content:
+                        raw_text = msg_content['_raw_text']
+
+                if raw_text:
+                    # Try to parse the raw text as JSON first
+                    try:
+                        msg_content = json.loads(raw_text)
+                    except (json.JSONDecodeError, TypeError):
+                        # Check if it's SWIFT MT format (starts with {1: or {2:)
+                        if raw_text.strip().startswith('{1:') or raw_text.strip().startswith('{2:'):
+                            # SWIFT MT block format - always use ChapsSwiftParser
+                            # (works for MT103, MT202, CHAPS, BACS, FPS, etc.)
+                            try:
+                                from gps_cdm.message_formats.chaps import ChapsSwiftParser
+                                swift_parser = ChapsSwiftParser()
+                                msg_content = swift_parser.parse(raw_text)
+                                logger.info(f"Parsed SWIFT MT for {raw_id}: {list(msg_content.keys())}")
+                            except Exception as swift_err:
+                                logger.warning(f"Failed to parse SWIFT MT for {raw_id}: {swift_err}")
+                                msg_content = {'_raw_text': raw_text, '_format': 'swift_mt'}
+                        elif raw_text.strip().startswith('<'):
+                            # XML format - use extractor's parser if available
+                            if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                try:
+                                    msg_content = extractor.parser.parse(raw_text)
+                                except Exception:
+                                    msg_content = {'_raw_text': raw_text, '_format': 'xml'}
+                            else:
+                                msg_content = {'_raw_text': raw_text, '_format': 'xml'}
+                        else:
+                            msg_content = {'_raw_text': raw_text, '_format': 'raw'}
+
                 # Generate stg_id
                 stg_id = extractor.generate_stg_id()
 
-                # Extract Silver record
-                silver_record = extractor.extract_silver(msg_content, raw_id, stg_id, batch_id)
+                # Extract Silver record using either DynamicMapper (database-driven) or hardcoded extractor
+                if USE_DYNAMIC_MAPPINGS:
+                    # Use database-driven field mappings
+                    from gps_cdm.orchestration.dynamic_mapper import DynamicMapper
+                    mapper = DynamicMapper(conn)
+                    silver_record = mapper.extract_silver_record(message_type, msg_content, raw_id, batch_id)
+                    silver_record['stg_id'] = stg_id  # Override generated stg_id
 
-                # Get table and columns
-                silver_table = extractor.SILVER_TABLE
-                columns = extractor.get_silver_columns()
-                values = extractor.get_silver_values(silver_record)
+                    # Get table from format registry
+                    format_info = mapper._get_format_info(message_type)
+                    silver_table = format_info['silver_table']
+                    columns = mapper.get_silver_columns(message_type)
+                    values = mapper.get_silver_values(message_type, silver_record)
+
+                    logger.debug(f"[{batch_id}] Using DynamicMapper for {message_type}: {len(columns)} columns")
+                else:
+                    # Use hardcoded extractor (legacy)
+                    silver_record = extractor.extract_silver(msg_content, raw_id, stg_id, batch_id)
+                    silver_table = extractor.SILVER_TABLE
+                    columns = extractor.get_silver_columns()
+                    values = extractor.get_silver_values(silver_record)
 
                 # Build INSERT statement
                 col_names = ', '.join(columns)
@@ -715,44 +811,49 @@ def process_gold_records(
 
         silver_table = extractor.SILVER_TABLE
 
-        # Read Silver records
+        # Read Silver records - get ALL columns for complete data
+        # Use DynamicMapper columns when enabled, otherwise use extractor columns
+        if USE_DYNAMIC_MAPPINGS:
+            from gps_cdm.orchestration.dynamic_mapper import DynamicMapper
+            mapper = DynamicMapper(conn)
+            silver_columns = mapper.get_silver_columns(message_type)
+        else:
+            silver_columns = extractor.get_silver_columns()
+        col_list = ', '.join(silver_columns)
+
         placeholders = ','.join(['%s'] * len(stg_ids))
         cursor.execute(f"""
-            SELECT stg_id, raw_id
+            SELECT {col_list}
             FROM silver.{silver_table}
             WHERE stg_id IN ({placeholders})
         """, tuple(stg_ids))
 
         silver_records = cursor.fetchall()
 
-        for stg_id, raw_id in silver_records:
+        for silver_row in silver_records:
+            # Convert to dict using column names
+            silver_data = dict(zip(silver_columns, silver_row))
+            stg_id = silver_data.get('stg_id')
+            raw_id = silver_data.get('raw_id')
+
             try:
-                # Read the original content from Bronze for entity extraction
-                cursor.execute("""
-                    SELECT raw_content FROM bronze.raw_payment_messages
-                    WHERE raw_id = %s
-                """, (raw_id,))
+                # Use DynamicGoldMapper for database-driven Gold processing
+                # This reads from mapping.gold_field_mappings to determine how to
+                # map Silver columns to all Gold tables (cdm_party, cdm_account,
+                # cdm_financial_institution, cdm_payment_instruction, extensions)
+                from gps_cdm.orchestration.dynamic_gold_mapper import DynamicGoldMapper
 
-                bronze_row = cursor.fetchone()
-                if not bronze_row:
-                    failed.append({
-                        'stg_id': stg_id,
-                        'error': f'Bronze record not found: {raw_id}',
-                        'error_code': 'MISSING_REQUIRED_FIELD'
-                    })
-                    continue
+                gold_mapper = DynamicGoldMapper(conn)
 
-                msg_content = json.loads(bronze_row[0])
-
-                # Extract Gold entities
-                gold_entities = extractor.extract_gold_entities(msg_content, stg_id, batch_id)
-
-                # Persist entities using common persister
-                entity_ids = GoldEntityPersister.persist_all_entities(
-                    cursor, gold_entities, message_type, stg_id, 'GPS_CDM'
+                # Build Gold records from Silver data using database mappings
+                gold_records = gold_mapper.build_gold_records(
+                    message_type, silver_data, stg_id, batch_id
                 )
 
-                # Count created entities
+                # Persist all Gold records (entities first, then instruction, then extensions)
+                entity_ids = gold_mapper.persist_gold_records(cursor, gold_records, message_type)
+
+                # Count created entities for response
                 if entity_ids.get('debtor_id'):
                     entities_created['parties'] += 1
                 if entity_ids.get('creditor_id'):
@@ -772,80 +873,9 @@ def process_gold_records(
                 if entity_ids.get('intermediary_agent1_id'):
                     entities_created['financial_institutions'] += 1
 
-                # Create payment instruction
-                instruction_id = f"instr_{uuid.uuid4().hex[:12]}"
+                instruction_id = entity_ids.get('instruction_id')
 
-                # Extract amounts and identifiers from msg_content
-                amount = msg_content.get('instructedAmount') or msg_content.get('amount') or 0
-                currency = msg_content.get('instructedCurrency') or msg_content.get('currency') or 'XXX'
-                end_to_end_id = msg_content.get('endToEndId') or msg_content.get('end_to_end_id')
-                uetr = msg_content.get('uetr')
-
-                # Determine payment type from message type
-                payment_type_map = {
-                    'pain.001': 'CREDIT_TRANSFER',
-                    'pain001': 'CREDIT_TRANSFER',
-                    'pacs.008': 'CREDIT_TRANSFER',
-                    'pacs008': 'CREDIT_TRANSFER',
-                    'mt103': 'CREDIT_TRANSFER',
-                    'fedwire': 'WIRE_TRANSFER',
-                }
-                payment_type = payment_type_map.get(message_type.lower().replace('.', '_').replace('-', '_'), 'TRANSFER')
-
-                # Generate payment_id (transaction group identifier)
-                payment_id = f"pmt_{uuid.uuid4().hex[:12]}"
-
-                # Determine scheme from message type
-                scheme_map = {
-                    'pain.001': 'ISO20022',
-                    'pain001': 'ISO20022',
-                    'pacs.008': 'ISO20022',
-                    'pacs008': 'ISO20022',
-                    'mt103': 'SWIFT_MT',
-                    'mt103_': 'SWIFT_MT',
-                    'fedwire': 'FEDWIRE',
-                }
-                scheme_code = scheme_map.get(message_type.lower().replace('.', '_').replace('-', '_'), 'OTHER')
-
-                # Get current date parts for partitioning
-                now = datetime.utcnow()
-                partition_year = now.year
-                partition_month = now.month
-
-                cursor.execute("""
-                    INSERT INTO gold.cdm_payment_instruction (
-                        instruction_id, payment_id, source_stg_id, source_stg_table, source_message_type,
-                        payment_type, scheme_code, direction, source_system,
-                        instructed_amount, instructed_currency, end_to_end_id, uetr,
-                        debtor_id, debtor_account_id, debtor_agent_id,
-                        creditor_id, creditor_account_id, creditor_agent_id,
-                        intermediary_agent1_id, ultimate_debtor_id, ultimate_creditor_id,
-                        current_status, lineage_batch_id, partition_year, partition_month,
-                        created_at, updated_at
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        'PROCESSED', %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                    )
-                    ON CONFLICT (instruction_id) DO NOTHING
-                    RETURNING instruction_id
-                """, (
-                    instruction_id, payment_id, stg_id, silver_table, message_type,
-                    payment_type, scheme_code, 'OUTGOING', 'GPS_CDM',
-                    amount, currency, end_to_end_id, uetr,
-                    entity_ids.get('debtor_id'),
-                    entity_ids.get('debtor_account_id'),
-                    entity_ids.get('debtor_agent_id'),
-                    entity_ids.get('creditor_id'),
-                    entity_ids.get('creditor_account_id'),
-                    entity_ids.get('creditor_agent_id'),
-                    entity_ids.get('intermediary_agent1_id'),
-                    entity_ids.get('ultimate_debtor_id'),
-                    entity_ids.get('ultimate_creditor_id'),
-                    batch_id, partition_year, partition_month
-                ))
-
-                result = cursor.fetchone()
-                if result:
+                if instruction_id:
                     instruction_ids.append(instruction_id)
 
                     # Update Silver status
@@ -858,7 +888,7 @@ def process_gold_records(
                 else:
                     failed.append({
                         'stg_id': stg_id,
-                        'error': 'Duplicate instruction_id (conflict)',
+                        'error': 'No instruction created (possible duplicate or missing data)',
                         'error_code': 'DUPLICATE_MESSAGE'
                     })
 
@@ -1318,28 +1348,101 @@ def process_medallion_pipeline(
                 try:
                     cursor.execute(f"SAVEPOINT {savepoint_name}")
 
-                    msg_content = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
+                    # Parse raw_content - Bronze stores data in original format (XML, SWIFT MT, etc.)
+                    raw_text = None
+                    if isinstance(raw_content, str):
+                        try:
+                            msg_content = json.loads(raw_content)
+                            # Check if JSON-wrapped raw content
+                            if isinstance(msg_content, dict):
+                                if 'raw' in msg_content and len(msg_content) == 1:
+                                    raw_text = msg_content['raw']
+                                elif '_raw_text' in msg_content:
+                                    raw_text = msg_content['_raw_text']
+                        except json.JSONDecodeError:
+                            # Not JSON - this is raw format content (XML, SWIFT MT, NACHA, etc.)
+                            raw_text = raw_content
+                            msg_content = {}
+                    else:
+                        msg_content = raw_content
 
-                    # Unwrap raw content if it was stored with {"raw": "..."}
-                    # This happens when Kafka receives non-JSON messages (XML, SWIFT MT, etc.)
-                    if isinstance(msg_content, dict) and 'raw' in msg_content and len(msg_content) == 1:
-                        raw_text = msg_content['raw']
+                    if raw_text:
                         # Try to parse the raw text as JSON first
                         try:
                             msg_content = json.loads(raw_text)
                         except (json.JSONDecodeError, TypeError):
-                            # Keep as raw text for XML/SWIFT MT parsers
-                            msg_content = {'_raw_text': raw_text, '_format': 'raw'}
+                            # Check if it's SWIFT MT format (starts with {1: or {2:)
+                            if raw_text.strip().startswith('{1:') or raw_text.strip().startswith('{2:'):
+                                # ALWAYS use ChapsSwiftParser for SWIFT MT block format
+                                # This handles MT103, MT202, CHAPS, BACS, FPS, etc.
+                                try:
+                                    from gps_cdm.message_formats.chaps import ChapsSwiftParser
+                                    swift_parser = ChapsSwiftParser()
+                                    msg_content = swift_parser.parse(raw_text)
+                                    logger.info(f"[{batch_id}] Parsed SWIFT MT for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                except Exception as parse_err:
+                                    logger.warning(f"[{batch_id}] Failed to parse SWIFT MT for {raw_id}: {parse_err}")
+                                    msg_content = {'_raw_text': raw_text, '_format': 'swift_mt'}
+                            elif raw_text.strip().startswith('<'):
+                                # XML format - use extractor's parser if available
+                                if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                    try:
+                                        msg_content = extractor.parser.parse(raw_text)
+                                        logger.info(f"[{batch_id}] Parsed XML for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                    except Exception as parse_err:
+                                        logger.warning(f"[{batch_id}] Failed to parse XML for {raw_id}: {parse_err}")
+                                        msg_content = {'_raw_text': raw_text, '_format': 'xml'}
+                                else:
+                                    msg_content = {'_raw_text': raw_text, '_format': 'xml'}
+                            elif raw_text.strip().startswith('{1') and raw_text.strip()[2:3].isdigit():
+                                # FEDWIRE tag-value format (e.g., {1500}00, {1510}1000)
+                                if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                    try:
+                                        msg_content = extractor.parser.parse(raw_text)
+                                        logger.info(f"[{batch_id}] Parsed FEDWIRE for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                    except Exception as parse_err:
+                                        logger.warning(f"[{batch_id}] Failed to parse FEDWIRE for {raw_id}: {parse_err}")
+                                        msg_content = {'_raw_text': raw_text, '_format': 'fedwire'}
+                                else:
+                                    msg_content = {'_raw_text': raw_text, '_format': 'fedwire'}
+                            elif raw_text.strip()[:3] == '101' or message_type.upper() in ('ACH', 'NACHA'):
+                                # ACH/NACHA fixed-width format (starts with 101 for file header)
+                                if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                    try:
+                                        msg_content = extractor.parser.parse(raw_text)
+                                        logger.info(f"[{batch_id}] Parsed ACH for {raw_id}: keys={list(msg_content.keys())[:5]}")
+                                    except Exception as parse_err:
+                                        logger.warning(f"[{batch_id}] Failed to parse ACH for {raw_id}: {parse_err}")
+                                        msg_content = {'_raw_text': raw_text, '_format': 'ach'}
+                                else:
+                                    msg_content = {'_raw_text': raw_text, '_format': 'ach'}
+                            else:
+                                # Unknown format - pass raw text to extractor
+                                msg_content = {'_raw_text': raw_text, '_format': 'raw'}
 
                     # Generate stg_id
                     stg_id = extractor.generate_stg_id()
 
-                    # Extract Silver record
-                    silver_record = extractor.extract_silver(msg_content, raw_id, stg_id, batch_id)
+                    # Extract Silver record using either DynamicMapper (database-driven) or hardcoded extractor
+                    if USE_DYNAMIC_MAPPINGS:
+                        # Use database-driven field mappings
+                        from gps_cdm.orchestration.dynamic_mapper import DynamicMapper
+                        mapper = DynamicMapper(conn)
+                        silver_record = mapper.extract_silver_record(message_type, msg_content, raw_id, batch_id)
+                        silver_record['stg_id'] = stg_id  # Override generated stg_id
 
-                    # Get columns and values
-                    columns = extractor.get_silver_columns()
-                    values = extractor.get_silver_values(silver_record)
+                        # Get table from format registry
+                        format_info = mapper._get_format_info(message_type)
+                        silver_table = format_info['silver_table']
+                        columns = mapper.get_silver_columns(message_type)
+                        values = mapper.get_silver_values(message_type, silver_record)
+
+                        logger.debug(f"[{batch_id}] Using DynamicMapper for {message_type}: {len(columns)} columns")
+                    else:
+                        # Use hardcoded extractor (legacy)
+                        silver_record = extractor.extract_silver(msg_content, raw_id, stg_id, batch_id)
+                        columns = extractor.get_silver_columns()
+                        values = extractor.get_silver_values(silver_record)
 
                     # Build INSERT
                     col_names = ', '.join(columns)
@@ -1425,7 +1528,14 @@ def process_medallion_pipeline(
             placeholders = ','.join(['%s'] * len(stg_ids))
 
             # Get all columns from Silver table for Gold entity extraction
-            silver_columns = extractor.get_silver_columns()
+            # When USE_DYNAMIC_MAPPINGS is enabled, we need to query using the same columns
+            # that DynamicMapper used to insert the data (database-driven mappings)
+            if USE_DYNAMIC_MAPPINGS:
+                from gps_cdm.orchestration.dynamic_mapper import DynamicMapper
+                mapper = DynamicMapper(conn)
+                silver_columns = mapper.get_silver_columns(message_type)
+            else:
+                silver_columns = extractor.get_silver_columns()
             col_list = ', '.join(silver_columns)
 
             cursor.execute(f"""
@@ -1522,6 +1632,17 @@ def process_medallion_pipeline(
                     row = cursor.fetchone()
                     if row:
                         result['gold']['instruction_ids'].append(instruction_id)
+
+                        # Persist extension data to format-specific Gold extension table
+                        try:
+                            extension_id = DynamicGoldMapper.persist_extension_data(
+                                cursor, silver_data, message_type, instruction_id
+                            )
+                            if extension_id:
+                                logger.debug(f"[{batch_id}] Persisted extension data: {extension_id}")
+                        except Exception as ext_err:
+                            # Log but don't fail - extension data is supplementary
+                            logger.warning(f"[{batch_id}] Failed to persist extension data for {stg_id}: {ext_err}")
 
                         # Update Silver status
                         cursor.execute(f"""

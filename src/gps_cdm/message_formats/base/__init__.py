@@ -11,6 +11,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def trunc(value: Optional[str], max_length: int) -> Optional[str]:
+    """Truncate string value to max_length."""
+    if value is None:
+        return None
+    if isinstance(value, str) and len(value) > max_length:
+        return value[:max_length]
+    return value
+
+
 # =============================================================================
 # DATA CLASSES FOR GOLD ENTITIES
 # =============================================================================
@@ -421,11 +430,15 @@ class GoldEntityPersister:
                 transaction_code = EXCLUDED.transaction_code
         """, (
             extension_id, instruction_id,
-            ext.immediate_destination, ext.immediate_origin, ext.file_creation_date, ext.file_creation_time, ext.file_id_modifier,
-            ext.standard_entry_class, ext.company_entry_description, ext.batch_number, ext.originator_status_code,
-            ext.transaction_code, ext.originating_dfi_id, ext.receiving_dfi_id, ext.individual_id, ext.discretionary_data,
-            ext.addenda_indicator, ext.addenda_type, ext.addenda_info,
-            ext.return_reason_code, ext.original_entry_trace, ext.date_of_death, ext.original_receiving_dfi
+            trunc(ext.immediate_destination, 50), trunc(ext.immediate_origin, 50),
+            trunc(ext.file_creation_date, 10), trunc(ext.file_creation_time, 4), trunc(ext.file_id_modifier, 1),
+            trunc(ext.standard_entry_class, 3), trunc(ext.company_entry_description, 100),
+            trunc(ext.batch_number, 20), trunc(ext.originator_status_code, 1),
+            trunc(ext.transaction_code, 2), trunc(ext.originating_dfi_id, 20), trunc(ext.receiving_dfi_id, 20),
+            trunc(ext.individual_id, 50), trunc(ext.discretionary_data, 2),
+            trunc(ext.addenda_indicator, 1), trunc(ext.addenda_type, 2), trunc(ext.addenda_info, 500),
+            trunc(ext.return_reason_code, 3), trunc(ext.original_entry_trace, 30),
+            trunc(ext.date_of_death, 10), trunc(ext.original_receiving_dfi, 20)
         ))
         return extension_id
 

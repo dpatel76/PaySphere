@@ -238,6 +238,9 @@ class RtpExtractor(BaseExtractor):
     MESSAGE_TYPE = "RTP"
     SILVER_TABLE = "stg_rtp"
 
+    def __init__(self):
+        self.parser = RtpXmlParser()
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================

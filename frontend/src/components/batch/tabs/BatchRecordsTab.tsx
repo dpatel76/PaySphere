@@ -1,6 +1,18 @@
 /**
  * Batch Records Tab
  * Displays paginated records for a batch with layer selector and cross-zone comparison
+ *
+ * Cross-Zone Comparison organized by CDM entities:
+ * 1. CDM_PAYMENT_INSTRUCTION - Core payment fields
+ * 2. CDM_PARTY (DEBTOR) - Debtor party entity
+ * 3. CDM_PARTY (CREDITOR) - Creditor party entity
+ * 4. CDM_ACCOUNT (DEBTOR) - Debtor account entity
+ * 5. CDM_ACCOUNT (CREDITOR) - Creditor account entity
+ * 6. CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT) - Ordering bank
+ * 7. CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT) - Beneficiary bank
+ * 8. CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES) - Intermediary agents
+ * 9. EXTENSION DATA - Format-specific extension fields
+ * 10. LINEAGE & METADATA - Processing and audit fields
  */
 import React, { useState, useMemo } from 'react';
 import {
@@ -19,7 +31,6 @@ import {
   Tabs,
   Tab,
   Paper,
-  Divider,
   TextField,
   Button,
   Alert,
@@ -34,14 +45,18 @@ import {
 import {
   Close as CloseIcon,
   CompareArrows as CompareIcon,
-  Visibility as ViewIcon,
-  ArrowForward as ArrowIcon,
   Edit as EditIcon,
   Replay as ReplayIcon,
+  Error as ErrorIcon,
+  AccountBalance as BankIcon,
+  Person as PersonIcon,
+  AccountBalanceWallet as AccountIcon,
+  Payment as PaymentIcon,
+  Extension as ExtensionIcon,
+  History as HistoryIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { pipelineApi, reprocessApi } from '../../../api/client';
-import { colors } from '../../../styles/design-system';
 
 interface BatchRecordsTabProps {
   batchId: string;
@@ -50,10 +65,11 @@ interface BatchRecordsTabProps {
 
 type LayerType = 'bronze' | 'silver' | 'gold';
 
-// Status color mapping
 const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
   PROCESSED: 'success',
   PROMOTED: 'success',
+  PROMOTED_TO_SILVER: 'success',
+  PROMOTED_TO_GOLD: 'success',
   PENDING: 'warning',
   FAILED: 'error',
   VALIDATED: 'info',
@@ -61,57 +77,38 @@ const statusColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'd
   DQ_FAILED: 'error',
 };
 
-// Zone colors for visual distinction
 const zoneColors = {
-  bronze: { bg: colors.zones.bronze.light, border: colors.zones.bronze.main, text: colors.zones.bronze.dark },
-  silver: { bg: colors.zones.silver.light, border: colors.zones.silver.main, text: colors.zones.silver.dark },
-  gold: { bg: colors.zones.gold.light, border: colors.zones.gold.main, text: colors.zones.gold.dark },
+  bronze: { bg: '#FFF8E1', border: '#FF8F00', text: '#E65100' },
+  silver: { bg: '#ECEFF1', border: '#607D8B', text: '#37474F' },
+  gold: { bg: '#FFF9C4', border: '#FBC02D', text: '#F57F17' },
 };
 
-// Field Display Component for showing key-value pairs
-const FieldDisplay: React.FC<{ label: string; value: any; isHighlighted?: boolean }> = ({
-  label,
-  value,
-  isHighlighted = false,
-}) => {
-  const displayValue = value === null || value === undefined
-    ? '-'
-    : typeof value === 'object'
-    ? JSON.stringify(value, null, 2)
-    : String(value);
-
-  return (
-    <Box sx={{ mb: 1.5 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-        {label}
-      </Typography>
-      <Typography
-        variant="body2"
-        sx={{
-          fontFamily: label.includes('id') || label.includes('content') ? 'monospace' : 'inherit',
-          fontSize: label.includes('content') ? 11 : 13,
-          backgroundColor: isHighlighted ? colors.primary.light + '20' : 'transparent',
-          p: isHighlighted ? 0.5 : 0,
-          borderRadius: 1,
-          wordBreak: 'break-all',
-          whiteSpace: label.includes('content') ? 'pre-wrap' : 'normal',
-          maxHeight: label.includes('content') ? 200 : 'auto',
-          overflow: 'auto',
-        }}
-      >
-        {displayValue}
-      </Typography>
-    </Box>
-  );
+// Entity category icons and colors
+const entityStyles = {
+  'CDM_PAYMENT_INSTRUCTION': { icon: PaymentIcon, color: '#1976d2', bg: '#e3f2fd' },
+  'CDM_PARTY (DEBTOR)': { icon: PersonIcon, color: '#7b1fa2', bg: '#f3e5f5' },
+  'CDM_PARTY (CREDITOR)': { icon: PersonIcon, color: '#388e3c', bg: '#e8f5e9' },
+  'CDM_PARTY (ULTIMATE)': { icon: PersonIcon, color: '#5d4037', bg: '#efebe9' },
+  'CDM_ACCOUNT (DEBTOR)': { icon: AccountIcon, color: '#7b1fa2', bg: '#f3e5f5' },
+  'CDM_ACCOUNT (CREDITOR)': { icon: AccountIcon, color: '#388e3c', bg: '#e8f5e9' },
+  'CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)': { icon: BankIcon, color: '#7b1fa2', bg: '#f3e5f5' },
+  'CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)': { icon: BankIcon, color: '#388e3c', bg: '#e8f5e9' },
+  'CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)': { icon: BankIcon, color: '#ff8f00', bg: '#fff3e0' },
+  'EXTENSION DATA': { icon: ExtensionIcon, color: '#0097a7', bg: '#e0f7fa' },
+  'LINEAGE & METADATA': { icon: HistoryIcon, color: '#455a64', bg: '#eceff1' },
 };
 
-// Record Comparison Dialog Component - Table-based side-by-side view
+/**
+ * Cross-Zone Comparison Dialog
+ * Shows fields organized by CDM entity structure
+ */
 const RecordComparisonDialog: React.FC<{
   open: boolean;
   onClose: () => void;
   layer: LayerType;
   recordId: string;
-}> = ({ open, onClose, layer, recordId }) => {
+  messageType: string;
+}> = ({ open, onClose, layer, recordId, messageType }) => {
   const [activeTab, setActiveTab] = useState(0);
 
   const { data: lineage, isLoading } = useQuery({
@@ -120,746 +117,448 @@ const RecordComparisonDialog: React.FC<{
     enabled: open && !!recordId,
   });
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
+  // Format value for display
+  const fmt = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'object') return JSON.stringify(val, null, 2);
+    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+    return String(val);
   };
 
-  // Build unified field comparison table rows - grouped by CDM entity
-  // Intelligently extracts values from raw_content and aligns with Silver/Gold fields
-  // Uses gold_entities for denormalized party/account/agent data
-  const getComparisonRows = () => {
+  // Build comparison data organized by CDM entities
+  const comparisonData = useMemo(() => {
     if (!lineage) return [];
 
-    // Parse raw_content from bronze to show actual source data
-    let rawContent: Record<string, any> = {};
-    if (lineage.bronze?.raw_content) {
-      try {
-        rawContent = typeof lineage.bronze.raw_content === 'string'
-          ? JSON.parse(lineage.bronze.raw_content)
-          : lineage.bronze.raw_content;
-      } catch {
-        rawContent = {};
-      }
-    }
-
-    // Gold entities (party, account, agent) from API
+    const bronze = lineage.bronze || {};
+    const bronzeParsed = (lineage as any).bronze_parsed || {};
+    const silver = lineage.silver || {};
+    const gold = lineage.gold || {};
     const goldEntities = lineage.gold_entities || {};
+    const goldExtension = (lineage as any).gold_extension || {};
 
-    // Helper to get nested value from raw_content (e.g., "debtor.name" or "debtorAccount.iban")
-    const getRawValue = (path: string): any => {
-      const parts = path.split('.');
-      let value: any = rawContent;
-      for (const part of parts) {
-        if (value === null || value === undefined) return undefined;
-        value = value[part];
-      }
-      return value;
-    };
+    // Helper to create a row - consolidated Bronze column shows parsed data or raw
+    const row = (category: string, field: string, bronzeVal: string, silver: string, gold: string, fkInfo?: string) =>
+      ({ category, field, bronze: bronzeVal, silver, gold, fkInfo });
 
-    // Helper to get value from gold entities (e.g., "debtor_party.name")
-    const getGoldEntityValue = (path: string): any => {
-      const parts = path.split('.');
-      if (parts.length !== 2) return undefined;
-      const [entity, field] = parts;
-      const entityData = goldEntities[entity as keyof typeof goldEntities];
-      return entityData?.[field];
-    };
+    const rows: ReturnType<typeof row>[] = [];
 
-    // Helper to format values for display
-    const fmt = (val: any): string => {
-      if (val === null || val === undefined) return '-';
-      if (typeof val === 'object') return JSON.stringify(val);
-      if (typeof val === 'boolean') return val ? 'Yes' : 'No';
-      return String(val);
-    };
+    // ==========================================
+    // ENTITY 1: CDM_PAYMENT_INSTRUCTION
+    // Core payment record fields
+    // ==========================================
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'instruction_id', '', '', fmt(gold.instruction_id)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'payment_id', fmt(bronzeParsed.messageId || bronze.message_type), fmt(silver.message_id), fmt(gold.payment_id)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'message_id', fmt(bronzeParsed.messageId), fmt(silver.message_id), fmt(gold.message_id)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'instruction_id_ext', fmt(bronzeParsed.instructionId), fmt(silver.instruction_id), fmt(gold.instruction_id_ext)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'end_to_end_id', fmt(bronzeParsed.endToEndId), fmt(silver.end_to_end_id), fmt(gold.end_to_end_id)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'uetr', fmt(bronzeParsed.uetr), fmt(silver.uetr), fmt(gold.uetr)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'transaction_id', '', '', fmt(gold.transaction_id)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'related_reference', '', '', fmt(gold.related_reference)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'source_message_type', fmt(bronze.message_type || bronzeParsed.messageType), fmt(silver.message_type), fmt(gold.source_message_type)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'message_format', fmt(bronze.message_format), '', ''));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'payment_type', '', '', fmt(gold.payment_type)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'scheme_code', '', '', fmt(gold.scheme_code)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'direction', '', '', fmt(gold.direction)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'cross_border_flag', '', '', fmt(gold.cross_border_flag)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'priority', '', '', fmt(gold.priority)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'service_level', '', '', fmt(gold.service_level)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'local_instrument', '', '', fmt(gold.local_instrument)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'category_purpose', '', '', fmt(gold.category_purpose)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'instructed_amount', fmt(bronzeParsed.amount), fmt(silver.amount), fmt(gold.instructed_amount)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'instructed_currency', fmt(bronzeParsed.currency), fmt(silver.currency), fmt(gold.instructed_currency)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'interbank_settlement_amount', '', '', fmt(gold.interbank_settlement_amount)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'interbank_settlement_currency', '', '', fmt(gold.interbank_settlement_currency)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'exchange_rate', '', '', fmt(gold.exchange_rate)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'exchange_rate_type', '', '', fmt(gold.exchange_rate_type)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'creation_datetime', fmt(bronzeParsed.creationDateTime), fmt(silver.creation_date_time), fmt(gold.creation_datetime)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'requested_execution_date', '', '', fmt(gold.requested_execution_date)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'value_date', '', '', fmt(gold.value_date)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'settlement_date', fmt(bronzeParsed.settlementDate), fmt(silver.settlement_date), fmt(gold.settlement_date)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'acceptance_datetime', '', '', fmt(gold.acceptance_datetime)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'completion_datetime', '', '', fmt(gold.completion_datetime)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'purpose', '', '', fmt(gold.purpose)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'purpose_description', '', '', fmt(gold.purpose_description)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'charge_bearer', fmt(bronzeParsed.chargeBearer), '', fmt(gold.charge_bearer)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'remittance_unstructured', fmt(bronzeParsed.remittanceInfo), fmt(silver.remittance_info), fmt(gold.remittance_unstructured)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'remittance_reference', '', '', fmt(gold.remittance_reference)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'remittance_structured', '', '', fmt(gold.remittance_structured)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'sender_to_receiver_info', fmt(bronzeParsed.senderToReceiverInfo), '', fmt(gold.sender_to_receiver_info)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'current_status', fmt(bronze.processing_status), fmt(silver.processing_status), fmt(gold.current_status)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'status_reason_code', '', '', fmt(gold.status_reason_code)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'status_reason_description', '', '', fmt(gold.status_reason_description)));
+    // Compliance fields
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'sanctions_screening_status', '', '', fmt(gold.sanctions_screening_status)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'fraud_score', '', '', fmt(gold.fraud_score)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'aml_risk_rating', '', '', fmt(gold.aml_risk_rating)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'pep_flag', '', '', fmt(gold.pep_flag)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'structuring_indicator', '', '', fmt(gold.structuring_indicator)));
+    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'high_risk_country_flag', '', '', fmt(gold.high_risk_country_flag)));
 
-    type RowData = {
-      field: string;
-      rawPath?: string;
-      bronze: string;
-      silver: string;
-      gold: string;
-      isHeader?: boolean;
-    };
+    // ==========================================
+    // ENTITY 2: CDM_PARTY (DEBTOR)
+    // Debtor party entity
+    // ==========================================
+    const debtorParty = goldEntities.debtor_party || {};
+    rows.push(row('CDM_PARTY (DEBTOR)', 'party_id', '', '', fmt(debtorParty.party_id), fmt(gold.debtor_id)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'party_type', '', '', fmt(debtorParty.party_type)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'name', fmt(bronzeParsed.debtorName), fmt(silver.debtor_name), fmt(debtorParty.name)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'street_name', fmt(bronzeParsed.debtorStreetName), fmt(silver.debtor_street_name), fmt(debtorParty.street_name)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'building_number', '', '', fmt(debtorParty.building_number)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'post_code', fmt(bronzeParsed.debtorPostCode), fmt(silver.debtor_post_code), fmt(debtorParty.post_code)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'town_name', fmt(bronzeParsed.debtorTownName), fmt(silver.debtor_town_name), fmt(debtorParty.town_name)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'country_sub_division', '', '', fmt(debtorParty.country_sub_division)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'country', fmt(bronzeParsed.debtorCountry), fmt(silver.debtor_country), fmt(debtorParty.country)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'address (combined)', fmt(bronzeParsed.debtorAddress), fmt(silver.debtor_address), fmt(debtorParty.address)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'identification_type', '', '', fmt(debtorParty.identification_type)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'identification_number', '', '', fmt(debtorParty.identification_number)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'tax_id', '', '', fmt(debtorParty.tax_id)));
+    rows.push(row('CDM_PARTY (DEBTOR)', 'tax_id_type', '', '', fmt(debtorParty.tax_id_type)));
 
-    const rows: RowData[] = [];
+    // ==========================================
+    // ENTITY 3: CDM_PARTY (CREDITOR)
+    // Creditor party entity
+    // ==========================================
+    const creditorParty = goldEntities.creditor_party || {};
+    rows.push(row('CDM_PARTY (CREDITOR)', 'party_id', '', '', fmt(creditorParty.party_id), fmt(gold.creditor_id)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'party_type', '', '', fmt(creditorParty.party_type)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'name', fmt(bronzeParsed.creditorName), fmt(silver.creditor_name), fmt(creditorParty.name)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'street_name', fmt(bronzeParsed.creditorStreetName), fmt(silver.creditor_street_name), fmt(creditorParty.street_name)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'building_number', '', '', fmt(creditorParty.building_number)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'post_code', fmt(bronzeParsed.creditorPostCode), fmt(silver.creditor_post_code), fmt(creditorParty.post_code)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'town_name', fmt(bronzeParsed.creditorTownName), fmt(silver.creditor_town_name), fmt(creditorParty.town_name)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'country_sub_division', '', '', fmt(creditorParty.country_sub_division)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'country', fmt(bronzeParsed.creditorCountry), fmt(silver.creditor_country), fmt(creditorParty.country)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'address (combined)', fmt(bronzeParsed.creditorAddress), fmt(silver.creditor_address), fmt(creditorParty.address)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'identification_type', '', '', fmt(creditorParty.identification_type)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'identification_number', '', '', fmt(creditorParty.identification_number)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'tax_id', '', '', fmt(creditorParty.tax_id)));
+    rows.push(row('CDM_PARTY (CREDITOR)', 'tax_id_type', '', '', fmt(creditorParty.tax_id_type)));
 
-    // Helper to add a section header
-    const addSection = (title: string) => {
-      rows.push({ field: title, bronze: '', silver: '', gold: '', isHeader: true });
-    };
+    // ==========================================
+    // ENTITY 4: CDM_PARTY (ULTIMATE)
+    // Ultimate debtor/creditor parties
+    // ==========================================
+    const ultimateDebtor = goldEntities.ultimate_debtor || {};
+    const ultimateCreditor = goldEntities.ultimate_creditor || {};
+    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_debtor_id', '', '', fmt(ultimateDebtor.party_id), fmt(gold.ultimate_debtor_id)));
+    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_debtor_name', '', '', fmt(ultimateDebtor.name)));
+    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_debtor_party_type', '', '', fmt(ultimateDebtor.party_type)));
+    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_debtor_country', '', '', fmt(ultimateDebtor.country)));
+    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_creditor_id', '', '', fmt(ultimateCreditor.party_id), fmt(gold.ultimate_creditor_id)));
+    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_creditor_name', '', '', fmt(ultimateCreditor.name)));
+    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_creditor_party_type', '', '', fmt(ultimateCreditor.party_type)));
+    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_creditor_country', '', '', fmt(ultimateCreditor.country)));
 
-    // Helper to add a mapped field row with intelligent extraction
-    // goldField can be either a direct field on gold or an entity path like "debtor_party.name"
-    const addRow = (
-      fieldName: string,
-      rawPath: string | null,  // Path in raw_content (e.g., "debtor.name", "instructedAmount")
-      silverField: string | null,
-      goldField: string | null  // Either direct field or entity.field path
-    ) => {
-      const rawVal = rawPath ? getRawValue(rawPath) : undefined;
-      const silverVal = silverField ? lineage.silver?.[silverField] : undefined;
+    // ==========================================
+    // ENTITY 5: CDM_ACCOUNT (DEBTOR)
+    // Debtor account entity
+    // ==========================================
+    const debtorAccount = goldEntities.debtor_account || {};
+    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'account_id', '', '', fmt(debtorAccount.account_id), fmt(gold.debtor_account_id)));
+    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'account_type', '', '', fmt(debtorAccount.account_type)));
+    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'iban', '', '', fmt(debtorAccount.iban)));
+    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'account_number', fmt(bronzeParsed.debtorAccount), fmt(silver.debtor_account), fmt(debtorAccount.account_number)));
+    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'sort_code', fmt(bronzeParsed.debtorSortCode), fmt(silver.debtor_sort_code), ''));
+    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'currency', '', '', fmt(debtorAccount.currency)));
 
-      // Check if goldField is an entity path (contains .)
-      let goldVal: any;
-      if (goldField) {
-        if (goldField.includes('.')) {
-          goldVal = getGoldEntityValue(goldField);
-        } else {
-          goldVal = lineage.gold?.[goldField];
-        }
-      }
+    // ==========================================
+    // ENTITY 6: CDM_ACCOUNT (CREDITOR)
+    // Creditor account entity
+    // ==========================================
+    const creditorAccount = goldEntities.creditor_account || {};
+    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'account_id', '', '', fmt(creditorAccount.account_id), fmt(gold.creditor_account_id)));
+    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'account_type', '', '', fmt(creditorAccount.account_type)));
+    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'iban', '', '', fmt(creditorAccount.iban)));
+    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'account_number', fmt(bronzeParsed.creditorAccount), fmt(silver.creditor_account), fmt(creditorAccount.account_number)));
+    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'sort_code', fmt(bronzeParsed.creditorSortCode), fmt(silver.creditor_sort_code), ''));
+    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'currency', '', '', fmt(creditorAccount.currency)));
 
-      // Always show if Gold has a value (100% Gold coverage), or if any zone has data
-      if (goldVal !== undefined || silverVal !== undefined || rawVal !== undefined) {
-        rows.push({
-          field: fieldName,
-          rawPath: rawPath || undefined,
-          bronze: fmt(rawVal),
-          silver: fmt(silverVal),
-          gold: fmt(goldVal),
-        });
-      }
-    };
+    // ==========================================
+    // ENTITY 7: CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)
+    // Debtor agent (ordering bank)
+    // ==========================================
+    const debtorAgent = goldEntities.debtor_agent || {};
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'fi_id', '', '', fmt(debtorAgent.fi_id), fmt(gold.debtor_agent_id)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'fi_type', '', '', fmt(debtorAgent.fi_type)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'institution_name', '', '', fmt(debtorAgent.name)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'bic', fmt(bronzeParsed.debtorAgentBic), fmt(silver.debtor_agent_bic), fmt(debtorAgent.bic)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'clearing_system_id', '', fmt(silver.debtor_clearing_system || 'GBDSC'), fmt(debtorAgent.clearing_system_id)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'member_id (sort_code)', fmt(bronzeParsed.debtorSortCode), fmt(silver.debtor_sort_code), fmt(debtorAgent.member_id)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'country', fmt(bronzeParsed.debtorCountry || 'GB'), fmt(silver.debtor_country || 'GB'), fmt(debtorAgent.country)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'lei', '', '', fmt(debtorAgent.lei)));
 
-    // =========================================================================
-    // SECTION: PAYMENT INSTRUCTION (Core CDM Entity)
-    // =========================================================================
-    addSection('PAYMENT INSTRUCTION');
-    addRow('Instruction ID', 'instructionId', 'instruction_id', 'instruction_id');
-    addRow('Payment ID', 'messageId', 'msg_id', 'payment_id');
-    addRow('End-to-End ID', 'endToEndId', 'end_to_end_id', 'end_to_end_id');
-    addRow('UETR', 'uetr', 'uetr', 'uetr');
-    addRow('Transaction ID', null, null, 'transaction_id');
-    addRow('Instruction ID (External)', null, null, 'instruction_id_ext');
-    addRow('Message ID', 'messageId', 'msg_id', 'message_id');
-    addRow('Related Reference', null, null, 'related_reference');
-    addRow('Payment Type', null, null, 'payment_type');
-    addRow('Scheme Code', 'paymentInformation.localInstrument', 'local_instrument', 'scheme_code');
-    addRow('Direction', null, null, 'direction');
-    addRow('Cross-Border Flag', null, null, 'cross_border_flag');
-    addRow('Priority', null, null, 'priority');
-    addRow('Service Level', 'paymentInformation.serviceLevel', 'service_level', 'service_level');
-    addRow('Local Instrument', 'paymentInformation.localInstrument', 'local_instrument', 'local_instrument');
-    addRow('Category Purpose', 'paymentInformation.categoryPurpose', 'category_purpose', 'category_purpose');
+    // ==========================================
+    // ENTITY 8: CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)
+    // Creditor agent (beneficiary bank)
+    // ==========================================
+    const creditorAgent = goldEntities.creditor_agent || {};
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'fi_id', '', '', fmt(creditorAgent.fi_id), fmt(gold.creditor_agent_id)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'fi_type', '', '', fmt(creditorAgent.fi_type)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'institution_name', '', '', fmt(creditorAgent.name)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'bic', fmt(bronzeParsed.creditorAgentBic), fmt(silver.creditor_agent_bic), fmt(creditorAgent.bic)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'clearing_system_id', '', fmt(silver.creditor_clearing_system || 'GBDSC'), fmt(creditorAgent.clearing_system_id)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'member_id (sort_code)', fmt(bronzeParsed.creditorSortCode), fmt(silver.creditor_sort_code), fmt(creditorAgent.member_id)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'country', fmt(bronzeParsed.creditorCountry || 'GB'), fmt(silver.creditor_country || 'GB'), fmt(creditorAgent.country)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'lei', '', '', fmt(creditorAgent.lei)));
 
-    // =========================================================================
-    // SECTION: AMOUNT & CURRENCY
-    // =========================================================================
-    addSection('AMOUNT & CURRENCY');
-    addRow('Instructed Amount', 'instructedAmount', 'instructed_amount', 'instructed_amount');
-    addRow('Instructed Currency', 'instructedCurrency', 'instructed_currency', 'instructed_currency');
-    addRow('Equivalent Amount', 'equivalentAmount', 'equivalent_amount', null);
-    addRow('Equivalent Currency', 'equivalentCurrency', 'equivalent_currency', null);
-    addRow('Interbank Settlement Amount', null, null, 'interbank_settlement_amount');
-    addRow('Interbank Settlement Currency', null, null, 'interbank_settlement_currency');
-    addRow('Exchange Rate', 'exchangeRate', 'exchange_rate', 'exchange_rate');
-    addRow('Exchange Rate Type', null, null, 'exchange_rate_type');
-    addRow('Charge Bearer', 'chargeBearer', 'charge_bearer', 'charge_bearer');
+    // ==========================================
+    // ENTITY 9: CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)
+    // Intermediary agents
+    // ==========================================
+    const intermediary1 = goldEntities.intermediary_agent1 || {};
+    const intermediary2 = goldEntities.intermediary_agent2 || {};
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary_agent1_id', '', '', fmt(intermediary1.fi_id), fmt(gold.intermediary_agent1_id)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary1_name', '', '', fmt(intermediary1.name)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary1_bic', '', '', fmt(intermediary1.bic)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary1_country', '', '', fmt(intermediary1.country)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary_agent2_id', '', '', fmt(intermediary2.fi_id), fmt(gold.intermediary_agent2_id)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary2_name', '', '', fmt(intermediary2.name)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary2_bic', '', '', fmt(intermediary2.bic)));
+    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary2_country', '', '', fmt(intermediary2.country)));
 
-    // =========================================================================
-    // SECTION: DEBTOR (Payer Party) - Gold uses cdm_party table
-    // =========================================================================
-    addSection('DEBTOR (PAYER)');
-    addRow('Debtor ID (FK)', null, null, 'debtor_id');
-    addRow('Debtor Party Type', null, null, 'debtor_party.party_type');
-    addRow('Debtor Name', 'debtor.name', 'debtor_name', 'debtor_party.name');
-    addRow('Debtor Street', 'debtor.streetName', 'debtor_street_name', 'debtor_party.street_name');
-    addRow('Debtor Building', 'debtor.buildingNumber', 'debtor_building_number', 'debtor_party.building_number');
-    addRow('Debtor Postal Code', 'debtor.postalCode', 'debtor_postal_code', 'debtor_party.post_code');
-    addRow('Debtor Town', 'debtor.townName', 'debtor_town_name', 'debtor_party.town_name');
-    addRow('Debtor Country', 'debtor.country', 'debtor_country', 'debtor_party.country');
-    addRow('Debtor Country Sub-Division', 'debtor.countrySubDivision', 'debtor_country_sub_division', 'debtor_party.country_sub_division');
-    addRow('Debtor Identification Type', 'debtor.idType', 'debtor_id_type', 'debtor_party.identification_type');
-    addRow('Debtor Identification Number', 'debtor.id', 'debtor_id', 'debtor_party.identification_number');
-    addRow('Debtor Tax ID', null, null, 'debtor_party.tax_id');
-    addRow('Debtor Tax ID Type', null, null, 'debtor_party.tax_id_type');
-
-    // =========================================================================
-    // SECTION: DEBTOR ACCOUNT - Gold uses cdm_account table
-    // =========================================================================
-    addSection('DEBTOR ACCOUNT');
-    addRow('Debtor Account ID (FK)', null, null, 'debtor_account_id');
-    addRow('Debtor Account Type', 'debtorAccount.accountType', 'debtor_account_type', 'debtor_account.account_type');
-    addRow('Debtor Account IBAN', 'debtorAccount.iban', 'debtor_account_iban', 'debtor_account.iban');
-    addRow('Debtor Account Number', 'debtorAccount.other', 'debtor_account_other', 'debtor_account.account_number');
-    addRow('Debtor Account Currency', 'debtorAccount.currency', 'debtor_account_currency', 'debtor_account.currency');
-
-    // =========================================================================
-    // SECTION: DEBTOR AGENT (Ordering Bank) - Gold uses cdm_financial_institution table
-    // =========================================================================
-    addSection('DEBTOR AGENT (ORDERING BANK)');
-    addRow('Debtor Agent ID (FK)', null, null, 'debtor_agent_id');
-    addRow('Debtor Agent Type', null, null, 'debtor_agent.fi_type');
-    addRow('Debtor Agent Name', 'debtorAgent.name', 'debtor_agent_name', 'debtor_agent.name');
-    addRow('Debtor Agent BIC', 'debtorAgent.bic', 'debtor_agent_bic', 'debtor_agent.bic');
-    addRow('Debtor Agent Clearing System', 'debtorAgent.clearingSystem', 'debtor_agent_clearing_system', 'debtor_agent.clearing_system_id');
-    addRow('Debtor Agent Member ID', 'debtorAgent.memberId', 'debtor_agent_member_id', 'debtor_agent.member_id');
-    addRow('Debtor Agent Country', 'debtorAgent.country', 'debtor_agent_country', 'debtor_agent.country');
-    addRow('Debtor Agent LEI', null, null, 'debtor_agent.lei');
-
-    // =========================================================================
-    // SECTION: CREDITOR (Payee Party) - Gold uses cdm_party table
-    // =========================================================================
-    addSection('CREDITOR (PAYEE)');
-    addRow('Creditor ID (FK)', null, null, 'creditor_id');
-    addRow('Creditor Party Type', null, null, 'creditor_party.party_type');
-    addRow('Creditor Name', 'creditor.name', 'creditor_name', 'creditor_party.name');
-    addRow('Creditor Street', 'creditor.streetName', 'creditor_street_name', 'creditor_party.street_name');
-    addRow('Creditor Building', 'creditor.buildingNumber', 'creditor_building_number', 'creditor_party.building_number');
-    addRow('Creditor Postal Code', 'creditor.postalCode', 'creditor_postal_code', 'creditor_party.post_code');
-    addRow('Creditor Town', 'creditor.townName', 'creditor_town_name', 'creditor_party.town_name');
-    addRow('Creditor Country', 'creditor.country', 'creditor_country', 'creditor_party.country');
-    addRow('Creditor Country Sub-Division', 'creditor.countrySubDivision', 'creditor_country_sub_division', 'creditor_party.country_sub_division');
-    addRow('Creditor Identification Type', 'creditor.idType', 'creditor_id_type', 'creditor_party.identification_type');
-    addRow('Creditor Identification Number', 'creditor.id', 'creditor_id', 'creditor_party.identification_number');
-    addRow('Creditor Tax ID', null, null, 'creditor_party.tax_id');
-    addRow('Creditor Tax ID Type', null, null, 'creditor_party.tax_id_type');
-
-    // =========================================================================
-    // SECTION: CREDITOR ACCOUNT - Gold uses cdm_account table
-    // =========================================================================
-    addSection('CREDITOR ACCOUNT');
-    addRow('Creditor Account ID (FK)', null, null, 'creditor_account_id');
-    addRow('Creditor Account Type', 'creditorAccount.accountType', 'creditor_account_type', 'creditor_account.account_type');
-    addRow('Creditor Account IBAN', 'creditorAccount.iban', 'creditor_account_iban', 'creditor_account.iban');
-    addRow('Creditor Account Number', 'creditorAccount.other', 'creditor_account_other', 'creditor_account.account_number');
-    addRow('Creditor Account Currency', 'creditorAccount.currency', 'creditor_account_currency', 'creditor_account.currency');
-
-    // =========================================================================
-    // SECTION: CREDITOR AGENT (Beneficiary Bank) - Gold uses cdm_financial_institution table
-    // =========================================================================
-    addSection('CREDITOR AGENT (BENEFICIARY BANK)');
-    addRow('Creditor Agent ID (FK)', null, null, 'creditor_agent_id');
-    addRow('Creditor Agent Type', null, null, 'creditor_agent.fi_type');
-    addRow('Creditor Agent Name', 'creditorAgent.name', 'creditor_agent_name', 'creditor_agent.name');
-    addRow('Creditor Agent BIC', 'creditorAgent.bic', 'creditor_agent_bic', 'creditor_agent.bic');
-    addRow('Creditor Agent Clearing System', 'creditorAgent.clearingSystem', 'creditor_agent_clearing_system', 'creditor_agent.clearing_system_id');
-    addRow('Creditor Agent Member ID', 'creditorAgent.memberId', 'creditor_agent_member_id', 'creditor_agent.member_id');
-    addRow('Creditor Agent Country', 'creditorAgent.country', 'creditor_agent_country', 'creditor_agent.country');
-    addRow('Creditor Agent LEI', null, null, 'creditor_agent.lei');
-
-    // =========================================================================
-    // SECTION: INTERMEDIARY AGENTS - Gold uses cdm_financial_institution table
-    // =========================================================================
-    addSection('INTERMEDIARY AGENTS');
-    addRow('Intermediary Agent 1 ID (FK)', null, null, 'intermediary_agent1_id');
-    addRow('Intermediary Agent 1 Name', null, null, 'intermediary_agent1.name');
-    addRow('Intermediary Agent 1 BIC', null, null, 'intermediary_agent1.bic');
-    addRow('Intermediary Agent 1 Country', null, null, 'intermediary_agent1.country');
-    addRow('Intermediary Agent 2 ID (FK)', null, null, 'intermediary_agent2_id');
-    addRow('Intermediary Agent 2 Name', null, null, 'intermediary_agent2.name');
-    addRow('Intermediary Agent 2 BIC', null, null, 'intermediary_agent2.bic');
-
-    // =========================================================================
-    // SECTION: ULTIMATE PARTIES - Gold uses cdm_party table
-    // =========================================================================
-    addSection('ULTIMATE PARTIES');
-    addRow('Ultimate Debtor ID (FK)', null, null, 'ultimate_debtor_id');
-    addRow('Ultimate Debtor Name', 'ultimateDebtor.name', 'ultimate_debtor_name', 'ultimate_debtor.name');
-    addRow('Ultimate Debtor Party Type', null, null, 'ultimate_debtor.party_type');
-    addRow('Ultimate Debtor ID Type', 'ultimateDebtor.idType', 'ultimate_debtor_id_type', 'ultimate_debtor.identification_type');
-    addRow('Ultimate Debtor ID Number', 'ultimateDebtor.id', 'ultimate_debtor_id', 'ultimate_debtor.identification_number');
-    addRow('Ultimate Debtor Country', null, null, 'ultimate_debtor.country');
-    addRow('Ultimate Creditor ID (FK)', null, null, 'ultimate_creditor_id');
-    addRow('Ultimate Creditor Name', 'ultimateCreditor.name', 'ultimate_creditor_name', 'ultimate_creditor.name');
-    addRow('Ultimate Creditor Party Type', null, null, 'ultimate_creditor.party_type');
-    addRow('Ultimate Creditor ID Type', 'ultimateCreditor.idType', 'ultimate_creditor_id_type', 'ultimate_creditor.identification_type');
-    addRow('Ultimate Creditor ID Number', 'ultimateCreditor.id', 'ultimate_creditor_id', 'ultimate_creditor.identification_number');
-    addRow('Ultimate Creditor Country', null, null, 'ultimate_creditor.country');
-
-    // =========================================================================
-    // SECTION: DATES & TIMESTAMPS
-    // =========================================================================
-    addSection('DATES & TIMESTAMPS');
-    addRow('Creation DateTime', 'creationDateTime', 'creation_date_time', 'creation_datetime');
-    addRow('Requested Execution Date', 'paymentInformation.requestedExecutionDate', 'requested_execution_date', 'requested_execution_date');
-    addRow('Value Date', null, null, 'value_date');
-    addRow('Settlement Date', null, null, 'settlement_date');
-    addRow('Acceptance DateTime', null, null, 'acceptance_datetime');
-    addRow('Completion DateTime', null, null, 'completion_datetime');
-
-    // =========================================================================
-    // SECTION: REMITTANCE INFORMATION
-    // =========================================================================
-    addSection('REMITTANCE INFORMATION');
-    addRow('Purpose Code', 'purposeCode', 'purpose_code', 'purpose');
-    addRow('Purpose Description', null, 'purpose_proprietary', 'purpose_description');
-    addRow('Remittance (Unstructured)', 'remittanceInformation.unstructured', 'remittance_information', 'remittance_unstructured');
-    addRow('Remittance Reference', 'remittanceInformation.structured.creditorReference', null, 'remittance_reference');
-    addRow('Remittance (Structured)', 'remittanceInformation.structured', 'structured_remittance', 'remittance_structured');
-
-    // =========================================================================
-    // SECTION: INITIATING PARTY
-    // =========================================================================
-    addSection('INITIATING PARTY');
-    addRow('Initiating Party Name', 'initiatingParty.name', 'initiating_party_name', null);
-    addRow('Initiating Party ID', 'initiatingParty.id', 'initiating_party_id', null);
-    addRow('Initiating Party ID Type', 'initiatingParty.idType', 'initiating_party_id_type', null);
-    addRow('Initiating Party Country', 'initiatingParty.country', 'initiating_party_country', null);
-
-    // =========================================================================
-    // SECTION: BATCH INFORMATION
-    // =========================================================================
-    addSection('BATCH INFORMATION');
-    addRow('Number of Transactions', 'numberOfTransactions', 'number_of_transactions', null);
-    addRow('Control Sum', 'controlSum', 'control_sum', null);
-    addRow('Payment Info ID', 'paymentInformation.paymentInfoId', 'payment_info_id', null);
-    addRow('Payment Method', 'paymentInformation.paymentMethod', 'payment_method', null);
-    addRow('Batch Booking', 'paymentInformation.batchBooking', 'batch_booking', null);
-
-    // =========================================================================
-    // SECTION: STATUS & PROCESSING
-    // =========================================================================
-    addSection('STATUS & PROCESSING');
-    addRow('Current Status', null, 'processing_status', 'current_status');
-    addRow('Status Reason Code', null, null, 'status_reason_code');
-    addRow('Status Reason Description', null, null, 'status_reason_description');
-    addRow('Processing Error', null, 'processing_error', null);
-
-    // =========================================================================
-    // SECTION: REGULATORY & COMPLIANCE
-    // =========================================================================
-    addSection('REGULATORY & COMPLIANCE');
-    addRow('Regulatory Reporting', 'regulatoryReporting', 'regulatory_reporting', 'regulatory_extensions');
-    addRow('Sanctions Screening Status', null, null, 'sanctions_screening_status');
-    addRow('Sanctions Screening Timestamp', null, null, 'sanctions_screening_timestamp');
-    addRow('Fraud Score', null, null, 'fraud_score');
-    addRow('Fraud Flags', null, null, 'fraud_flags');
-    addRow('AML Risk Rating', null, null, 'aml_risk_rating');
-    addRow('PEP Flag', null, null, 'pep_flag');
-    addRow('Structuring Indicator', null, null, 'structuring_indicator');
-    addRow('High Risk Country Flag', null, null, 'high_risk_country_flag');
-
-    // =========================================================================
-    // SECTION: DATA QUALITY
-    // =========================================================================
-    addSection('DATA QUALITY');
-    addRow('Data Quality Score', null, null, 'data_quality_score');
-    addRow('Data Quality Issues', null, null, 'data_quality_issues');
-
-    // =========================================================================
-    // SECTION: LINEAGE & TRACKING (System/Audit Fields)
-    // =========================================================================
-    addSection('LINEAGE & TRACKING');
-    // Bronze tracking
-    addRow('Raw ID', null, 'raw_id', 'source_raw_id');
-    addRow('Bronze Batch ID', null, null, null);
-    rows[rows.length - 1].bronze = fmt(lineage.bronze?._batch_id);
-    rows[rows.length - 1].silver = fmt(lineage.silver?._batch_id);
-    rows[rows.length - 1].gold = fmt(lineage.gold?.lineage_batch_id);
-
-    addRow('Source STG ID', null, null, 'source_stg_id');
-    addRow('Source STG Table', null, null, 'source_stg_table');
-    addRow('Source Message Type', null, null, 'source_message_type');
-    addRow('Source System', null, null, 'source_system');
-    addRow('Lineage Pipeline Run ID', null, null, 'lineage_pipeline_run_id');
-
-    // Temporal tracking
-    addRow('Valid From', null, null, 'valid_from');
-    addRow('Valid To', null, null, 'valid_to');
-    addRow('Is Current', null, null, 'is_current');
-
-    // Partition info
-    addRow('Partition Year', null, null, 'partition_year');
-    addRow('Partition Month', null, null, 'partition_month');
-    addRow('Region', null, null, 'region');
-
-    // Audit fields
-    addRow('Created At', null, null, 'created_at');
-    addRow('Updated At', null, null, 'updated_at');
-    addRow('Updated By', null, null, 'updated_by');
-    addRow('Record Version', null, null, 'record_version');
-    addRow('Is Deleted', null, null, 'is_deleted');
-
-    // Bronze/Silver timestamps
-    addRow('Ingested At', null, null, null);
-    rows[rows.length - 1].bronze = fmt(lineage.bronze?._ingested_at);
-    rows[rows.length - 1].silver = '-';
-    rows[rows.length - 1].gold = '-';
-
-    addRow('Processed To Silver At', null, null, null);
-    rows[rows.length - 1].bronze = fmt(lineage.bronze?.processed_to_silver_at);
-    rows[rows.length - 1].silver = fmt(lineage.silver?._processed_at);
-    rows[rows.length - 1].gold = '-';
-
-    addRow('Processed To Gold At', null, 'processed_to_gold_at', null);
-
-    // Filter out sections that have no data rows after them
-    const filteredRows: RowData[] = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (row.isHeader) {
-        // Check if there are any non-header rows after this header before the next header
-        let hasData = false;
-        for (let j = i + 1; j < rows.length && !rows[j].isHeader; j++) {
-          if (rows[j].bronze !== '-' || rows[j].silver !== '-' || rows[j].gold !== '-') {
-            hasData = true;
-            break;
-          }
-        }
-        if (hasData) {
-          filteredRows.push(row);
-        }
-      } else {
-        // Only add non-header rows if they have some data
-        if (row.bronze !== '-' || row.silver !== '-' || row.gold !== '-') {
-          filteredRows.push(row);
-        }
-      }
+    // ==========================================
+    // ENTITY 10: EXTENSION DATA
+    // Format-specific extension fields
+    // ==========================================
+    if (Object.keys(goldExtension).length > 0) {
+      const extTable = goldExtension._table || 'extension';
+      // Add extension table name as header info
+      rows.push(row('EXTENSION DATA', `[Table: gold.${extTable}]`, '', '', ''));
+      Object.entries(goldExtension).forEach(([key, value]) => {
+        if (key === '_table' || key === 'instruction_id' || key === 'extension_id' || key === 'created_at' || key === 'updated_at') return;
+        rows.push(row('EXTENSION DATA', key, '', '', fmt(value)));
+      });
+    } else {
+      rows.push(row('EXTENSION DATA', '(no extension data)', '', '', ''));
     }
 
-    return filteredRows;
-  };
+    // ==========================================
+    // ENTITY 11: LINEAGE & METADATA
+    // Processing lineage and audit fields
+    // ==========================================
+    rows.push(row('LINEAGE & METADATA', 'raw_id (Bronze PK)', fmt(bronze.raw_id), fmt(silver.raw_id), fmt(gold.source_raw_id)));
+    rows.push(row('LINEAGE & METADATA', 'stg_id (Silver PK)', '', fmt(silver.stg_id), fmt(gold.source_stg_id)));
+    rows.push(row('LINEAGE & METADATA', 'source_stg_table', '', fmt(silver.source_table), fmt(gold.source_stg_table)));
+    rows.push(row('LINEAGE & METADATA', 'batch_id', fmt(bronze._batch_id), fmt(silver._batch_id), fmt(gold.lineage_batch_id)));
+    rows.push(row('LINEAGE & METADATA', 'pipeline_run_id', '', '', fmt(gold.lineage_pipeline_run_id)));
+    rows.push(row('LINEAGE & METADATA', 'source_system', fmt(bronze.source_system), '', fmt(gold.source_system)));
+    rows.push(row('LINEAGE & METADATA', '_ingested_at', fmt(bronze._ingested_at), '', ''));
+    rows.push(row('LINEAGE & METADATA', '_processed_at', '', fmt(silver._processed_at), ''));
+    rows.push(row('LINEAGE & METADATA', 'processed_to_gold_at', '', fmt(silver.processed_to_gold_at), ''));
+    rows.push(row('LINEAGE & METADATA', 'created_at', '', '', fmt(gold.created_at)));
+    rows.push(row('LINEAGE & METADATA', 'updated_at', '', '', fmt(gold.updated_at)));
+    rows.push(row('LINEAGE & METADATA', 'valid_from', '', '', fmt(gold.valid_from)));
+    rows.push(row('LINEAGE & METADATA', 'valid_to', '', '', fmt(gold.valid_to)));
+    rows.push(row('LINEAGE & METADATA', 'updated_by', '', '', fmt(gold.updated_by)));
+    rows.push(row('LINEAGE & METADATA', 'record_version', '', '', fmt(gold.record_version)));
+    rows.push(row('LINEAGE & METADATA', 'is_current', '', '', fmt(gold.is_current)));
+    rows.push(row('LINEAGE & METADATA', 'is_deleted', '', '', fmt(gold.is_deleted)));
+    rows.push(row('LINEAGE & METADATA', 'partition_year', '', '', fmt(gold.partition_year)));
+    rows.push(row('LINEAGE & METADATA', 'partition_month', '', '', fmt(gold.partition_month)));
+    rows.push(row('LINEAGE & METADATA', 'region', '', '', fmt(gold.region)));
+    rows.push(row('LINEAGE & METADATA', 'data_quality_score', '', '', fmt(gold.data_quality_score)));
+    rows.push(row('LINEAGE & METADATA', 'data_quality_issues', '', '', fmt(gold.data_quality_issues)));
 
-  const formatValue = (value: any, isDefault?: boolean): string => {
-    if (value === null || value === undefined) return '-';
-    if (typeof value === 'object') return JSON.stringify(value);
-    const strVal = String(value);
-    return isDefault ? `${strVal} (default)` : strVal;
-  };
+    return rows;
+  }, [lineage]);
+
+  // Group rows by category
+  const groupedData = useMemo(() => {
+    const groups: { category: string; rows: typeof comparisonData }[] = [];
+    let currentCategory = '';
+    let currentRows: typeof comparisonData = [];
+
+    comparisonData.forEach(row => {
+      if (row.category !== currentCategory) {
+        if (currentRows.length > 0) {
+          groups.push({ category: currentCategory, rows: currentRows });
+        }
+        currentCategory = row.category;
+        currentRows = [];
+      }
+      currentRows.push(row);
+    });
+    if (currentRows.length > 0) {
+      groups.push({ category: currentCategory, rows: currentRows });
+    }
+    return groups;
+  }, [comparisonData]);
+
+  // Count non-empty values per zone
+  const stats = useMemo(() => {
+    let bronze = 0, silver = 0, gold = 0;
+    comparisonData.forEach(row => {
+      if (row.bronze) bronze++;
+      if (row.silver) silver++;
+      if (row.gold) gold++;
+    });
+    return { bronze, silver, gold, total: comparisonData.length };
+  }, [comparisonData]);
+
+  // Count entities with data
+  const entityCounts = useMemo(() => {
+    const counts: Record<string, { fields: number; populated: number }> = {};
+    groupedData.forEach(group => {
+      const populated = group.rows.filter(r => r.bronze || r.silver || r.gold).length;
+      counts[group.category] = { fields: group.rows.length, populated };
+    });
+    return counts;
+  }, [groupedData]);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth PaperProps={{ sx: { minHeight: '80vh' } }}>
-      <DialogTitle>
+    <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth PaperProps={{ sx: { height: '90vh' } }}>
+      <DialogTitle sx={{ pb: 1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <CompareIcon />
             <Typography variant="h6" fontWeight={600}>
-              Cross-Zone Record Comparison
+              Cross-Zone Comparison by CDM Entity
             </Typography>
+            <Chip label={messageType} size="small" color="primary" variant="outlined" />
           </Box>
-          <IconButton onClick={onClose} size="small">
-            <CloseIcon />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Chip label={`Bronze: ${stats.bronze}`} size="small" sx={{ backgroundColor: zoneColors.bronze.bg }} />
+            <Chip label={`Silver: ${stats.silver}`} size="small" sx={{ backgroundColor: zoneColors.silver.bg }} />
+            <Chip label={`Gold: ${stats.gold}`} size="small" sx={{ backgroundColor: zoneColors.gold.bg }} />
+            <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
+          </Box>
         </Box>
       </DialogTitle>
-      <DialogContent>
-        <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2 }}>
-          <Tab label="Table Comparison" />
-          <Tab label="Raw Content" />
+      <DialogContent sx={{ p: 0 }}>
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Tab label={`CDM Entities (${groupedData.length})`} />
+          <Tab label="Raw JSON" />
         </Tabs>
 
         {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress />
-          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
         ) : activeTab === 0 ? (
-          <Box>
-            {/* Table-based comparison */}
-            <Paper sx={{ overflow: 'auto', maxHeight: 600 }}>
-              <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
-                <Box component="thead">
-                  <Box component="tr">
-                    <Box
-                      component="th"
-                      sx={{
-                        p: 1.5,
-                        textAlign: 'left',
-                        fontWeight: 600,
-                        backgroundColor: colors.grey[100],
-                        borderBottom: `2px solid ${colors.grey[300]}`,
-                        position: 'sticky',
-                        top: 0,
-                        width: '20%',
-                      }}
-                    >
-                      Field
-                    </Box>
-                    <Box
-                      component="th"
-                      sx={{
-                        p: 1.5,
-                        textAlign: 'left',
-                        fontWeight: 600,
-                        backgroundColor: zoneColors.bronze.bg,
-                        borderBottom: `2px solid ${zoneColors.bronze.border}`,
-                        color: zoneColors.bronze.text,
-                        position: 'sticky',
-                        top: 0,
-                        width: '26.6%',
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: zoneColors.bronze.border }} />
-                        Bronze (Raw)
-                      </Box>
-                    </Box>
-                    <Box
-                      component="th"
-                      sx={{
-                        p: 1.5,
-                        textAlign: 'left',
-                        fontWeight: 600,
-                        backgroundColor: zoneColors.silver.bg,
-                        borderBottom: `2px solid ${zoneColors.silver.border}`,
-                        color: zoneColors.silver.text,
-                        position: 'sticky',
-                        top: 0,
-                        width: '26.6%',
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ArrowIcon sx={{ fontSize: 14, color: colors.grey[400] }} />
-                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: zoneColors.silver.border }} />
-                        Silver (Staged)
-                      </Box>
-                    </Box>
-                    <Box
-                      component="th"
-                      sx={{
-                        p: 1.5,
-                        textAlign: 'left',
-                        fontWeight: 600,
-                        backgroundColor: zoneColors.gold.bg,
-                        borderBottom: `2px solid ${zoneColors.gold.border}`,
-                        color: zoneColors.gold.text,
-                        position: 'sticky',
-                        top: 0,
-                        width: '26.6%',
-                      }}
-                    >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ArrowIcon sx={{ fontSize: 14, color: colors.grey[400] }} />
-                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: zoneColors.gold.border }} />
-                        Gold (CDM)
-                      </Box>
-                    </Box>
+          <Box sx={{ height: 'calc(90vh - 140px)', overflow: 'auto' }}>
+            <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <Box component="thead" sx={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                <Box component="tr">
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '25%' }}>
+                    CDM Field
+                  </Box>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.bronze.bg, borderBottom: `2px solid ${zoneColors.bronze.border}`, width: '20%' }}>
+                    Bronze (Parsed)
+                  </Box>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.silver.bg, borderBottom: `2px solid ${zoneColors.silver.border}`, width: '25%' }}>
+                    Silver (stg_*)
+                  </Box>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.gold.bg, borderBottom: `2px solid ${zoneColors.gold.border}`, width: '30%' }}>
+                    Gold (CDM Entity)
                   </Box>
                 </Box>
-                <Box component="tbody">
-                  {getComparisonRows().map((row, idx) => (
-                    <Box
-                      component="tr"
-                      key={idx}
-                      sx={{
-                        '&:hover': { backgroundColor: row.isHeader ? 'inherit' : colors.grey[50] },
-                        backgroundColor: row.isHeader
-                          ? colors.primary.main + '15'
-                          : row.rawPath
-                          ? zoneColors.bronze.bg + '30'
-                          : 'transparent',
-                      }}
-                    >
-                      {row.isHeader ? (
-                        <Box
-                          component="td"
-                          colSpan={4}
-                          sx={{
-                            p: 1.5,
-                            py: 1,
-                            borderBottom: `2px solid ${colors.primary.main}`,
-                            borderTop: idx > 0 ? `1px solid ${colors.grey[300]}` : 'none',
-                            fontWeight: 700,
-                            fontSize: 11,
-                            textTransform: 'uppercase',
-                            letterSpacing: 1,
-                            color: colors.primary.main,
-                            backgroundColor: colors.primary.main + '10',
-                          }}
-                        >
-                          {row.field}
+              </Box>
+              <Box component="tbody">
+                {groupedData.map((group, gIdx) => {
+                  const style = entityStyles[group.category as keyof typeof entityStyles] || { icon: PaymentIcon, color: '#666', bg: '#f5f5f5' };
+                  const IconComponent = style.icon;
+                  const counts = entityCounts[group.category] || { fields: 0, populated: 0 };
+
+                  return (
+                    <React.Fragment key={gIdx}>
+                      {/* Entity Category Header - spans all 4 columns */}
+                      <Box component="tr">
+                        <Box component="td" colSpan={4} sx={{
+                          p: 1, py: 0.75, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5,
+                          backgroundColor: style.bg, color: style.color, borderTop: gIdx > 0 ? `2px solid ${style.color}40` : 'none',
+                        }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <IconComponent sx={{ fontSize: 16 }} />
+                            {group.category}
+                            <Chip label={`${counts.populated}/${counts.fields}`} size="small" sx={{ ml: 1, height: 18, fontSize: 10, backgroundColor: 'white' }} />
+                          </Box>
                         </Box>
-                      ) : (
-                        <>
-                          <Box
-                            component="td"
-                            sx={{
-                              p: 1.5,
-                              py: 1,
-                              borderBottom: `1px solid ${colors.grey[200]}`,
-                              fontWeight: 500,
-                              fontSize: 12,
-                              color: row.field.includes('(FK)') ? colors.grey[500] : 'inherit',
-                            }}
-                          >
-                            {row.field}
-                            {row.rawPath && row.bronze !== '-' && (
-                              <Tooltip title={`Source path: ${row.rawPath}`}>
-                                <Chip
-                                  label="MAPPED"
-                                  size="small"
-                                  sx={{ ml: 1, height: 16, fontSize: 8, backgroundColor: colors.success.light, color: colors.success.dark }}
-                                />
-                              </Tooltip>
-                            )}
-                          </Box>
-                          <Box
-                            component="td"
-                            sx={{
-                              p: 1.5,
-                              py: 1,
-                              borderBottom: `1px solid ${colors.grey[200]}`,
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                              backgroundColor: row.bronze !== '-' ? zoneColors.bronze.bg + '40' : 'transparent',
-                              wordBreak: 'break-all',
-                              maxWidth: 250,
-                            }}
-                          >
-                            {row.bronze}
-                          </Box>
-                          <Box
-                            component="td"
-                            sx={{
-                              p: 1.5,
-                              py: 1,
-                              borderBottom: `1px solid ${colors.grey[200]}`,
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                              backgroundColor: row.silver !== '-' ? zoneColors.silver.bg + '40' : 'transparent',
-                              wordBreak: 'break-all',
-                              maxWidth: 250,
-                            }}
-                          >
-                            {row.silver}
-                          </Box>
-                          <Box
-                            component="td"
-                            sx={{
-                              p: 1.5,
-                              py: 1,
-                              borderBottom: `1px solid ${colors.grey[200]}`,
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                              backgroundColor: row.gold !== '-' ? zoneColors.gold.bg + '40' : 'transparent',
-                              wordBreak: 'break-all',
-                              maxWidth: 250,
-                            }}
-                          >
-                            {row.gold}
-                          </Box>
-                        </>
-                      )}
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-            </Paper>
+                      </Box>
+                      {/* Data Rows */}
+                      {group.rows.map((row, rIdx) => {
+                        const hasAnyData = row.bronze || row.silver || row.gold;
+                        const bronzeHasData = row.bronze;
+                        const silverMissing = !!(bronzeHasData && !row.silver);
+                        const isHeaderRow = row.field.startsWith('[');
+                        const hasFkInfo = row.fkInfo;
 
-            {/* Lineage Warning */}
-            {lineage && (!lineage.silver || !lineage.gold) && (
-              <Alert severity="warning" sx={{ mt: 2 }}>
-                Some zone data is missing. This may indicate the record hasn't been fully processed through the pipeline.
-              </Alert>
-            )}
-
-            {/* Field Mappings */}
-            {lineage?.field_mappings && lineage.field_mappings.length > 0 && (
-              <Box sx={{ mt: 3 }}>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
-                  Schema Field Mappings (from Neo4j)
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {lineage.field_mappings.slice(0, 20).map((mapping: any, idx: number) => (
-                    <Chip
-                      key={idx}
-                      label={`${mapping.source || mapping.source_field} → ${mapping.target || mapping.target_field}`}
-                      size="small"
-                      variant="outlined"
-                      sx={{ fontSize: 11 }}
-                    />
-                  ))}
-                </Box>
+                        return (
+                          <Box component="tr" key={rIdx} sx={{
+                            '&:hover': { backgroundColor: '#f5f5f5' },
+                            backgroundColor: silverMissing ? '#ffebee' : isHeaderRow ? '#fafafa' : 'transparent',
+                            opacity: hasAnyData ? 1 : 0.5,
+                          }}>
+                            <Box component="td" sx={{
+                              p: 0.75, borderBottom: '1px solid #eee', fontWeight: isHeaderRow ? 600 : 500,
+                              fontStyle: isHeaderRow ? 'italic' : 'normal', color: isHeaderRow ? '#666' : 'inherit',
+                              fontFamily: 'monospace', fontSize: 11
+                            }}>
+                              {row.field}
+                              {hasFkInfo && <Tooltip title={`FK: ${row.fkInfo}`}><Chip label="FK" size="small" sx={{ ml: 0.5, height: 14, fontSize: 8, backgroundColor: '#e3f2fd' }} /></Tooltip>}
+                              {silverMissing && <Tooltip title="Data parsed from Bronze but missing in Silver"><ErrorIcon sx={{ fontSize: 12, color: 'error.main', ml: 0.5 }} /></Tooltip>}
+                            </Box>
+                            <Box component="td" sx={{
+                              p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10,
+                              backgroundColor: row.bronze ? zoneColors.bronze.bg + '80' : 'transparent',
+                              wordBreak: 'break-word', maxWidth: 180
+                            }}>
+                              {row.bronze || '-'}
+                            </Box>
+                            <Box component="td" sx={{
+                              p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10,
+                              backgroundColor: row.silver ? zoneColors.silver.bg + '80' : silverMissing ? '#ffcdd2' : 'transparent',
+                              wordBreak: 'break-word', maxWidth: 220
+                            }}>
+                              {row.silver || (silverMissing ? '⚠️ MISSING' : '-')}
+                            </Box>
+                            <Box component="td" sx={{
+                              p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10,
+                              backgroundColor: row.gold ? zoneColors.gold.bg + '80' : 'transparent',
+                              wordBreak: 'break-word', maxWidth: 280
+                            }}>
+                              {row.gold || '-'}
+                              {hasFkInfo && row.gold && <Chip label={row.fkInfo} size="small" sx={{ ml: 0.5, height: 14, fontSize: 8, backgroundColor: '#e3f2fd' }} />}
+                            </Box>
+                          </Box>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
               </Box>
-            )}
+            </Box>
           </Box>
         ) : (
-          <Box>
-            {/* Raw content view */}
-            <Alert severity="info" sx={{ mb: 2 }}>
-              This shows the original raw_content from Bronze. Silver and Gold fields are derived from this data.
-            </Alert>
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-              Bronze Raw Content
-            </Typography>
-            <Paper
-              sx={{
-                p: 2,
-                backgroundColor: zoneColors.bronze.bg,
-                border: `2px solid ${zoneColors.bronze.border}`,
-                maxHeight: 400,
-                overflow: 'auto',
-              }}
-            >
-              <Typography
-                component="pre"
-                sx={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-              >
-                {lineage?.bronze?.raw_content
-                  ? typeof lineage.bronze.raw_content === 'string'
-                    ? (() => { try { return JSON.stringify(JSON.parse(lineage.bronze.raw_content), null, 2); } catch { return lineage.bronze.raw_content; } })()
-                    : JSON.stringify(lineage.bronze.raw_content, null, 2)
-                  : 'No raw content available'}
-              </Typography>
+          <Box sx={{ p: 2, height: 'calc(90vh - 140px)', overflow: 'auto' }}>
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Bronze (raw_content)</Typography>
+            <Paper sx={{ p: 1, mb: 2, backgroundColor: zoneColors.bronze.bg, maxHeight: 200, overflow: 'auto' }}>
+              <pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>
+                {lineage?.bronze?.raw_content ? (typeof lineage.bronze.raw_content === 'string' ? (() => { try { return JSON.stringify(JSON.parse(lineage.bronze.raw_content), null, 2); } catch { return lineage.bronze.raw_content; } })() : JSON.stringify(lineage.bronze.raw_content, null, 2)) : 'N/A'}
+              </pre>
             </Paper>
 
-            {/* Show what Silver extracted */}
-            {lineage?.silver && (
-              <>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1, mt: 3 }}>
-                  Silver Extracted Fields
-                </Typography>
-                <Paper
-                  sx={{
-                    p: 2,
-                    backgroundColor: zoneColors.silver.bg,
-                    border: `2px solid ${zoneColors.silver.border}`,
-                    maxHeight: 300,
-                    overflow: 'auto',
-                  }}
-                >
-                  <Typography
-                    component="pre"
-                    sx={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap' }}
-                  >
-                    {JSON.stringify({
-                      stg_id: lineage.silver.stg_id,
-                      msg_id: lineage.silver.msg_id,
-                      debtor_name: lineage.silver.debtor_name,
-                      creditor_name: lineage.silver.creditor_name,
-                      instructed_amount: lineage.silver.instructed_amount,
-                      instructed_currency: lineage.silver.instructed_currency,
-                      processing_status: lineage.silver.processing_status,
-                    }, null, 2)}
-                  </Typography>
-                </Paper>
-              </>
-            )}
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Bronze Parsed (extractor output)</Typography>
+            <Paper sx={{ p: 1, mb: 2, backgroundColor: '#e8f5e9', maxHeight: 200, overflow: 'auto' }}>
+              <pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify((lineage as any)?.bronze_parsed || {}, null, 2)}</pre>
+            </Paper>
 
-            {/* Show what Gold has */}
-            {lineage?.gold && (
-              <>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1, mt: 3 }}>
-                  Gold CDM Fields
-                </Typography>
-                <Paper
-                  sx={{
-                    p: 2,
-                    backgroundColor: zoneColors.gold.bg,
-                    border: `2px solid ${zoneColors.gold.border}`,
-                    maxHeight: 300,
-                    overflow: 'auto',
-                  }}
-                >
-                  <Typography
-                    component="pre"
-                    sx={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap' }}
-                  >
-                    {JSON.stringify({
-                      instruction_id: lineage.gold.instruction_id,
-                      payment_id: lineage.gold.payment_id,
-                      payment_type: lineage.gold.payment_type,
-                      source_message_type: lineage.gold.source_message_type,
-                      instructed_amount: lineage.gold.instructed_amount,
-                      instructed_currency: lineage.gold.instructed_currency,
-                      current_status: lineage.gold.current_status,
-                    }, null, 2)}
-                  </Typography>
-                </Paper>
-              </>
-            )}
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Silver (stg_* record)</Typography>
+            <Paper sx={{ p: 1, mb: 2, backgroundColor: zoneColors.silver.bg, maxHeight: 200, overflow: 'auto' }}>
+              <pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(lineage?.silver || {}, null, 2)}</pre>
+            </Paper>
+
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Gold (cdm_payment_instruction)</Typography>
+            <Paper sx={{ p: 1, mb: 2, backgroundColor: zoneColors.gold.bg, maxHeight: 200, overflow: 'auto' }}>
+              <pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(lineage?.gold || {}, null, 2)}</pre>
+            </Paper>
+
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Gold Entities</Typography>
+            <Paper sx={{ p: 1, mb: 2, backgroundColor: zoneColors.gold.bg, maxHeight: 200, overflow: 'auto' }}>
+              <pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(lineage?.gold_entities || {}, null, 2)}</pre>
+            </Paper>
+
+            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Gold Extension</Typography>
+            <Paper sx={{ p: 1, backgroundColor: '#e0f7fa', maxHeight: 200, overflow: 'auto' }}>
+              <pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify((lineage as any)?.gold_extension || {}, null, 2)}</pre>
+            </Paper>
           </Box>
         )}
       </DialogContent>
@@ -867,7 +566,7 @@ const RecordComparisonDialog: React.FC<{
   );
 };
 
-// Edit Record Dialog Component
+// Edit Record Dialog
 const EditRecordDialog: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -879,118 +578,46 @@ const EditRecordDialog: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  // Fetch record details
   const { data: recordData, isLoading } = useQuery({
     queryKey: ['recordDetail', layer, recordId],
     queryFn: () => pipelineApi.getRecordDetails(layer, recordId),
     enabled: open && !!recordId,
   });
 
-  // Set initial content when data loads
   React.useEffect(() => {
     if (recordData?.raw_content) {
-      const content = typeof recordData.raw_content === 'string'
-        ? recordData.raw_content
-        : JSON.stringify(recordData.raw_content, null, 2);
-      setEditedContent(content);
+      setEditedContent(typeof recordData.raw_content === 'string' ? recordData.raw_content : JSON.stringify(recordData.raw_content, null, 2));
     }
   }, [recordData]);
 
-  // Reprocess mutation
   const reprocessMutation = useMutation({
     mutationFn: async () => {
-      // Update the record content and trigger reprocess
       const parsedContent = JSON.parse(editedContent);
-      return reprocessApi.updateRecord(
-        layer,
-        layer === 'bronze' ? 'raw_payment_messages' : layer === 'silver' ? 'stg_payment' : 'cdm_payment_instruction',
-        recordId,
-        { raw_content: parsedContent },
-        true
-      );
+      return reprocessApi.updateRecord(layer, layer === 'bronze' ? 'raw_payment_messages' : layer === 'silver' ? 'stg_payment' : 'cdm_payment_instruction', recordId, { raw_content: parsedContent }, true);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['batchRecords'] });
-      queryClient.invalidateQueries({ queryKey: ['recordLineage'] });
-      onSuccess();
-      onClose();
-    },
-    onError: (err: any) => {
-      setError(err.message || 'Failed to reprocess record');
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['batchRecords'] }); queryClient.invalidateQueries({ queryKey: ['recordLineage'] }); onSuccess(); onClose(); },
+    onError: (err: any) => { setError(err.message || 'Failed to reprocess record'); },
   });
-
-  const handleReprocess = () => {
-    setError(null);
-    try {
-      // Validate JSON
-      JSON.parse(editedContent);
-      reprocessMutation.mutate();
-    } catch {
-      setError('Invalid JSON format');
-    }
-  };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <EditIcon />
-            <Typography variant="h6" fontWeight={600}>
-              Edit & Reprocess Record
-            </Typography>
-          </Box>
-          <IconButton onClick={onClose} size="small">
-            <CloseIcon />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}><EditIcon /><Typography variant="h6" fontWeight={600}>Edit & Reprocess</Typography></Box>
+          <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
         </Box>
       </DialogTitle>
       <DialogContent>
-        {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
+        {isLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box> : (
           <Box sx={{ mt: 1 }}>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Edit the record content below and click "Reprocess" to update and re-run the pipeline.
-            </Alert>
-
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
-            )}
-
-            <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-              Record Content (JSON)
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              rows={15}
-              value={editedContent}
-              onChange={(e) => setEditedContent(e.target.value)}
-              sx={{
-                '& .MuiInputBase-input': {
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                },
-              }}
-            />
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+            <TextField fullWidth multiline rows={15} value={editedContent} onChange={(e) => setEditedContent(e.target.value)} sx={{ '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: 12 } }} />
           </Box>
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<ReplayIcon />}
-          onClick={handleReprocess}
-          disabled={reprocessMutation.isPending || isLoading}
-        >
+        <Button variant="contained" startIcon={<ReplayIcon />} onClick={() => { setError(null); try { JSON.parse(editedContent); reprocessMutation.mutate(); } catch { setError('Invalid JSON'); } }} disabled={reprocessMutation.isPending || isLoading}>
           {reprocessMutation.isPending ? 'Reprocessing...' : 'Reprocess'}
         </Button>
       </DialogActions>
@@ -1001,431 +628,90 @@ const EditRecordDialog: React.FC<{
 const BatchRecordsTab: React.FC<BatchRecordsTabProps> = ({ batchId, messageType }) => {
   const queryClient = useQueryClient();
   const [selectedLayer, setSelectedLayer] = useState<LayerType>('bronze');
-  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
-    page: 0,
-    pageSize: 25,
-  });
+  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({ page: 0, pageSize: 25 });
   const [selectedRecord, setSelectedRecord] = useState<{ layer: LayerType; id: string } | null>(null);
   const [editRecord, setEditRecord] = useState<{ layer: LayerType; id: string } | null>(null);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
 
-  // Fetch records for selected layer
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['batchRecords', batchId, selectedLayer, paginationModel],
     queryFn: async () => {
-      const records = await pipelineApi.getBatchRecords(
-        batchId,
-        selectedLayer,
-        paginationModel.pageSize,
-        paginationModel.page * paginationModel.pageSize
-      );
-      return {
-        items: records,
-        total: records.length,
-      };
+      const records = await pipelineApi.getBatchRecords(batchId, selectedLayer, paginationModel.pageSize, paginationModel.page * paginationModel.pageSize);
+      return { items: records, total: records.length };
     },
     enabled: !!batchId,
   });
 
-  const handleLayerChange = (
-    _event: React.MouseEvent<HTMLElement>,
-    newLayer: LayerType | null
-  ) => {
-    if (newLayer) {
-      setSelectedLayer(newLayer);
-      setPaginationModel({ ...paginationModel, page: 0 });
-    }
-  };
-
-  const handleViewRecord = (recordId: string) => {
-    setSelectedRecord({ layer: selectedLayer, id: recordId });
-  };
-
-  // Dynamic columns based on layer
   const columns: GridColDef[] = useMemo(() => {
-    const baseColumns: GridColDef[] = [];
-
-    // Add actions column first
-    baseColumns.push({
-      field: 'actions',
-      headerName: 'Actions',
-      width: 140,
-      sortable: false,
-      filterable: false,
+    const cols: GridColDef[] = [{
+      field: 'actions', headerName: 'Actions', width: 100, sortable: false,
       renderCell: (params: GridRenderCellParams) => {
-        const recordId =
-          selectedLayer === 'bronze'
-            ? params.row.raw_id
-            : selectedLayer === 'silver'
-            ? params.row.stg_id
-            : params.row.instruction_id;
-        const isFailed = params.row.processing_status === 'FAILED' || params.row.current_status === 'FAILED';
+        const id = selectedLayer === 'bronze' ? params.row.raw_id : selectedLayer === 'silver' ? params.row.stg_id : params.row.instruction_id;
         return (
           <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <Tooltip title="View Details">
-              <IconButton size="small" onClick={() => handleViewRecord(recordId)}>
-                <ViewIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Compare Across Zones">
-              <IconButton size="small" onClick={() => handleViewRecord(recordId)} color="primary">
-                <CompareIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={isFailed ? "Edit & Reprocess (Failed)" : "Edit & Reprocess"}>
-              <IconButton
-                size="small"
-                onClick={() => setEditRecord({ layer: selectedLayer, id: recordId })}
-                color={isFailed ? "error" : "default"}
-              >
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <Tooltip title="Compare All Zones"><IconButton size="small" onClick={() => setSelectedRecord({ layer: selectedLayer, id })} color="primary"><CompareIcon fontSize="small" /></IconButton></Tooltip>
+            <Tooltip title="Edit"><IconButton size="small" onClick={() => setEditRecord({ layer: selectedLayer, id })}><EditIcon fontSize="small" /></IconButton></Tooltip>
           </Box>
         );
       },
-    });
+    }];
 
     if (selectedLayer === 'bronze') {
-      baseColumns.push(
-        {
-          field: 'raw_id',
-          headerName: 'Raw ID',
-          width: 140,
-          renderCell: (params: GridRenderCellParams) => (
-            <Tooltip title={params.value}>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 11 }}>
-                {params.value?.substring(0, 12)}...
-              </Typography>
-            </Tooltip>
-          ),
-        },
-        {
-          field: 'message_type',
-          headerName: 'Message Type',
-          width: 120,
-        },
-        {
-          field: 'message_format',
-          headerName: 'Format',
-          width: 80,
-        },
-        {
-          field: 'source_system',
-          headerName: 'Source',
-          width: 100,
-        },
-        {
-          field: 'processing_status',
-          headerName: 'Status',
-          width: 120,
-          renderCell: (params: GridRenderCellParams) => (
-            <Chip
-              label={params.value}
-              size="small"
-              color={statusColors[params.value] || 'default'}
-              sx={{ fontSize: 11 }}
-            />
-          ),
-        },
-        {
-          field: 'ingested_at',
-          headerName: 'Ingested At',
-          width: 160,
-          valueFormatter: (value: string) =>
-            value ? new Date(value).toLocaleString() : '-',
-        }
+      cols.push(
+        { field: 'raw_id', headerName: 'Raw ID', width: 130, renderCell: (p) => <Tooltip title={p.value}><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{p.value?.substring(0, 14)}...</span></Tooltip> },
+        { field: 'message_type', headerName: 'Type', width: 100 },
+        { field: 'message_format', headerName: 'Format', width: 90 },
+        { field: 'source_system', headerName: 'Source', width: 80 },
+        { field: 'processing_status', headerName: 'Status', width: 140, renderCell: (p) => <Chip label={p.value} size="small" color={statusColors[p.value] || 'default'} sx={{ fontSize: 10 }} /> },
+        { field: '_ingested_at', headerName: 'Ingested', width: 150, valueFormatter: (v: string) => v ? new Date(v).toLocaleString() : '-' }
       );
     } else if (selectedLayer === 'silver') {
-      baseColumns.push(
-        {
-          field: 'stg_id',
-          headerName: 'Staging ID',
-          width: 140,
-          renderCell: (params: GridRenderCellParams) => (
-            <Tooltip title={params.value}>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 11 }}>
-                {params.value?.substring(0, 12)}...
-              </Typography>
-            </Tooltip>
-          ),
-        },
-        {
-          field: 'msg_id',
-          headerName: 'Message ID',
-          width: 120,
-        },
-        {
-          field: 'instructed_amount',
-          headerName: 'Amount',
-          width: 120,
-          type: 'number',
-          align: 'right',
-          headerAlign: 'right',
-          valueFormatter: (value: number) =>
-            value ? value.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-',
-        },
-        {
-          field: 'instructed_currency',
-          headerName: 'Ccy',
-          width: 60,
-        },
-        {
-          field: 'debtor_name',
-          headerName: 'Debtor',
-          width: 150,
-        },
-        {
-          field: 'creditor_name',
-          headerName: 'Creditor',
-          width: 150,
-        },
-        {
-          field: 'processing_status',
-          headerName: 'Status',
-          width: 100,
-          renderCell: (params: GridRenderCellParams) => (
-            <Chip
-              label={params.value || 'N/A'}
-              size="small"
-              color={statusColors[params.value] || 'default'}
-              sx={{ fontSize: 11 }}
-            />
-          ),
-        }
+      cols.push(
+        { field: 'stg_id', headerName: 'Stg ID', width: 120, renderCell: (p) => <Tooltip title={p.value}><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{p.value?.substring(0, 10)}...</span></Tooltip> },
+        { field: 'message_id', headerName: 'Msg ID', width: 100 },
+        { field: 'amount', headerName: 'Amount', width: 100, type: 'number', valueFormatter: (v: number) => v ? v.toLocaleString() : '-' },
+        { field: 'currency', headerName: 'Ccy', width: 50 },
+        { field: 'debtor_name', headerName: 'Debtor', width: 140 },
+        { field: 'creditor_name', headerName: 'Creditor', width: 140 },
+        { field: 'processing_status', headerName: 'Status', width: 140, renderCell: (p) => <Chip label={p.value || 'N/A'} size="small" color={statusColors[p.value] || 'default'} sx={{ fontSize: 10 }} /> }
       );
-    } else if (selectedLayer === 'gold') {
-      baseColumns.push(
-        {
-          field: 'instruction_id',
-          headerName: 'Instruction ID',
-          width: 140,
-          renderCell: (params: GridRenderCellParams) => (
-            <Tooltip title={params.value}>
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 11 }}>
-                {params.value?.substring(0, 12)}...
-              </Typography>
-            </Tooltip>
-          ),
-        },
-        {
-          field: 'payment_id',
-          headerName: 'Payment ID',
-          width: 130,
-        },
-        {
-          field: 'payment_type',
-          headerName: 'Type',
-          width: 100,
-        },
-        {
-          field: 'instructed_amount',
-          headerName: 'Amount',
-          width: 120,
-          type: 'number',
-          align: 'right',
-          headerAlign: 'right',
-          valueFormatter: (value: number) =>
-            value ? value.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-',
-        },
-        {
-          field: 'instructed_currency',
-          headerName: 'Ccy',
-          width: 60,
-        },
-        {
-          field: 'source_message_type',
-          headerName: 'Source Type',
-          width: 110,
-        },
-        {
-          field: 'current_status',
-          headerName: 'Status',
-          width: 100,
-          renderCell: (params: GridRenderCellParams) => (
-            <Chip
-              label={params.value || 'N/A'}
-              size="small"
-              color={statusColors[params.value] || 'default'}
-              sx={{ fontSize: 11 }}
-            />
-          ),
-        },
-        {
-          field: 'created_at',
-          headerName: 'Created At',
-          width: 160,
-          valueFormatter: (value: string) =>
-            value ? new Date(value).toLocaleString() : '-',
-        }
+    } else {
+      cols.push(
+        { field: 'instruction_id', headerName: 'Instr ID', width: 130, renderCell: (p) => <Tooltip title={p.value}><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{p.value?.substring(0, 14)}...</span></Tooltip> },
+        { field: 'payment_id', headerName: 'Payment ID', width: 120 },
+        { field: 'payment_type', headerName: 'Type', width: 90 },
+        { field: 'instructed_amount', headerName: 'Amount', width: 100, type: 'number', valueFormatter: (v: number) => v ? v.toLocaleString() : '-' },
+        { field: 'instructed_currency', headerName: 'Ccy', width: 50 },
+        { field: 'source_message_type', headerName: 'Src Type', width: 90 },
+        { field: 'current_status', headerName: 'Status', width: 100, renderCell: (p) => <Chip label={p.value || 'N/A'} size="small" color={statusColors[p.value] || 'default'} sx={{ fontSize: 10 }} /> },
+        { field: 'created_at', headerName: 'Created', width: 150, valueFormatter: (v: string) => v ? new Date(v).toLocaleString() : '-' }
       );
     }
-
-    return baseColumns;
+    return cols;
   }, [selectedLayer]);
 
-  // Get row ID based on layer
-  const getRowId = (row: Record<string, unknown>): string => {
-    if (selectedLayer === 'bronze') return row.raw_id as string;
-    if (selectedLayer === 'silver') return row.stg_id as string;
-    return row.instruction_id as string;
-  };
+  const getRowId = (row: Record<string, unknown>) => selectedLayer === 'bronze' ? row.raw_id as string : selectedLayer === 'silver' ? row.stg_id as string : row.instruction_id as string;
 
   return (
     <Box>
-      {/* Layer Selector */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Typography variant="body2" color="text.secondary">
-          Layer:
-        </Typography>
-        <ToggleButtonGroup
-          value={selectedLayer}
-          exclusive
-          onChange={handleLayerChange}
-          size="small"
-        >
-          <ToggleButton
-            value="bronze"
-            sx={{
-              '&.Mui-selected': {
-                backgroundColor: colors.zones.bronze.light,
-                color: colors.zones.bronze.dark,
-                '&:hover': {
-                  backgroundColor: colors.zones.bronze.light,
-                },
-              },
-            }}
-          >
-            Bronze
-          </ToggleButton>
-          <ToggleButton
-            value="silver"
-            sx={{
-              '&.Mui-selected': {
-                backgroundColor: colors.zones.silver.light,
-                color: colors.zones.silver.dark,
-                '&:hover': {
-                  backgroundColor: colors.zones.silver.light,
-                },
-              },
-            }}
-          >
-            Silver
-          </ToggleButton>
-          <ToggleButton
-            value="gold"
-            sx={{
-              '&.Mui-selected': {
-                backgroundColor: colors.zones.gold.light,
-                color: colors.zones.gold.dark,
-                '&:hover': {
-                  backgroundColor: colors.zones.gold.light,
-                },
-              },
-            }}
-          >
-            Gold
-          </ToggleButton>
+      <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Typography variant="body2" color="text.secondary">Layer:</Typography>
+        <ToggleButtonGroup value={selectedLayer} exclusive onChange={(_, v) => v && (setSelectedLayer(v), setPaginationModel({ ...paginationModel, page: 0 }))} size="small">
+          <ToggleButton value="bronze" sx={{ '&.Mui-selected': { backgroundColor: zoneColors.bronze.bg, color: zoneColors.bronze.text } }}>Bronze</ToggleButton>
+          <ToggleButton value="silver" sx={{ '&.Mui-selected': { backgroundColor: zoneColors.silver.bg, color: zoneColors.silver.text } }}>Silver</ToggleButton>
+          <ToggleButton value="gold" sx={{ '&.Mui-selected': { backgroundColor: zoneColors.gold.bg, color: zoneColors.gold.text } }}>Gold</ToggleButton>
         </ToggleButtonGroup>
-        <Chip
-          label={messageType}
-          size="small"
-          sx={{
-            ml: 'auto',
-            backgroundColor: colors.primary.light + '30',
-            fontWeight: 500,
-          }}
-        />
+        <Chip label={messageType} size="small" sx={{ ml: 'auto' }} />
       </Box>
 
-      {/* Records DataGrid */}
-      {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <DataGrid
-          rows={data?.items || []}
-          columns={columns}
-          getRowId={getRowId}
-          paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
-          pageSizeOptions={[10, 25, 50]}
-          rowCount={data?.total || 0}
-          paginationMode="client"
-          disableRowSelectionOnClick
-          autoHeight
-          sx={{
-            border: 'none',
-            '& .MuiDataGrid-columnHeaders': {
-              backgroundColor: colors.grey[50],
-              borderBottom: `2px solid ${colors.grey[200]}`,
-            },
-            '& .MuiDataGrid-cell': {
-              borderBottom: `1px solid ${colors.grey[100]}`,
-            },
-            '& .MuiDataGrid-row:hover': {
-              backgroundColor: colors.grey[50],
-            },
-            '& .MuiDataGrid-columnHeaderTitle': {
-              fontWeight: 600,
-              fontSize: 12,
-            },
-          }}
-        />
+      {isLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box> : (
+        <DataGrid rows={data?.items || []} columns={columns} getRowId={getRowId} paginationModel={paginationModel} onPaginationModelChange={setPaginationModel} pageSizeOptions={[10, 25, 50]} rowCount={data?.total || 0} paginationMode="client" disableRowSelectionOnClick autoHeight sx={{ border: 'none', '& .MuiDataGrid-columnHeaders': { backgroundColor: '#f5f5f5' } }} />
       )}
 
-      {/* Empty State */}
-      {!isLoading && (!data?.items || data.items.length === 0) && (
-        <Box sx={{ py: 4, textAlign: 'center' }}>
-          <Typography color="text.secondary">
-            No records found in {selectedLayer} layer for this batch
-          </Typography>
-        </Box>
-      )}
-
-      {/* Record Comparison Dialog */}
-      {selectedRecord && (
-        <RecordComparisonDialog
-          open={!!selectedRecord}
-          onClose={() => setSelectedRecord(null)}
-          layer={selectedRecord.layer}
-          recordId={selectedRecord.id}
-        />
-      )}
-
-      {/* Edit Record Dialog */}
-      {editRecord && (
-        <EditRecordDialog
-          open={!!editRecord}
-          onClose={() => setEditRecord(null)}
-          layer={editRecord.layer}
-          recordId={editRecord.id}
-          onSuccess={() => {
-            setSnackbar({ open: true, message: 'Record updated and reprocessed successfully', severity: 'success' });
-            refetch();
-          }}
-        />
-      )}
-
-      {/* Snackbar for notifications */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
+      {selectedRecord && <RecordComparisonDialog open onClose={() => setSelectedRecord(null)} layer={selectedRecord.layer} recordId={selectedRecord.id} messageType={messageType} />}
+      {editRecord && <EditRecordDialog open onClose={() => setEditRecord(null)} layer={editRecord.layer} recordId={editRecord.id} onSuccess={() => { setSnackbar({ open: true, message: 'Reprocessed successfully', severity: 'success' }); refetch(); }} />}
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>{snackbar.message}</Alert>
       </Snackbar>
     </Box>
   );

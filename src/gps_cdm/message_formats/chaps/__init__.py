@@ -157,25 +157,66 @@ class ChapsSwiftParser:
                 pass
 
     def _parse_party(self, value: str, result: Dict, party_type: str):
-        """Parse party field (50 or 59)."""
-        lines = value.split('\n')
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
+        """Parse party field (50 or 59) with full address extraction.
 
+        SWIFT MT format for field 50K/59:
+        Line 1: /account_number (optional)
+        Line 2: Party name
+        Line 3: Street address
+        Line 4: City + Post code
+        Line 5: Country
+        """
+        lines = [line.strip() for line in value.split('\n') if line.strip()]
+        address_lines = []
+
+        for i, line in enumerate(lines):
             if i == 0 and line.startswith('/'):
-                # Account number
+                # Account number on first line
                 result[f'{party_type}Account'] = line[1:].split('\n')[0][:34]
-                # Extract sort code if format is /SC:NNNNNN/ACCOUNT
-                if 'GB' in line or len(line) > 10:
-                    # UK IBAN format
-                    if line.startswith('/GB'):
-                        result[f'{party_type}SortCode'] = line[5:11] if len(line) > 10 else None
+                # Extract sort code from UK IBAN format /GBNNSSSSSSNNNNNNNN
+                if line.startswith('/GB') and len(line) >= 10:
+                    result[f'{party_type}SortCode'] = line[5:11]
             elif f'{party_type}Name' not in result:
+                # First non-account line is the name
                 result[f'{party_type}Name'] = line[:140]
-            elif f'{party_type}Address' not in result:
-                result[f'{party_type}Address'] = line
+            else:
+                # Remaining lines are address
+                address_lines.append(line)
+
+        # Parse address lines
+        if address_lines:
+            # Full combined address
+            result[f'{party_type}Address'] = ', '.join(address_lines)
+
+            # Street address (first address line)
+            if len(address_lines) >= 1:
+                result[f'{party_type}StreetName'] = address_lines[0][:70]
+
+            # City/Town and Post code (second address line typically has "CITY POSTCODE")
+            if len(address_lines) >= 2:
+                city_line = address_lines[1]
+                # Try to extract post code (UK format: letter(s) + number(s) + space + number + letters)
+                import re
+                uk_postcode = re.search(r'([A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2})', city_line)
+                if uk_postcode:
+                    result[f'{party_type}PostCode'] = uk_postcode.group(1)
+                    result[f'{party_type}TownName'] = city_line[:city_line.find(uk_postcode.group(1))].strip()
+                else:
+                    result[f'{party_type}TownName'] = city_line[:35]
+
+            # Country (last address line if it looks like a country name)
+            if len(address_lines) >= 3:
+                country_line = address_lines[-1].upper()
+                # Map common country names to ISO codes
+                country_map = {
+                    'UNITED KINGDOM': 'GB', 'UK': 'GB', 'GREAT BRITAIN': 'GB', 'ENGLAND': 'GB',
+                    'UNITED STATES': 'US', 'USA': 'US', 'AMERICA': 'US',
+                    'GERMANY': 'DE', 'DEUTSCHLAND': 'DE',
+                    'FRANCE': 'FR', 'SPAIN': 'ES', 'ITALY': 'IT', 'NETHERLANDS': 'NL',
+                    'BELGIUM': 'BE', 'SWITZERLAND': 'CH', 'IRELAND': 'IE',
+                    'AUSTRALIA': 'AU', 'CANADA': 'CA', 'JAPAN': 'JP', 'CHINA': 'CN',
+                }
+                result[f'{party_type}Country'] = country_map.get(country_line, country_line[:2])
 
     def _extract_bic(self, value: str) -> Optional[str]:
         """Extract BIC from field value."""
@@ -342,7 +383,34 @@ class ChapsExtractor(BaseExtractor):
     SILVER_TABLE = "stg_chaps"
 
     def __init__(self):
-        self.parser = ChapsXmlParser()
+        self.swift_parser = ChapsSwiftParser()
+        self.xml_parser = ChapsXmlParser()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse raw CHAPS content - auto-detect SWIFT MT vs XML format."""
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        content = raw_content.strip() if isinstance(raw_content, str) else str(raw_content)
+
+        # Auto-detect format
+        if content.startswith('{1:') or content.startswith('{2:'):
+            # SWIFT MT block format
+            return self.swift_parser.parse(content)
+        elif content.startswith('<') or content.startswith('<?xml'):
+            # XML format
+            return self.xml_parser.parse(content)
+        elif content.startswith('{'):
+            # JSON format - try to parse
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+        # Default to SWIFT parser
+        return self.swift_parser.parse(content)
 
     # =========================================================================
     # BRONZE EXTRACTION
@@ -450,58 +518,76 @@ class ChapsExtractor(BaseExtractor):
         """
         entities = GoldEntities()
 
-        # Debtor Party - uses Silver column names
+        # Debtor Party - uses Silver column names with full address details
         if silver_data.get('debtor_name'):
             entities.parties.append(PartyData(
                 name=silver_data.get('debtor_name'),
                 role="DEBTOR",
-                party_type='UNKNOWN',
-                country='GB',
+                party_type='INDIVIDUAL',  # Assume individual for CHAPS
+                street_name=silver_data.get('debtor_street_name'),
+                post_code=silver_data.get('debtor_post_code'),
+                town_name=silver_data.get('debtor_town_name'),
+                country=silver_data.get('debtor_country') or 'GB',
             ))
 
-        # Creditor Party
+        # Creditor Party with full address details
         if silver_data.get('creditor_name'):
             entities.parties.append(PartyData(
                 name=silver_data.get('creditor_name'),
                 role="CREDITOR",
-                party_type='UNKNOWN',
-                country='GB',
+                party_type='INDIVIDUAL',
+                street_name=silver_data.get('creditor_street_name'),
+                post_code=silver_data.get('creditor_post_code'),
+                town_name=silver_data.get('creditor_town_name'),
+                country=silver_data.get('creditor_country') or 'GB',
             ))
 
-        # Debtor Account
+        # Debtor Account - detect if IBAN
         if silver_data.get('debtor_account'):
+            acct = silver_data.get('debtor_account')
+            is_iban = acct.startswith('GB') and len(acct) >= 22
             entities.accounts.append(AccountData(
-                account_number=silver_data.get('debtor_account'),
+                account_number=acct,
                 role="DEBTOR",
+                iban=acct if is_iban else None,
                 account_type='CACC',
-                currency='GBP',
+                currency=silver_data.get('currency') or 'GBP',
             ))
 
         # Creditor Account
         if silver_data.get('creditor_account'):
+            acct = silver_data.get('creditor_account')
+            is_iban = acct.startswith('GB') and len(acct) >= 22
             entities.accounts.append(AccountData(
-                account_number=silver_data.get('creditor_account'),
+                account_number=acct,
                 role="CREDITOR",
+                iban=acct if is_iban else None,
                 account_type='CACC',
-                currency='GBP',
+                currency=silver_data.get('currency') or 'GBP',
             ))
 
-        # Debtor Agent
+        # Debtor Agent - generate institution name from BIC
         if silver_data.get('debtor_agent_bic') or silver_data.get('debtor_sort_code'):
+            bic = silver_data.get('debtor_agent_bic')
+            sort_code = silver_data.get('debtor_sort_code')
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                bic=silver_data.get('debtor_agent_bic'),
-                clearing_code=silver_data.get('debtor_sort_code'),
+                name=f"FI_{bic}" if bic else f"FI_SC_{sort_code}",
+                bic=bic,
+                clearing_code=sort_code,
                 clearing_system='GBDSC',  # UK Domestic Sort Code
                 country='GB',
             ))
 
         # Creditor Agent
         if silver_data.get('creditor_agent_bic') or silver_data.get('creditor_sort_code'):
+            bic = silver_data.get('creditor_agent_bic')
+            sort_code = silver_data.get('creditor_sort_code')
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                bic=silver_data.get('creditor_agent_bic'),
-                clearing_code=silver_data.get('creditor_sort_code'),
+                name=f"FI_{bic}" if bic else f"FI_SC_{sort_code}",
+                bic=bic,
+                clearing_code=sort_code,
                 clearing_system='GBDSC',
                 country='GB',
             ))

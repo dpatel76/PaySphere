@@ -4,29 +4,38 @@
 
 GPS Common Domain Model (CDM) - A payment message processing pipeline supporting 63+ payment standards across ISO 20022, SWIFT MT, and regional payment schemes. Uses medallion architecture (Bronze → Silver → Gold) with Celery for distributed task processing and NiFi for flow orchestration.
 
-## Architecture (v2.0 - Kafka-Based)
+## Architecture (v3.0 - Zone-Separated Kafka)
+
+The architecture uses zone-separated Kafka topics with dedicated consumers for each zone.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              INGESTION TIER                                 │
-│  Files (SFTP/S3) → NiFi (Parse + Route) → Kafka (payment.bronze.{type})    │
+│  Files (SFTP/S3) → NiFi (Detect Type) → Kafka bronze.{message_type}        │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           PROCESSING TIER                                   │
-│  Kafka Consumer → MicroBatchAccumulator (10K records) → BulkWriter (COPY)  │
-│                          │                                                  │
-│                          ▼                                                  │
-│  Celery Beat (poll pending) → Bronze→Silver→Gold promotion tasks           │
+│                       ZONE-SEPARATED PROCESSING                             │
+│                                                                             │
+│  bronze.{type} → BronzeConsumer → Celery (process_bronze_message)          │
+│       │              └─→ bronze.raw_payment_messages (store AS-IS)         │
+│       └──────────────→ silver.{type} (publishes raw_ids)                   │
+│                                                                             │
+│  silver.{type} → SilverConsumer → Celery (process_silver_message)          │
+│       │              └─→ silver.stg_{type} (parsed/transformed)            │
+│       └──────────────→ gold.{type} (publishes stg_ids)                     │
+│                                                                             │
+│  gold.{type} → GoldConsumer → Celery (process_gold_message)                │
+│                      └─→ gold.cdm_* (CDM entities + Neo4j)                 │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          PERSISTENCE TIER                                   │
 │  Bronze (raw_*) → Silver (stg_*) → Gold (cdm_*) [PostgreSQL/Databricks]    │
-│                          │                                                  │
-│  Observability: batch_tracking, kafka_checkpoints, micro_batch_tracking     │
+│  Neo4j Graph: Parties, Accounts, Financial Institutions                    │
+│  Observability: batch_tracking, obs_data_lineage                           │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -34,30 +43,50 @@ GPS Common Domain Model (CDM) - A payment message processing pipeline supporting
 
 | Component | Purpose | Location |
 |-----------|---------|----------|
-| `MicroBatchAccumulator` | Accumulates Kafka messages, flushes on size/time | `streaming/micro_batch_accumulator.py` |
-| `BulkWriter` | PostgreSQL COPY / Databricks COPY INTO | `streaming/bulk_writer.py` |
-| `KafkaBatchConsumer` | Kafka consumer with checkpointing | `streaming/kafka_batch_consumer.py` |
-| `batch_promotion_tasks` | Bronze→Silver→Gold Celery tasks | `orchestration/batch_promotion_tasks.py` |
-| `batch_stats` API | Real-time processing stats | `api/routes/batch_stats.py` |
+| `BronzeConsumer` | Consumes from bronze.{type}, stores raw, publishes to silver.{type} | `streaming/zone_consumers.py` |
+| `SilverConsumer` | Consumes from silver.{type}, parses/transforms, publishes to gold.{type} | `streaming/zone_consumers.py` |
+| `GoldConsumer` | Consumes from gold.{type}, creates CDM entities + Neo4j graph | `streaming/zone_consumers.py` |
+| `zone_tasks` | Celery tasks for each zone (process_bronze/silver/gold_message) | `orchestration/zone_tasks.py` |
+| NiFi Flow | GetFile → Detect Type → PublishKafka (bronze.${message.type}) | NiFi UI |
+
+### Kafka Topic Naming
+
+- Bronze topics: `bronze.pain.001`, `bronze.MT103`, `bronze.FEDWIRE`, etc.
+- Silver topics: `silver.pain.001`, `silver.MT103`, `silver.FEDWIRE`, etc.
+- Gold topics: `gold.pain.001`, `gold.MT103`, `gold.FEDWIRE`, etc.
+- DLQ topics: `dlq.bronze`, `dlq.silver`, `dlq.gold`
+
+### Starting Zone Consumers
+
+```bash
+# Start all three zone consumers (each in separate terminal)
+source .venv/bin/activate
+
+# Bronze consumer
+PYTHONPATH=src:$PYTHONPATH python -m gps_cdm.streaming.zone_consumers \
+    --zone bronze --types pain.001,MT103,pacs.008,FEDWIRE,ACH,SEPA,RTP
+
+# Silver consumer
+PYTHONPATH=src:$PYTHONPATH python -m gps_cdm.streaming.zone_consumers \
+    --zone silver --types pain.001,MT103,pacs.008,FEDWIRE,ACH,SEPA,RTP
+
+# Gold consumer
+PYTHONPATH=src:$PYTHONPATH python -m gps_cdm.streaming.zone_consumers \
+    --zone gold --types pain.001,MT103,pacs.008,FEDWIRE,ACH,SEPA,RTP
+```
 
 ### Performance Targets
 
 - **PostgreSQL COPY**: ~135,000 rows/second
-- **Micro-batch size**: 10,000-50,000 records
-- **Flush interval**: 10 seconds max
+- **Micro-batch size**: 100 records per Celery task
 - **Target throughput**: 50M+ messages/day
 
 ### Restartability
 
-Crash recovery is handled via:
-1. **Kafka checkpoints** (`kafka_consumer_checkpoints`) - consumer offsets + pending records
-2. **Micro-batch tracking** (`micro_batch_tracking`) - batch state through pipeline
-3. **Dead letter queue** (`kafka_dead_letter_queue`) - failed batches for replay
-
-On restart:
-1. Consumer claims stale checkpoints (>60s heartbeat)
-2. Pending records recovered from checkpoint
-3. Incomplete batches resumed or sent to DLQ
+Each zone consumer maintains Kafka consumer offsets. On restart:
+1. Consumer resumes from last committed offset
+2. Messages redelivered and reprocessed if not committed
+3. DLQ topics (`dlq.bronze`, `dlq.silver`, `dlq.gold`) capture failed messages
 
 ---
 
@@ -206,23 +235,29 @@ output = result.get(timeout=30)
 print(f"Status: {output['status']}, Persisted to: {output['persisted_to']}")
 ```
 
-## NiFi Flow Structure
+## NiFi Flow Structure (Zone-Separated)
 
 ```
 GPS CDM Payment Pipeline/
 ├── Message Type Detection/
 │   ├── Read Test Messages (GetFile) - /opt/nifi/nifi-current/input/
 │   ├── Detect Message Type from Filename (UpdateAttribute)
-│   ├── Route by Message Type (RouteOnAttribute)
-│   └── Output Ports: To Kafka Publish
+│   │       Sets ${message.type} from filename pattern: {type}_{id}.{ext}
+│   └── Output Ports: To Kafka Publishing
 ├── Kafka Publishing/
-│   ├── Set Message Attributes (UpdateAttribute) - Sets message.type
-│   ├── Publish to Kafka (PublishKafka) - Topic: gps-cdm-${message.type}
-│   └── Log Success (LogAttribute)
+│   ├── Publish to Per-Type Kafka Topics (PublishKafka)
+│   │       Topic: bronze.${message.type}
+│   │       Bootstrap: kafka:29092
+│   └── Log Kafka Failures (LogAttribute)
 └── Error Handling/
     ├── Log Error (LogAttribute)
     └── Write to DLQ (PutFile)
 ```
+
+**Critical NiFi Configuration:**
+- PublishKafka topic pattern: `bronze.${message.type}` (NOT `gps-cdm-${message.type}`)
+- Bootstrap servers: `kafka:29092` (container internal DNS)
+- Message type extracted from filename: `pain.001_test.xml` → `message.type=pain.001`
 
 ## NiFi API Access
 
@@ -242,10 +277,11 @@ Set `GPS_CDM_DATA_SOURCE=postgresql` when starting Celery worker.
 2. Check GetFile processor state: Should be RUNNING
 3. Wait for poll interval (30 seconds)
 
-### Kafka Consumer Issues
-1. Check Kafka topics have messages: `docker exec gps-cdm-kafka kafka-get-offsets --bootstrap-server localhost:9092 --topic gps-cdm-pain.001`
-2. Check consumer logs: `tail -f /tmp/kafka_consumer_pain_001.log`
+### Kafka/Zone Consumer Issues
+1. Check Kafka topics have messages: `docker exec gps-cdm-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic bronze.pain.001 --from-beginning --timeout-ms 3000`
+2. Check zone consumer logs: `tail -f /tmp/zone_consumer_bronze.log`
 3. Check NiFi logs: `docker logs gps-cdm-nifi --tail 50`
+4. Verify NiFi PublishKafka topic: Should be `bronze.${message.type}`
 
 ### Celery Tasks Not Received
 1. Verify worker is listening on correct queues: `-Q celery,bronze,silver,gold,dq,cdc`
@@ -571,3 +607,120 @@ For each new message type, complete these steps:
 | PromptPay | Thailand | ISO 20022 |
 | PayNow | Singapore | ISO 20022 |
 | InstaPay | Philippines | ISO 20022 |
+
+---
+
+## Database-Driven Gold Processing
+
+### Overview
+
+Gold processing uses `DynamicGoldMapper` which reads from `mapping.gold_field_mappings` to determine how to map Silver columns to ALL Gold tables. This is NOT hardcoded in extractors.
+
+**Key Files:**
+- `src/gps_cdm/orchestration/dynamic_gold_mapper.py` - Reads mappings from DB and builds Gold records
+- `src/gps_cdm/orchestration/zone_tasks.py` - `process_gold_records` task uses DynamicGoldMapper
+
+### Gold Tables and Entity Roles
+
+| Gold Table | Entity Roles | Description |
+|------------|-------------|-------------|
+| `cdm_payment_instruction` | NULL | Main payment record (1 per message) |
+| `cdm_party` | DEBTOR, CREDITOR, INITIATING_PARTY, ULTIMATE_DEBTOR, ULTIMATE_CREDITOR | Party records (multiple per message) |
+| `cdm_account` | DEBTOR, CREDITOR | Account records (multiple per message) |
+| `cdm_financial_institution` | DEBTOR_AGENT, CREDITOR_AGENT, INTERMEDIARY_AGENT1, INTERMEDIARY_AGENT2 | Bank/FI records |
+| `cdm_payment_extension_*` | NULL | Format-specific extension data |
+
+### Gold Mapping Source Expressions
+
+| Expression Type | Example | Description |
+|----------------|---------|-------------|
+| Silver column | `debtor_name` | Direct Silver column reference |
+| Literal string | `'pain.001'` | Quoted literal value |
+| Generated UUID | `_GENERATED_UUID` | Auto-generate UUID |
+| Context variable | `_CONTEXT.stg_id` | Use context (stg_id, batch_id, now) |
+| NULL | `NULL` or empty | Explicit NULL value |
+
+### Gold Mapping Transforms
+
+| Transform | Description | Example Use Case |
+|-----------|-------------|-----------------|
+| `UPPER` | Convert to uppercase | BIC codes |
+| `LOWER` | Convert to lowercase | Email addresses |
+| `TRIM` | Strip whitespace | Names |
+| `COALESCE:default` | Use default if NULL | `COALESCE:USD` |
+| `COALESCE_IBAN` | Fall back to IBAN if account_number NULL | Account identifiers |
+| `COALESCE_BIC` | Derive institution name from BIC | FI names |
+| `TO_ARRAY` | Wrap single value in array | PostgreSQL array columns |
+| `TO_DECIMAL` | Convert to decimal | Amount fields |
+| `TO_DATE` | Parse ISO date string | Date fields |
+
+### Common Gold Mapping Issues
+
+1. **Empty string vs NULL entity_role**: Mappings without entity_role MUST have `entity_role = NULL`, not empty string `''`. The grouping logic uses `(table, role)` as key.
+
+2. **NOT NULL columns need mappings**: Check `information_schema.columns` for NOT NULL columns and ensure mappings exist with defaults.
+
+3. **Array columns**: Columns like `remittance_unstructured` need `TO_ARRAY` transform.
+
+4. **Derived fields**: Use `COALESCE_*` transforms to derive values from related fields when primary source is NULL.
+
+---
+
+## Field Coverage Reconciliation Script
+
+### Running the Recon Script
+
+The recon script validates field coverage from Standard → Silver → Gold:
+
+```bash
+# Full reconciliation for pain.001
+GPS_CDM_DATA_SOURCE=postgresql \
+POSTGRES_HOST=localhost \
+POSTGRES_PORT=5433 \
+POSTGRES_DB=gps_cdm \
+POSTGRES_USER=gps_cdm_svc \
+POSTGRES_PASSWORD=gps_cdm_password \
+PYTHONPATH=src:$PYTHONPATH \
+.venv/bin/python scripts/reporting/recon_message_format.py pain.001
+
+# Output options:
+#   --output-format psv  (pipe-separated values)
+#   --output-format json
+#   --output-format text (default)
+```
+
+### What the Script Checks
+
+1. **Standard → Silver Coverage**: How many standard fields (leaf nodes only) have Silver mappings
+2. **Silver → Gold Coverage**: How many Silver columns have Gold mappings
+3. **Mandatory Field Coverage**: Verifies all required fields are mapped
+4. **Unmapped Fields**: Lists fields that exist in standard but aren't mapped
+
+### Expected Output
+
+```
+=== MESSAGE FORMAT RECONCILIATION: pain.001 ===
+
+STANDARD TO SILVER COVERAGE
+Total standard fields: 118 (leaf nodes only)
+Fields mapped to Silver: 88
+Coverage: 74.6%
+Mandatory fields covered: 100.0%
+
+SILVER TO GOLD COVERAGE
+Total Silver columns: 118
+Columns mapped to Gold: 132 mappings
+All critical fields mapped: YES
+
+UNMAPPED STANDARD FIELDS (30)
+- CtgyPurp/Cd (OPTIONAL)
+- ChqInstr/ChqTp (OPTIONAL)
+...
+```
+
+### Adding New Format to Recon
+
+1. Add format's standard fields to `mapping.standard_fields` table
+2. Add Silver field mappings to `mapping.silver_field_mappings`
+3. Add Gold field mappings to `mapping.gold_field_mappings`
+4. Run recon script to validate coverage

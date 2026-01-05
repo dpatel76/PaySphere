@@ -28,6 +28,7 @@ import os
 import logging
 import httpx
 import asyncio
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -712,6 +713,12 @@ async def get_record_lineage(layer: str, record_id: str):
                 result["bronze"] = dict(zip(columns, row))
                 raw_id = result["bronze"]["raw_id"]
 
+                # Dynamically compute message_format if stored as UNKNOWN
+                if result["bronze"].get("message_format") == "UNKNOWN":
+                    from gps_cdm.orchestration.zone_tasks import get_message_format
+                    msg_type = result["bronze"].get("message_type", "")
+                    result["bronze"]["message_format"] = get_message_format(msg_type)
+
                 # Find silver record linked by raw_id (proper FK relationship)
                 for table in silver_tables:
                     try:
@@ -769,6 +776,11 @@ async def get_record_lineage(layer: str, record_id: str):
                             if brow:
                                 bcols = [desc[0] for desc in cursor.description]
                                 result["bronze"] = dict(zip(bcols, brow))
+                                # Dynamically compute message_format if stored as UNKNOWN
+                                if result["bronze"].get("message_format") == "UNKNOWN":
+                                    from gps_cdm.orchestration.zone_tasks import get_message_format
+                                    msg_type = result["bronze"].get("message_type", "")
+                                    result["bronze"]["message_format"] = get_message_format(msg_type)
 
                         # Find gold using source_stg_id FK
                         if stg_id:
@@ -846,6 +858,11 @@ async def get_record_lineage(layer: str, record_id: str):
                             if brow:
                                 bcols = [desc[0] for desc in cursor.description]
                                 result["bronze"] = dict(zip(bcols, brow))
+                                # Dynamically compute message_format if stored as UNKNOWN
+                                if result["bronze"].get("message_format") == "UNKNOWN":
+                                    from gps_cdm.orchestration.zone_tasks import get_message_format
+                                    msg_type = result["bronze"].get("message_type", "")
+                                    result["bronze"]["message_format"] = get_message_format(msg_type)
 
         # Fetch related CDM entities for Gold layer (Party, Account, Financial Institution)
         if result.get("gold"):
@@ -1002,6 +1019,122 @@ async def get_record_lineage(layer: str, record_id: str):
                     result["field_mappings"] = schema["transforms"]
         except Exception:
             pass
+
+        # Parse Bronze raw_content using extractors to provide structured fields
+        if result.get("bronze") and result["bronze"].get("raw_content"):
+            try:
+                from gps_cdm.message_formats import get_extractor, ExtractorRegistry
+                msg_type = result["bronze"].get("message_type", "")
+                raw_content = result["bronze"]["raw_content"]
+
+                # Get the extractor for this message type
+                extractor = ExtractorRegistry.get(msg_type)
+                if extractor:
+                    # Parse raw_content - handle both string and dict
+                    content = raw_content
+                    if isinstance(raw_content, str):
+                        try:
+                            content = json.loads(raw_content)
+                        except json.JSONDecodeError:
+                            content = {"_raw_text": raw_content}
+
+                    # Use extractor to get structured Bronze data
+                    batch_id = result["bronze"].get("_batch_id", "")
+                    raw_id_value = result["bronze"].get("raw_id", "")
+                    try:
+                        bronze_data = extractor.extract_bronze(content, batch_id)
+                        result["bronze_parsed"] = bronze_data
+                    except Exception:
+                        pass  # bronze_parsed is optional enhancement
+
+                    # Also extract Silver-equivalent fields from Bronze
+                    try:
+                        # Parse the raw text to structured format if needed
+                        parsed_content = content
+                        if content.get("_raw_text"):
+                            raw_text = content["_raw_text"]
+                            # Try to parse based on message format
+                            if raw_text.strip().startswith("{1:") or raw_text.strip().startswith("{2:"):
+                                # SWIFT block format - use SWIFT parser
+                                from gps_cdm.message_formats.chaps import ChapsSwiftParser
+                                parser = ChapsSwiftParser()
+                                parsed_content = parser.parse(raw_text)
+                            elif raw_text.strip().startswith("<"):
+                                # XML format - use XML parser if available
+                                if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                                    parsed_content = extractor.parser.parse(raw_text)
+                            else:
+                                # Try JSON
+                                try:
+                                    parsed_content = json.loads(raw_text)
+                                except json.JSONDecodeError:
+                                    parsed_content = content
+
+                        # extract_silver(content, raw_id, stg_id, batch_id)
+                        silver_data = extractor.extract_silver(parsed_content, raw_id_value, "", batch_id)
+                        result["bronze_silver_equivalent"] = silver_data
+
+                        # Also include the parsed bronze content for display
+                        if parsed_content != content:
+                            result["bronze_parsed"] = parsed_content
+                    except Exception:
+                        pass  # bronze_silver_equivalent is optional enhancement
+            except Exception:
+                pass  # Extractor enhancement is optional
+
+        # Fetch Gold extension data if available
+        if result.get("gold"):
+            gold = result["gold"]
+            instruction_id = gold.get("instruction_id")
+            msg_type = gold.get("source_message_type", "")
+
+            # Map message type to extension table
+            extension_tables = {
+                "pain.001": "cdm_payment_extension_iso20022",
+                "pain.002": "cdm_payment_extension_iso20022",
+                "pain.008": "cdm_payment_extension_iso20022",
+                "pacs.002": "cdm_payment_extension_iso20022",
+                "pacs.003": "cdm_payment_extension_iso20022",
+                "pacs.004": "cdm_payment_extension_iso20022",
+                "pacs.008": "cdm_payment_extension_iso20022",
+                "pacs.009": "cdm_payment_extension_iso20022",
+                "camt.052": "cdm_payment_extension_iso20022",
+                "camt.053": "cdm_payment_extension_iso20022",
+                "camt.054": "cdm_payment_extension_iso20022",
+                "MT103": "cdm_payment_extension_swift",
+                "MT103STP": "cdm_payment_extension_swift",
+                "MT101": "cdm_payment_extension_swift",
+                "MT202": "cdm_payment_extension_swift",
+                "MT202COV": "cdm_payment_extension_swift",
+                "FEDWIRE": "cdm_payment_extension_fedwire",
+                "ACH": "cdm_payment_extension_ach",
+                "SEPA": "cdm_payment_extension_sepa",
+                "SEPA_SCT": "cdm_payment_extension_sepa",
+                "SEPA_SDD": "cdm_payment_extension_sepa",
+                "SEPA_INST": "cdm_payment_extension_sepa",
+                "RTP": "cdm_payment_extension_rtp",
+                "FEDNOW": "cdm_payment_extension_iso20022",
+                "CHAPS": "cdm_payment_extension_swift",
+                "BACS": "cdm_payment_extension_swift",
+                "FPS": "cdm_payment_extension_iso20022",
+                "CHIPS": "cdm_payment_extension_swift",
+                "NPP": "cdm_payment_extension_iso20022",
+            }
+
+            ext_table = extension_tables.get(msg_type)
+            if ext_table and instruction_id:
+                try:
+                    cursor.execute(f"""
+                        SELECT * FROM gold.{ext_table}
+                        WHERE instruction_id = %s
+                    """, (instruction_id,))
+                    ext_row = cursor.fetchone()
+                    if ext_row:
+                        ext_cols = [desc[0] for desc in cursor.description]
+                        result["gold_extension"] = dict(zip(ext_cols, ext_row))
+                        result["gold_extension"]["_table"] = ext_table
+                except Exception:
+                    pass
 
         return result
     finally:
@@ -1628,3 +1761,75 @@ async def get_pipeline_overview():
         "message_types": message_types,
         "queues": queues_status.get("queues", {}),
     }
+
+
+@router.get("/mappings/{message_type}")
+async def get_field_mappings(message_type: str):
+    """Get Bronze→Silver→Gold field mappings for a message type from the mapping database.
+
+    Returns mappings from:
+    - mapping.silver_field_mappings: Bronze source_path → Silver target_column
+    - mapping.gold_field_mappings: Silver source_expression → Gold gold_table.gold_column with entity_role
+
+    This enables dynamic field comparison in the UI without hardcoded mappings.
+    """
+    result = {
+        "message_type": message_type,
+        "bronze_to_silver": [],
+        "silver_to_gold": [],
+    }
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        if not conn:
+            raise HTTPException(status_code=503, detail="Database not available")
+
+        cursor = conn.cursor()
+
+        # Get Bronze → Silver mappings
+        cursor.execute("""
+            SELECT target_column, source_path, data_type, is_required, default_value
+            FROM mapping.silver_field_mappings
+            WHERE format_id = %s AND is_active = true
+            ORDER BY ordinal_position
+        """, (message_type.upper(),))
+
+        for row in cursor.fetchall():
+            result["bronze_to_silver"].append({
+                "silver_column": row[0],
+                "bronze_path": row[1],
+                "data_type": row[2],
+                "is_required": row[3],
+                "default_value": row[4],
+            })
+
+        # Get Silver → Gold mappings
+        cursor.execute("""
+            SELECT gold_table, gold_column, source_expression, entity_role, data_type, is_required, default_value
+            FROM mapping.gold_field_mappings
+            WHERE format_id = %s AND is_active = true
+            ORDER BY gold_table, ordinal_position
+        """, (message_type.upper(),))
+
+        for row in cursor.fetchall():
+            result["silver_to_gold"].append({
+                "gold_table": row[0],
+                "gold_column": row[1],
+                "silver_column": row[2],  # source_expression is the Silver column name
+                "entity_role": row[3],
+                "data_type": row[4],
+                "is_required": row[5],
+                "default_value": row[6],
+            })
+
+        cursor.close()
+
+    except Exception as e:
+        logger.error(f"Error fetching mappings for {message_type}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+    return result

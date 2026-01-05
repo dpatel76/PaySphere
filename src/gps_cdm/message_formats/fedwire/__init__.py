@@ -83,9 +83,18 @@ class FedwireTagValueParser:
             result['subtypeCode'] = value
         elif tag == '1520':
             result['imad'] = value
-            # Parse IMAD: YYYYMMDDSSSSSSSSNNNNNN
-            if len(value) >= 8:
-                result['inputCycleDate'] = f"{value[:4]}-{value[4:6]}-{value[6:8]}"
+            # Parse IMAD: YYYYMMDDSSSSSSSSNNNNNN (22 chars)
+            # Only extract date if it looks like a valid date format (starts with digits)
+            if len(value) >= 8 and value[:8].isdigit():
+                try:
+                    year = value[:4]
+                    month = value[4:6]
+                    day = value[6:8]
+                    # Validate date components
+                    if 1900 <= int(year) <= 2100 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                        result['inputCycleDate'] = f"{year}-{month}-{day}"
+                except (ValueError, IndexError):
+                    pass  # Invalid date format, skip
             if len(value) >= 16:
                 result['inputSource'] = value[8:16]
             if len(value) >= 22:
@@ -219,6 +228,9 @@ class FedwireExtractor(BaseExtractor):
 
     MESSAGE_TYPE = "FEDWIRE"
     SILVER_TABLE = "stg_fedwire"
+
+    def __init__(self):
+        self.parser = FedwireTagValueParser()
 
     # =========================================================================
     # BRONZE EXTRACTION
