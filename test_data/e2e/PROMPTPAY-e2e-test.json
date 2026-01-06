@@ -1,0 +1,19 @@
+{
+  "transactionId": "E2E-PROMPTPAY-001",
+  "creationDateTime": "2025-01-06T11:00:00+07:00",
+  "amount": 5000.00,
+  "currency": "THB",
+  "payerProxyType": "MOBILE",
+  "payerProxyValue": "0812345678",
+  "payerName": "E2E PromptPay Payer",
+  "payerBankCode": "002",
+  "payerAccount": "1234567890",
+  "payeeProxyType": "MOBILE",
+  "payeeProxyValue": "0898765432",
+  "payeeName": "E2E PromptPay Payee",
+  "payeeBankCode": "014",
+  "payeeAccount": "9876543210",
+  "endToEndId": "E2E-PP-001",
+  "qrCodeData": "00020101021229370016A000000677010111011300668123456785802TH",
+  "remittanceInfo": "E2E PromptPay Test Payment"
+}

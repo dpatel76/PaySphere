@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>CHAPS-E2E-V2-001</MsgId>
+      <CreDtTm>2026-01-06T15:30:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><EndToEndId>E2E-CHAPS-V2</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="GBP">25000.00</IntrBkSttlmAmt>
+      <ChrgBr>SLEV</ChrgBr>
+      <Dbtr><Nm>E2E CHAPS Debtor Ltd</Nm></Dbtr>
+      <DbtrAcct><Id><IBAN>GB82WEST12345698765432</IBAN></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>WESTGB2LXXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>LOYDGB2LXXX</BICFI></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>E2E CHAPS Creditor Corp</Nm></Cdtr>
+      <CdtrAcct><Id><IBAN>GB29LOYD60161331926819</IBAN></Id></CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

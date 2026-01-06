@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08">
+  <FICdtTrf>
+    <GrpHdr>
+      <MsgId>TARGET2-E2E-TEST-001</MsgId>
+      <CreDtTm>2026-01-06T10:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><EndToEndId>E2E-TARGET2-001</EndToEndId><TxId>TXN-TARGET2-001</TxId></PmtId>
+      <IntrBkSttlmAmt Ccy="EUR">100000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <InstgAgt><FinInstnId><BIC>DEUTDEFFXXX</BIC></FinInstnId></InstgAgt>
+      <InstdAgt><FinInstnId><BIC>COBADEFFXXX</BIC></FinInstnId></InstdAgt>
+      <Dbtr><FinInstnId><BIC>DEUTDEFFXXX</BIC></FinInstnId></Dbtr>
+      <Cdtr><FinInstnId><BIC>COBADEFFXXX</BIC></FinInstnId></Cdtr>
+    </CdtTrfTxInf>
+  </FICdtTrf>
+</Document>

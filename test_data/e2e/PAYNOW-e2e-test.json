@@ -1,0 +1,18 @@
+{
+  "transactionId": "E2E-PAYNOW-001",
+  "creationDateTime": "2025-01-06T11:00:00+08:00",
+  "amount": 2000.00,
+  "currency": "SGD",
+  "payerProxyType": "MOBILE",
+  "payerProxyValue": "+6591234567",
+  "payerName": "E2E PayNow Payer",
+  "payerBankCode": "DBSSSGSG",
+  "payerAccount": "1234567890",
+  "payeeProxyType": "NRIC",
+  "payeeProxyValue": "S1234567D",
+  "payeeName": "E2E PayNow Payee",
+  "payeeBankCode": "OCBCSGSG",
+  "payeeAccount": "9876543210",
+  "endToEndId": "E2E-PN-001",
+  "remittanceInfo": "E2E PayNow Test Payment"
+}

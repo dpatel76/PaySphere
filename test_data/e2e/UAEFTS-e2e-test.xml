@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>E2E-UAEFTS-001</MsgId>
+      <CreDtTm>2025-01-06T11:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><EndToEndId>E2E-UAEFTS-TX001</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="AED">7500.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>E2E UAEFTS Debtor</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>AE123456789012345678901</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>ABORUAEAXXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>EABORUAEXXX</BICFI></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>E2E UAEFTS Creditor</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>AE987654321098765432109</Id></Othr></Id></CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

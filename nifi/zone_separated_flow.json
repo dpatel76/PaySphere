@@ -1,16 +1,17 @@
 {
   "flow_name": "GPS CDM Zone-Separated Payment Pipeline",
   "description": "NiFi flow that publishes raw payment messages to zone-specific Kafka topics",
-  "version": "2.0",
+  "version": "2.1",
   "architecture": "zone_separated",
+  "last_synced_from_container": "2026-01-06",
 
   "overview": {
     "purpose": "Read payment files, detect message type, publish raw content to bronze.{message_type} Kafka topics",
     "data_flow": [
       "1. GetFile reads payment files from input directory",
-      "2. UpdateAttribute extracts message_type from filename and generates batch_id",
-      "3. PublishKafkaRecord_2_6 publishes raw content to bronze.{message_type} topic",
-      "4. Success logged, failures routed to DLQ"
+      "2. UpdateAttribute extracts message_type from filename (using hyphen delimiter) and generates batch_id",
+      "3. PublishKafka_2_6 publishes raw content to bronze.{message_type} topic",
+      "4. Success auto-terminated, failures routed to Log Failures"
     ]
   },
 
@@ -18,197 +19,153 @@
     {
       "name": "Read Payment Files",
       "type": "GetFile",
+      "state": "RUNNING",
       "config": {
         "Input Directory": "/opt/nifi/nifi-current/input",
-        "File Filter": "[^\\.].*\\.(xml|json|txt|mt103|mt202|nacha)$",
+        "File Filter": "[^\\.].*\\.(xml|json|txt|ach)$",
+        "Batch Size": "100",
         "Keep Source File": "false",
-        "Recurse Subdirectories": "false",
-        "Polling Interval": "10 sec",
-        "Batch Size": "100"
+        "Recurse Subdirectories": "true",
+        "Polling Interval": "5 sec",
+        "Ignore Hidden Files": "true",
+        "Minimum File Age": "0 sec",
+        "Minimum File Size": "0 B"
       },
       "relationships": {
-        "success": "Extract Message Metadata"
+        "success": "Detect Message Type"
       }
     },
 
     {
-      "name": "Extract Message Metadata",
+      "name": "Detect Message Type",
       "type": "UpdateAttribute",
+      "state": "RUNNING",
       "config": {
         "properties": {
-          "batch_id": "${UUID()}",
-          "message_type": "${filename:substringBefore('_'):toUpper():replace('.','.')}",
-          "source_file": "${filename}",
-          "ingest_timestamp": "${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'')}",
-          "kafka_topic": "bronze.${message_type:toLower()}"
-        }
+          "batch.id": "${UUID()}",
+          "message.type": "${filename:substringBefore('-')}"
+        },
+        "Store State": "Do not store state",
+        "canonical-value-lookup-cache-size": "100"
       },
       "relationships": {
-        "success": "Publish to Bronze Kafka"
+        "success": "Publish to Kafka"
       },
       "notes": [
-        "Message type extracted from filename: pain.001_test.xml -> pain.001",
-        "MT103_sample.txt -> MT103",
-        "FEDWIRE_001.txt -> FEDWIRE"
+        "Message type extracted from filename using hyphen (-) delimiter",
+        "pain.001-test.xml -> pain.001",
+        "MT103-sample.txt -> MT103",
+        "FEDWIRE-001.txt -> FEDWIRE",
+        "MEPS_PLUS-test.json -> MEPS_PLUS (underscores in type preserved)",
+        "RTGS_HK-test.json -> RTGS_HK"
       ]
     },
 
     {
-      "name": "Publish to Bronze Kafka",
+      "name": "Publish to Kafka",
       "type": "PublishKafka_2_6",
+      "state": "RUNNING",
       "config": {
-        "Kafka Brokers": "${kafka.brokers:gps-cdm-kafka:9092}",
-        "Topic Name": "${kafka_topic}",
-        "Delivery Guarantee": "Guarantee Replicated Delivery",
-        "Message Key": "${batch_id}",
-        "Use Transactions": "false",
-        "Attributes to Send as Headers": "batch_id, message_type, source_file, ingest_timestamp",
-        "Max Request Size": "10 MB",
-        "Acknowledgment Wait Time": "5 secs",
-        "Compression Type": "none"
-      },
-      "relationships": {
-        "success": "Log Success",
-        "failure": "Route to DLQ"
-      },
-      "notes": [
-        "Publishes raw content AS-IS (no transformation)",
-        "Kafka headers carry metadata for downstream consumers",
-        "Topic determined by message_type: bronze.pain.001, bronze.MT103, etc."
-      ]
-    },
-
-    {
-      "name": "Log Success",
-      "type": "LogAttribute",
-      "config": {
-        "Log Level": "info",
-        "Log Prefix": "BRONZE_PUBLISHED",
-        "Attributes to Log": "batch_id, message_type, kafka_topic, fileSize"
-      },
-      "relationships": {
-        "success": "Auto-terminate"
-      }
-    },
-
-    {
-      "name": "Route to DLQ",
-      "type": "PublishKafka_2_6",
-      "config": {
-        "Kafka Brokers": "${kafka.brokers:gps-cdm-kafka:9092}",
-        "Topic Name": "dlq.bronze",
-        "Delivery Guarantee": "Guarantee Replicated Delivery",
-        "Message Key": "${batch_id}",
-        "Attributes to Send as Headers": "batch_id, message_type, source_file, error_reason"
-      },
-      "relationships": {
-        "success": "Log DLQ Entry",
-        "failure": "Log DLQ Failure"
-      }
-    },
-
-    {
-      "name": "Log DLQ Entry",
-      "type": "LogAttribute",
-      "config": {
-        "Log Level": "warn",
-        "Log Prefix": "DLQ_ENTRY",
-        "Attributes to Log": "batch_id, message_type, error_reason"
-      },
-      "relationships": {
-        "success": "Auto-terminate"
-      }
-    },
-
-    {
-      "name": "Log DLQ Failure",
-      "type": "PutFile",
-      "config": {
-        "Directory": "/opt/nifi/nifi-current/dlq",
-        "Conflict Resolution Strategy": "replace",
-        "Create Missing Directories": "true"
+        "bootstrap.servers": "kafka:29092",
+        "topic": "bronze.${message.type}",
+        "use-transactions": "false",
+        "Failure Strategy": "Route to Failure",
+        "acks": "all",
+        "message-header-encoding": "UTF-8",
+        "security.protocol": "PLAINTEXT",
+        "key-attribute-encoding": "utf-8",
+        "max.request.size": "1 MB",
+        "ack.wait.time": "5 secs",
+        "max.block.ms": "5 sec",
+        "partitioner.class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+        "compression.type": "none"
       },
       "relationships": {
         "success": "Auto-terminate",
-        "failure": "Auto-terminate"
-      }
-    }
-  ],
+        "failure": "Log Failures"
+      },
+      "notes": [
+        "Publishes raw content AS-IS (no transformation)",
+        "Topic determined by message.type attribute: bronze.pain.001, bronze.MT103, etc.",
+        "Success relationship is auto-terminated"
+      ]
+    },
 
-  "controller_services": [
     {
-      "name": "Kafka Connection Pool",
-      "type": "StandardKafkaProducerService",
+      "name": "Log Failures",
+      "type": "LogAttribute",
+      "state": "RUNNING",
       "config": {
-        "Bootstrap Servers": "gps-cdm-kafka:9092",
-        "Security Protocol": "PLAINTEXT",
-        "Max Request Size": "10485760"
+        "Log Level": "error",
+        "Log Payload": "false",
+        "Attributes to Log": ".*",
+        "Log FlowFile Properties": "true",
+        "Output Format": "Line per Attribute",
+        "character-set": "UTF-8"
+      },
+      "relationships": {
+        "success": "Auto-terminate"
       }
     }
   ],
 
-  "variables": {
-    "kafka.brokers": "gps-cdm-kafka:9092",
-    "input.directory": "/opt/nifi/nifi-current/input",
-    "dlq.directory": "/opt/nifi/nifi-current/dlq"
-  },
+  "connections": [
+    {
+      "source": "Read Payment Files",
+      "destination": "Detect Message Type",
+      "relationships": ["success"]
+    },
+    {
+      "source": "Detect Message Type",
+      "destination": "Publish to Kafka",
+      "relationships": ["success"]
+    },
+    {
+      "source": "Publish to Kafka",
+      "destination": "Log Failures",
+      "relationships": ["failure"]
+    }
+  ],
 
   "message_type_patterns": {
-    "description": "Filename patterns to message type mappings",
-    "patterns": [
-      {"pattern": "pain.001*", "message_type": "pain.001", "format": "XML"},
-      {"pattern": "pain.002*", "message_type": "pain.002", "format": "XML"},
-      {"pattern": "pain.008*", "message_type": "pain.008", "format": "XML"},
-      {"pattern": "pacs.002*", "message_type": "pacs.002", "format": "XML"},
-      {"pattern": "pacs.003*", "message_type": "pacs.003", "format": "XML"},
-      {"pattern": "pacs.004*", "message_type": "pacs.004", "format": "XML"},
-      {"pattern": "pacs.008*", "message_type": "pacs.008", "format": "XML"},
-      {"pattern": "pacs.009*", "message_type": "pacs.009", "format": "XML"},
-      {"pattern": "camt.052*", "message_type": "camt.052", "format": "XML"},
-      {"pattern": "camt.053*", "message_type": "camt.053", "format": "XML"},
-      {"pattern": "camt.054*", "message_type": "camt.054", "format": "XML"},
-      {"pattern": "MT103*", "message_type": "MT103", "format": "SWIFT_MT"},
-      {"pattern": "MT202*", "message_type": "MT202", "format": "SWIFT_MT"},
-      {"pattern": "MT940*", "message_type": "MT940", "format": "SWIFT_MT"},
-      {"pattern": "MT101*", "message_type": "MT101", "format": "SWIFT_MT"},
-      {"pattern": "MT199*", "message_type": "MT199", "format": "SWIFT_MT"},
-      {"pattern": "FEDWIRE*", "message_type": "FEDWIRE", "format": "TAG_VALUE"},
-      {"pattern": "ACH*", "message_type": "ACH", "format": "FIXED"},
-      {"pattern": "CHIPS*", "message_type": "CHIPS", "format": "XML"},
-      {"pattern": "RTP*", "message_type": "RTP", "format": "XML"},
-      {"pattern": "FEDNOW*", "message_type": "FEDNOW", "format": "XML"},
-      {"pattern": "CHAPS*", "message_type": "CHAPS", "format": "SWIFT_MT"},
-      {"pattern": "BACS*", "message_type": "BACS", "format": "SWIFT_MT"},
-      {"pattern": "FPS*", "message_type": "FPS", "format": "XML"},
-      {"pattern": "SEPA*", "message_type": "SEPA", "format": "XML"},
-      {"pattern": "TARGET2*", "message_type": "TARGET2", "format": "XML"},
-      {"pattern": "NPP*", "message_type": "NPP", "format": "XML"},
-      {"pattern": "UPI*", "message_type": "UPI", "format": "JSON"},
-      {"pattern": "PIX*", "message_type": "PIX", "format": "JSON"},
-      {"pattern": "INSTAPAY*", "message_type": "INSTAPAY", "format": "XML"},
-      {"pattern": "PAYNOW*", "message_type": "PAYNOW", "format": "XML"},
-      {"pattern": "PROMPTPAY*", "message_type": "PROMPTPAY", "format": "XML"},
-      {"pattern": "MEPS_PLUS*", "message_type": "MEPS_PLUS", "format": "XML"},
-      {"pattern": "CNAPS*", "message_type": "CNAPS", "format": "XML"},
-      {"pattern": "BOJNET*", "message_type": "BOJNET", "format": "XML"},
-      {"pattern": "KFTC*", "message_type": "KFTC", "format": "XML"},
-      {"pattern": "RTGS_HK*", "message_type": "RTGS_HK", "format": "XML"},
-      {"pattern": "SARIE*", "message_type": "SARIE", "format": "SWIFT_MT"},
-      {"pattern": "UAEFTS*", "message_type": "UAEFTS", "format": "XML"}
+    "description": "Filename patterns to message type mappings (filename prefix before hyphen)",
+    "examples": [
+      {"filename": "pain.001-test-001.xml", "message_type": "pain.001", "topic": "bronze.pain.001"},
+      {"filename": "pacs.008-e2e-test.xml", "message_type": "pacs.008", "topic": "bronze.pacs.008"},
+      {"filename": "camt.053-statement.xml", "message_type": "camt.053", "topic": "bronze.camt.053"},
+      {"filename": "MT103-sample.txt", "message_type": "MT103", "topic": "bronze.MT103"},
+      {"filename": "MT202-e2e-test.txt", "message_type": "MT202", "topic": "bronze.MT202"},
+      {"filename": "MT940-statement.txt", "message_type": "MT940", "topic": "bronze.MT940"},
+      {"filename": "FEDWIRE-001.txt", "message_type": "FEDWIRE", "topic": "bronze.FEDWIRE"},
+      {"filename": "ACH-batch.ach", "message_type": "ACH", "topic": "bronze.ACH"},
+      {"filename": "SEPA-payment.xml", "message_type": "SEPA", "topic": "bronze.SEPA"},
+      {"filename": "CHAPS-transfer.xml", "message_type": "CHAPS", "topic": "bronze.CHAPS"},
+      {"filename": "MEPS_PLUS-test.json", "message_type": "MEPS_PLUS", "topic": "bronze.MEPS_PLUS"},
+      {"filename": "RTGS_HK-test.json", "message_type": "RTGS_HK", "topic": "bronze.RTGS_HK"}
+    ],
+    "supported_formats": [
+      "pain.001", "pain.002", "pain.008",
+      "pacs.002", "pacs.003", "pacs.004", "pacs.008", "pacs.009",
+      "camt.052", "camt.053", "camt.054",
+      "MT103", "MT202", "MT940", "MT101", "MT199",
+      "FEDWIRE", "ACH", "CHIPS", "RTP", "FEDNOW",
+      "CHAPS", "BACS", "FPS", "SEPA", "TARGET2",
+      "NPP", "UPI", "PIX", "INSTAPAY", "PAYNOW", "PROMPTPAY",
+      "MEPS_PLUS", "CNAPS", "BOJNET", "KFTC", "RTGS_HK", "SARIE", "UAEFTS"
     ]
   },
 
   "deployment_notes": [
-    "1. Import this template into NiFi",
-    "2. Update kafka.brokers variable if needed",
-    "3. Ensure input directory is accessible",
-    "4. Start all processors",
-    "5. Zone consumers (Bronze, Silver, Gold) must be running to process messages"
+    "1. This config is synced from the live NiFi container (gps-cdm-nifi)",
+    "2. File naming convention: {MESSAGE_TYPE}-{identifier}.{extension}",
+    "3. The hyphen (-) is the delimiter for extracting message type",
+    "4. Underscores in message types (MEPS_PLUS, RTGS_HK) are preserved",
+    "5. Zone consumers (Bronze, Silver, Gold) must be running to process messages from Kafka"
   ],
 
   "testing": {
-    "test_command": "docker cp test_file.xml gps-cdm-nifi:/opt/nifi/nifi-current/input/pain.001_test.xml",
-    "verify_kafka": "docker exec gps-cdm-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic bronze.pain.001 --from-beginning --max-messages 1",
+    "copy_file_command": "docker cp test_data/e2e/pain.001-e2e-test.xml gps-cdm-nifi:/opt/nifi/nifi-current/input/",
+    "verify_kafka": "docker exec gps-cdm-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic bronze.pain.001 --from-beginning --max-messages 1 --timeout-ms 5000",
     "verify_bronze": "docker exec gps-cdm-postgres psql -U gps_cdm_svc -d gps_cdm -c \"SELECT raw_id, message_type FROM bronze.raw_payment_messages ORDER BY _ingested_at DESC LIMIT 5;\""
   }
 }

@@ -1,0 +1,6 @@
+VOL1BACS01                                                                              
+HDR1ABACS01    E2EBACS001                                                               
+UHL1 123456002601060000001                                                              
+1712345600987654320000015000000000000E2E BACS CREDITOR       E2EBACSV2 0140908712345678E2E BACS DEBTOR         
+EOF1ABACS01    E2EBACS001                                                               
+UTL10000010000001500000000000                                                           

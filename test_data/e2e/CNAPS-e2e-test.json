@@ -1,0 +1,17 @@
+{
+  "messageId": "CNAPS-E2E-V2-001",
+  "messageType": "CNAPS",
+  "creationDateTime": "2026-01-06T15:30:00",
+  "amount": 100000.00,
+  "currency": "CNY",
+  "businessType": "CT",
+  "payerName": "E2E CNAPS Payer Co",
+  "payerAccount": "6225880123456789",
+  "payerBankCode": "102100099996",
+  "payerBankName": "ICBC Beijing",
+  "payeeName": "E2E CNAPS Payee Ltd",
+  "payeeAccount": "6228480654321098",
+  "payeeBankCode": "105100000017",
+  "payeeBankName": "CCB Shanghai",
+  "remittanceInfo": "E2E Test Payment V2"
+}

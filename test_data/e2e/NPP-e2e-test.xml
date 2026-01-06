@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>E2E-NPP-001</MsgId>
+      <CreDtTm>2025-01-06T11:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><EndToEndId>E2E-NPP-TX001</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="AUD">1500.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>E2E NPP Debtor</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>123456789</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>CTBAAU2SXXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>NABORUAUXXX</BICFI></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>E2E NPP Creditor</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>987654321</Id></Othr></Id></CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

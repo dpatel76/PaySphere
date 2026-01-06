@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.03">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>SEPA-E2E-TEST-001</MsgId>
+      <CreDtTm>2026-01-06T10:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>2500.00</CtrlSum>
+      <InitgPty><Nm>SEPA E2E Initiator</Nm></InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>SEPA-PMT-E2E-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>2500.00</CtrlSum>
+      <PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl></PmtTpInf>
+      <ReqdExctnDt>2026-01-07</ReqdExctnDt>
+      <Dbtr><Nm>SEPA E2E Debtor</Nm></Dbtr>
+      <DbtrAcct><Id><IBAN>FR7630006000011234567890189</IBAN></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BIC>BNABORPAXXX</BIC></FinInstnId></DbtrAgt>
+      <CdtTrfTxInf>
+        <PmtId><EndToEndId>E2E-SEPA-001</EndToEndId></PmtId>
+        <Amt><InstdAmt Ccy="EUR">2500.00</InstdAmt></Amt>
+        <CdtrAgt><FinInstnId><BIC>INGBDEFFXXX</BIC></FinInstnId></CdtrAgt>
+        <Cdtr><Nm>SEPA E2E Creditor</Nm></Cdtr>
+        <CdtrAcct><Id><IBAN>DE89370400440532013000</IBAN></Id></CdtrAcct>
+        <RmtInf><Ustrd>SEPA E2E Test Payment</Ustrd></RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

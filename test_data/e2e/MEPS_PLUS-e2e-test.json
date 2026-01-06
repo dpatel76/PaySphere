@@ -1,0 +1,16 @@
+{
+  "messageId": "MEPS-E2E-20260105-001",
+  "creationDateTime": "2026-01-05T22:30:00+08:00",
+  "settlementDate": "2026-01-05",
+  "amount": 250000.00,
+  "currency": "SGD",
+  "sendingBankBic": "DBSSSGSG",
+  "receivingBankBic": "OCBCSGSG",
+  "transactionReference": "TXN-SG-E2E-001",
+  "debtorName": "E2E Test Singapore Tech Holdings Pte Ltd",
+  "debtorAccount": "001-E2E567-001",
+  "creditorName": "E2E Test Marina Bay Trading Company",
+  "creditorAccount": "002-E2E543-002",
+  "purposeCode": "SUPP",
+  "remittanceInfo": "E2E Test Invoice INV-2026-E2E001 payment for IT services"
+}

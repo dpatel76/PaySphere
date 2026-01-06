@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.02">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>PACS008-E2E-TEST-001</MsgId>
+      <CreDtTm>2026-01-06T10:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf><SttlmMtd>INDA</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><EndToEndId>E2E-PACS008-001</EndToEndId><TxId>TXN-PACS008-001</TxId></PmtId>
+      <IntrBkSttlmAmt Ccy="USD">7500.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-07</IntrBkSttlmDt>
+      <Dbtr><Nm>E2E Test Debtor pacs008</Nm></Dbtr>
+      <DbtrAcct><Id><IBAN>US12345678901234567890</IBAN></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BIC>CHABORNYXXX</BIC></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BIC>CITABORUXXX</BIC></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>E2E Test Creditor pacs008</Nm></Cdtr>
+      <CdtrAcct><Id><IBAN>US09876543210987654321</IBAN></Id></CdtrAcct>
+      <RmtInf><Ustrd>E2E Test pacs.008</Ustrd></RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

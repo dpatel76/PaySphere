@@ -1,0 +1,71 @@
+{
+  "Head": {
+    "msgId": "E2E-UPI-001",
+    "orgId": "NPCI",
+    "ts": "2025-01-06T11:00:00+05:30",
+    "ver": "2.0"
+  },
+  "Txn": {
+    "id": "TXN-UPI-E2E-001",
+    "type": "PAY",
+    "ts": "2025-01-06T11:00:00+05:30",
+    "note": "E2E UPI Test Payment"
+  },
+  "Payer": {
+    "addr": "payer@okicici",
+    "name": "E2E UPI Payer",
+    "type": "PERSON",
+    "Ac": {
+      "addrType": "ACCOUNT",
+      "Detail": [
+        {"name": "ACNUM", "value": "1234567890"},
+        {"name": "ACTYPE", "value": "SAVINGS"},
+        {"name": "IFSC", "value": "ICIC0001234"}
+      ]
+    },
+    "Amount": {
+      "curr": "INR",
+      "value": "7500.00"
+    }
+  },
+  "Payee": {
+    "addr": "payee@oksbi",
+    "name": "E2E UPI Payee",
+    "type": "PERSON",
+    "Ac": {
+      "addrType": "ACCOUNT",
+      "Detail": [
+        {"name": "ACNUM", "value": "9876543210"},
+        {"name": "ACTYPE", "value": "SAVINGS"},
+        {"name": "IFSC", "value": "SBIN0005678"}
+      ]
+    }
+  },
+  "headMsgId": "E2E-UPI-001",
+  "headOrgId": "NPCI",
+  "headTs": "2025-01-06T11:00:00+05:30",
+  "headVer": "2.0",
+  "txnId": "TXN-UPI-E2E-001",
+  "txnType": "PAY",
+  "txnTs": "2025-01-06T11:00:00+05:30",
+  "txnNote": "E2E UPI Test Payment",
+  "payerAddr": "payer@okicici",
+  "payerName": "E2E UPI Payer",
+  "payerType": "PERSON",
+  "payerAcAddrType": "ACCOUNT",
+  "payerAcAcnum": "1234567890",
+  "payerAcActype": "SAVINGS",
+  "payerAcIfsc": "ICIC0001234",
+  "payerAmountCurr": "INR",
+  "payerAmountValue": 7500.00,
+  "payeeAddr": "payee@oksbi",
+  "payeeName": "E2E UPI Payee",
+  "payeeType": "PERSON",
+  "payeeAcAddrType": "ACCOUNT",
+  "payeeAcAcnum": "9876543210",
+  "payeeAcActype": "SAVINGS",
+  "payeeAcIfsc": "SBIN0005678",
+  "transactionId": "E2E-UPI-001",
+  "amount": 7500.00,
+  "currency": "INR"
+}

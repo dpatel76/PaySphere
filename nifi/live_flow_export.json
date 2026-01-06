@@ -1,0 +1,97 @@
+{
+  "flow_name": "GPS CDM Payment Pipeline (Live Export)",
+  "description": "Exported from live NiFi container",
+  "version": "2.0-live",
+  "processors": [
+    {
+      "id": "93f72c07-019b-1000-8396-436da7ade186",
+      "name": "Log Failures",
+      "type": "LogAttribute",
+      "state": "RUNNING",
+      "properties": {
+        "Log Level": "error",
+        "Log Payload": "false",
+        "Attributes to Log": ".*",
+        "attributes-to-log-regex": ".*",
+        "Log FlowFile Properties": "true",
+        "Output Format": "Line per Attribute",
+        "character-set": "UTF-8"
+      }
+    },
+    {
+      "id": "93f72bc2-019b-1000-33f6-efb2e2be5638",
+      "name": "Detect Message Type",
+      "type": "UpdateAttribute",
+      "state": "RUNNING",
+      "properties": {
+        "Store State": "Do not store state",
+        "canonical-value-lookup-cache-size": "100",
+        "batch.id": "${UUID()}",
+        "message.type": "${filename:substringBefore('-')}"
+      }
+    },
+    {
+      "id": "93f72bfc-019b-1000-e34b-9b4902734c6d",
+      "name": "Publish to Kafka",
+      "type": "PublishKafka_2_6",
+      "state": "RUNNING",
+      "properties": {
+        "bootstrap.servers": "kafka:29092",
+        "topic": "bronze.${message.type}",
+        "use-transactions": "false",
+        "Failure Strategy": "Route to Failure",
+        "acks": "all",
+        "message-header-encoding": "UTF-8",
+        "security.protocol": "PLAINTEXT",
+        "sasl.mechanism": "GSSAPI",
+        "sasl.token.auth": "false",
+        "key-attribute-encoding": "utf-8",
+        "max.request.size": "1 MB",
+        "ack.wait.time": "5 secs",
+        "max.block.ms": "5 sec",
+        "partitioner.class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+        "compression.type": "none"
+      }
+    },
+    {
+      "id": "93f72bb7-019b-1000-4eb3-38d5b1db195e",
+      "name": "Read Payment Files",
+      "type": "GetFile",
+      "state": "RUNNING",
+      "properties": {
+        "Input Directory": "/opt/nifi/nifi-current/input",
+        "File Filter": "[^\\.].*\\.(xml|json|txt|ach)$",
+        "Batch Size": "100",
+        "Keep Source File": "false",
+        "Recurse Subdirectories": "true",
+        "Polling Interval": "5 sec",
+        "Ignore Hidden Files": "true",
+        "Minimum File Age": "0 sec",
+        "Minimum File Size": "0 B"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "source": "Read Payment Files",
+      "destination": "Detect Message Type",
+      "relationships": [
+        "success"
+      ]
+    },
+    {
+      "source": "Publish to Kafka",
+      "destination": "Log Failures",
+      "relationships": [
+        "failure"
+      ]
+    },
+    {
+      "source": "Detect Message Type",
+      "destination": "Publish to Kafka",
+      "relationships": [
+        "success"
+      ]
+    }
+  ]
+}

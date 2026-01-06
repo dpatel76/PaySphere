@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>E2E-FPS-001</MsgId>
+      <CreDtTm>2025-01-06T10:30:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <IntrBkSttlmDt>2025-01-06</IntrBkSttlmDt>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>FPS-INSTR-001</InstrId>
+        <EndToEndId>E2E-FPS-REF-001</EndToEndId>
+        <TxId>FPS-TX-001</TxId>
+        <UETR>f1e2d3c4-b5a6-9078-fedc-ba9876543210</UETR>
+      </PmtId>
+      <IntrBkSttlmAmt Ccy="GBP">250.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>E2E FPS Payer John Smith</Nm><PstlAdr><AdrLine>15 Baker Street</AdrLine></PstlAdr></Dbtr>
+      <DbtrAcct><Id><Othr><Id>11223344</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>200000</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>300000</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>E2E FPS Payee Jane Doe</Nm><PstlAdr><AdrLine>42 Oxford Street</AdrLine></PstlAdr></Cdtr>
+      <CdtrAcct><Id><Othr><Id>55667788</Id></Othr></Id></CdtrAcct>
+      <RmtInf><Ustrd>E2E FPS Test Payment</Ustrd></RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

@@ -1,0 +1,16 @@
+{
+  "messageId": "RTGSHK-E2E-20260105-001",
+  "creationDateTime": "2026-01-05T22:30:00+08:00",
+  "settlementDate": "2026-01-05",
+  "settlementCurrency": "HKD",
+  "amount": 3000000.00,
+  "currency": "HKD",
+  "sendingBankCode": "004",
+  "receivingBankCode": "024",
+  "transactionReference": "TXN-HK-E2E-001",
+  "payerName": "E2E Test Hong Kong Trading Company Ltd",
+  "payerAccount": "004-E2E-456789-001",
+  "payeeName": "E2E Test China Import Export Corp",
+  "payeeAccount": "024-E2E-654321-002",
+  "purpose": "E2E Test Payment for goods shipment"
+}

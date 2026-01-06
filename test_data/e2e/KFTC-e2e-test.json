@@ -1,0 +1,17 @@
+{
+  "messageId": "KFTC-E2E-20260105-001",
+  "messageType": "KFTC",
+  "creationDateTime": "2026-01-05T22:30:00",
+  "settlementDate": "2026-01-05",
+  "transactionReference": "KFTC-REF-E2E-001",
+  "transactionId": "TXN-KR-E2E-001",
+  "amount": 2500000.00,
+  "currency": "KRW",
+  "sendingBankCode": "004",
+  "receivingBankCode": "011",
+  "payerName": "E2E Test Kim",
+  "payerAccount": "110-E2E-456789",
+  "payeeName": "E2E Test Park",
+  "payeeAccount": "333-E2E-654321",
+  "purpose": "E2E Business Payment"
+}

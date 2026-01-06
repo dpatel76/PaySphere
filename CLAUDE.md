@@ -307,13 +307,19 @@ LIMIT 10;
 
 ## File Naming Convention for NiFi
 
-NiFi extracts message type from filename:
-- `pain.001_test.json` → message_type = `pain.001`
-- `pacs.008_12345.json` → message_type = `pacs.008`
-- `mt103_abc.json` → message_type = `MT103`
-- `fedwire_001.json` → message_type = `FEDWIRE`
+NiFi extracts message type from filename using **hyphen (`-`) as delimiter**:
+- `pain.001-test.json` → message_type = `pain.001`
+- `pacs.008-12345.json` → message_type = `pacs.008`
+- `MT103-abc.txt` → message_type = `MT103`
+- `FEDWIRE-001.txt` → message_type = `FEDWIRE`
+- `MEPS_PLUS-test.json` → message_type = `MEPS_PLUS` (underscores in type name preserved)
+- `RTGS_HK-test.json` → message_type = `RTGS_HK`
 
-Pattern: `{message_type}_{identifier}.{extension}`
+Pattern: `{message_type}-{identifier}.{extension}`
+
+**NiFi Expression**: `${filename:substringBefore('-')}`
+
+**E2E Test Files**: Located in `test_data/e2e/` with naming pattern `{MESSAGE_TYPE}-e2e-test.{ext}`
 
 ---
 
@@ -1147,7 +1153,7 @@ PYTHONPATH=src:$PYTHONPATH python -m gps_cdm.streaming.zone_consumers \
 </Document>
 ```
 
-**File naming**: `pain.001_test_{ID}.xml`, `pacs.008_test_{ID}.xml`, `SEPA_test_{ID}.xml`
+**File naming**: `pain.001-test-{ID}.xml`, `pacs.008-test-{ID}.xml`, `SEPA-test-{ID}.xml`
 
 #### SWIFT MT Formats (MT103, MT202, MT940)
 
@@ -1168,7 +1174,7 @@ TEST CREDITOR
 -}
 ```
 
-**File naming**: `MT103_test_{ID}.txt`, `MT202_test_{ID}.txt`, `MT940_test_{ID}.txt`
+**File naming**: `MT103-test-{ID}.txt`, `MT202-test-{ID}.txt`, `MT940-test-{ID}.txt`
 
 #### ACH/NACHA Format (Fixed-Width 94 Characters)
 
@@ -1182,7 +1188,7 @@ Each line MUST be exactly 94 characters (pad with spaces):
 9000001000001000000010009100001000000000000000000100000
 ```
 
-**File naming**: `ACH_test_{ID}.ach`
+**File naming**: `ACH-test-{ID}.ach`
 
 #### FEDWIRE Format (Tag-Value)
 
@@ -1201,7 +1207,7 @@ Each line MUST be exactly 94 characters (pad with spaces):
 {6100}123 BENEFICIARY STREET
 ```
 
-**File naming**: `FEDWIRE_test_{ID}.txt`
+**File naming**: `FEDWIRE-test-{ID}.txt`
 
 #### JSON Formats (PIX, UPI, PROMPTPAY, PAYNOW)
 
@@ -1233,7 +1239,7 @@ Each line MUST be exactly 94 characters (pad with spaces):
 }
 ```
 
-**File naming**: `PIX_test_{ID}.json`, `UPI_test_{ID}.json`
+**File naming**: `PIX-test-{ID}.json`, `UPI-test-{ID}.json`
 
 #### Fixed-Width Regional Formats (BACS, KFTC, BOJNET, CNAPS, CHIPS)
 
@@ -1253,7 +1259,7 @@ D001...{transaction details}
 T001...{trailer}
 ```
 
-**File naming**: `BACS_test_{ID}.txt`, `KFTC_test_{ID}.txt`, etc.
+**File naming**: `BACS-test-{ID}.txt`, `KFTC-test-{ID}.txt`, etc.
 
 ---
 

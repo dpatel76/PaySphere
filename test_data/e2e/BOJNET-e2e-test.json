@@ -1,0 +1,24 @@
+{
+  "header": {
+    "messageType": "BOJNET",
+    "batchId": "BOJNET-E2E-20260105",
+    "recordCount": 1,
+    "creationDateTime": "2026-01-05T22:30:00Z"
+  },
+  "transactions": [
+    {
+      "messageId": "BOJNET-E2E-20260105-001",
+      "transactionReference": "TXN-JP-E2E-001",
+      "creationDateTime": "2026-01-05T22:30:00Z",
+      "settlementDate": "2026-01-05",
+      "amount": 5000000.00,
+      "currency": "JPY",
+      "sendingParticipantCode": "MUFGJPJT",
+      "receivingParticipantCode": "SMBCJPJT",
+      "debitAccount": "E2E1234567890",
+      "creditAccount": "E2E9876543210",
+      "paymentType": "RTGS",
+      "relatedReference": "REL-E2E-001"
+    }
+  ]
+}

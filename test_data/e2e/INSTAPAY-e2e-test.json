@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>E2E-INSTAPAY-001</MsgId>
+      <CreDtTm>2025-01-06T12:30:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><EndToEndId>E2E-INSTAPAY-TX001</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="PHP">75000.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>E2E InstaPay Debtor Manila</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>PH1234567890123</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><BICFI>BABORUAUXXX</BICFI></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><BICFI>BPIPHPMMXXX</BICFI></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>E2E InstaPay Creditor Manila</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>PH9876543210987</Id></Othr></Id></CdtrAcct>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

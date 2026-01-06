@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.02">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>RTP-E2E-TEST-001</MsgId>
+      <CreDtTm>2026-01-06T10:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><EndToEndId>E2E-RTP-001</EndToEndId><TxId>TXN-RTP-001</TxId></PmtId>
+      <IntrBkSttlmAmt Ccy="USD">150.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <Dbtr><Nm>RTP E2E Debtor</Nm></Dbtr>
+      <DbtrAcct><Id><Othr><Id>123456789012</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>021000089</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+      <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>021000021</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+      <Cdtr><Nm>RTP E2E Creditor</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>987654321098</Id></Othr></Id></CdtrAcct>
+      <RmtInf><Ustrd>RTP E2E Test Payment</Ustrd></RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

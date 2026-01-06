@@ -24,7 +24,7 @@
       "name": "Detect Message Type from Filename",
       "config": {
         "properties": {
-          "message.type": "${filename:substringBefore('_'):toUpper()}",
+          "message.type": "${filename:substringBefore('-')}",
           "batch.id": "${UUID()}",
           "source.file": "${filename}",
           "ingestion.timestamp": "${now():format('yyyy-MM-dd\\'T\\'HH:mm:ss.SSS\\'Z\\'')}"
