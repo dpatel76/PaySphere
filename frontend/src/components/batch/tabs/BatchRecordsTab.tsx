@@ -56,7 +56,7 @@ import {
   History as HistoryIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { pipelineApi, reprocessApi } from '../../../api/client';
+import { pipelineApi, reprocessApi, mappingsApi } from '../../../api/client';
 
 interface BatchRecordsTabProps {
   batchId: string;
@@ -99,8 +99,9 @@ const entityStyles = {
 };
 
 /**
- * Cross-Zone Comparison Dialog
- * Shows fields organized by CDM entity structure
+ * Dynamic Field Mapping Comparison Dialog
+ * Shows fields organized by CDM entity structure, dynamically fetched from mapping database
+ * Only shows fields applicable to the selected message format
  */
 const RecordComparisonDialog: React.FC<{
   open: boolean;
@@ -110,12 +111,23 @@ const RecordComparisonDialog: React.FC<{
   messageType: string;
 }> = ({ open, onClose, layer, recordId, messageType }) => {
   const [activeTab, setActiveTab] = useState(0);
+  const [showPopulatedOnly, setShowPopulatedOnly] = useState(false);
 
-  const { data: lineage, isLoading } = useQuery({
+  // Fetch record lineage data
+  const { data: lineage, isLoading: lineageLoading } = useQuery({
     queryKey: ['recordLineage', layer, recordId],
     queryFn: () => pipelineApi.getRecordLineage(layer, recordId),
     enabled: open && !!recordId,
   });
+
+  // Fetch field mappings for this message type
+  const { data: mappings, isLoading: mappingsLoading } = useQuery({
+    queryKey: ['mappingsDoc', messageType],
+    queryFn: () => mappingsApi.getDocumentation(messageType, { mapped_only: true }),
+    enabled: open && !!messageType,
+  });
+
+  const isLoading = lineageLoading || mappingsLoading;
 
   // Format value for display
   const fmt = (val: any): string => {
@@ -125,9 +137,29 @@ const RecordComparisonDialog: React.FC<{
     return String(val);
   };
 
-  // Build comparison data organized by CDM entities
+  // Get value from nested object using path
+  const getNestedValue = (obj: any, path: string): any => {
+    if (!obj || !path) return undefined;
+    // Handle paths like "CstmrCdtTrfInitn/PmtInf/CdtTrfTxInf/Amt/InstdAmt"
+    const parts = path.split('/');
+    let value = obj;
+    for (const part of parts) {
+      if (value === null || value === undefined) return undefined;
+      // Try exact key first, then camelCase conversion
+      if (value[part] !== undefined) {
+        value = value[part];
+      } else {
+        // Try converting XML path to camelCase (e.g., InstdAmt -> instdAmt)
+        const camelKey = part.charAt(0).toLowerCase() + part.slice(1);
+        value = value[camelKey];
+      }
+    }
+    return value;
+  };
+
+  // Build comparison data dynamically from mappings
   const comparisonData = useMemo(() => {
-    if (!lineage) return [];
+    if (!lineage || !mappings) return [];
 
     const bronze = lineage.bronze || {};
     const bronzeParsed = (lineage as any).bronze_parsed || {};
@@ -136,274 +168,188 @@ const RecordComparisonDialog: React.FC<{
     const goldEntities = lineage.gold_entities || {};
     const goldExtension = (lineage as any).gold_extension || {};
 
-    // Helper to create a row - consolidated Bronze column shows parsed data or raw
-    const row = (category: string, field: string, bronzeVal: string, silver: string, gold: string, fkInfo?: string) =>
-      ({ category, field, bronze: bronzeVal, silver, gold, fkInfo });
+    // Group mappings by gold_table + entity_role
+    const groups: Record<string, {
+      category: string;
+      goldTable: string;
+      entityRole: string | null;
+      rows: {
+        standardField: string;
+        standardPath: string;
+        silverColumn: string;
+        goldColumn: string;
+        bronzeValue: string;
+        silverValue: string;
+        goldValue: string;
+      }[];
+    }> = {};
 
-    const rows: ReturnType<typeof row>[] = [];
+    // Process each mapping
+    mappings.forEach(mapping => {
+      const goldTable = mapping.gold_table?.replace('gold.', '') || 'unmapped';
+      const entityRole = mapping.gold_entity_role;
+      const categoryKey = entityRole ? `${goldTable} (${entityRole})` : goldTable;
 
-    // ==========================================
-    // ENTITY 1: CDM_PAYMENT_INSTRUCTION
-    // Core payment record fields
-    // ==========================================
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'instruction_id', '', '', fmt(gold.instruction_id)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'payment_id', fmt(bronzeParsed.messageId || bronze.message_type), fmt(silver.message_id), fmt(gold.payment_id)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'message_id', fmt(bronzeParsed.messageId), fmt(silver.message_id), fmt(gold.message_id)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'instruction_id_ext', fmt(bronzeParsed.instructionId), fmt(silver.instruction_id), fmt(gold.instruction_id_ext)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'end_to_end_id', fmt(bronzeParsed.endToEndId), fmt(silver.end_to_end_id), fmt(gold.end_to_end_id)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'uetr', fmt(bronzeParsed.uetr), fmt(silver.uetr), fmt(gold.uetr)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'transaction_id', '', '', fmt(gold.transaction_id)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'related_reference', '', '', fmt(gold.related_reference)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'source_message_type', fmt(bronze.message_type || bronzeParsed.messageType), fmt(silver.message_type), fmt(gold.source_message_type)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'message_format', fmt(bronze.message_format), '', ''));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'payment_type', '', '', fmt(gold.payment_type)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'scheme_code', '', '', fmt(gold.scheme_code)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'direction', '', '', fmt(gold.direction)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'cross_border_flag', '', '', fmt(gold.cross_border_flag)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'priority', '', '', fmt(gold.priority)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'service_level', '', '', fmt(gold.service_level)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'local_instrument', '', '', fmt(gold.local_instrument)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'category_purpose', '', '', fmt(gold.category_purpose)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'instructed_amount', fmt(bronzeParsed.amount), fmt(silver.amount), fmt(gold.instructed_amount)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'instructed_currency', fmt(bronzeParsed.currency), fmt(silver.currency), fmt(gold.instructed_currency)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'interbank_settlement_amount', '', '', fmt(gold.interbank_settlement_amount)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'interbank_settlement_currency', '', '', fmt(gold.interbank_settlement_currency)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'exchange_rate', '', '', fmt(gold.exchange_rate)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'exchange_rate_type', '', '', fmt(gold.exchange_rate_type)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'creation_datetime', fmt(bronzeParsed.creationDateTime), fmt(silver.creation_date_time), fmt(gold.creation_datetime)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'requested_execution_date', '', '', fmt(gold.requested_execution_date)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'value_date', '', '', fmt(gold.value_date)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'settlement_date', fmt(bronzeParsed.settlementDate), fmt(silver.settlement_date), fmt(gold.settlement_date)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'acceptance_datetime', '', '', fmt(gold.acceptance_datetime)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'completion_datetime', '', '', fmt(gold.completion_datetime)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'purpose', '', '', fmt(gold.purpose)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'purpose_description', '', '', fmt(gold.purpose_description)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'charge_bearer', fmt(bronzeParsed.chargeBearer), '', fmt(gold.charge_bearer)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'remittance_unstructured', fmt(bronzeParsed.remittanceInfo), fmt(silver.remittance_info), fmt(gold.remittance_unstructured)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'remittance_reference', '', '', fmt(gold.remittance_reference)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'remittance_structured', '', '', fmt(gold.remittance_structured)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'sender_to_receiver_info', fmt(bronzeParsed.senderToReceiverInfo), '', fmt(gold.sender_to_receiver_info)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'current_status', fmt(bronze.processing_status), fmt(silver.processing_status), fmt(gold.current_status)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'status_reason_code', '', '', fmt(gold.status_reason_code)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'status_reason_description', '', '', fmt(gold.status_reason_description)));
-    // Compliance fields
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'sanctions_screening_status', '', '', fmt(gold.sanctions_screening_status)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'fraud_score', '', '', fmt(gold.fraud_score)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'aml_risk_rating', '', '', fmt(gold.aml_risk_rating)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'pep_flag', '', '', fmt(gold.pep_flag)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'structuring_indicator', '', '', fmt(gold.structuring_indicator)));
-    rows.push(row('CDM_PAYMENT_INSTRUCTION', 'high_risk_country_flag', '', '', fmt(gold.high_risk_country_flag)));
-
-    // ==========================================
-    // ENTITY 2: CDM_PARTY (DEBTOR)
-    // Debtor party entity
-    // ==========================================
-    const debtorParty = goldEntities.debtor_party || {};
-    rows.push(row('CDM_PARTY (DEBTOR)', 'party_id', '', '', fmt(debtorParty.party_id), fmt(gold.debtor_id)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'party_type', '', '', fmt(debtorParty.party_type)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'name', fmt(bronzeParsed.debtorName), fmt(silver.debtor_name), fmt(debtorParty.name)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'street_name', fmt(bronzeParsed.debtorStreetName), fmt(silver.debtor_street_name), fmt(debtorParty.street_name)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'building_number', '', '', fmt(debtorParty.building_number)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'post_code', fmt(bronzeParsed.debtorPostCode), fmt(silver.debtor_post_code), fmt(debtorParty.post_code)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'town_name', fmt(bronzeParsed.debtorTownName), fmt(silver.debtor_town_name), fmt(debtorParty.town_name)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'country_sub_division', '', '', fmt(debtorParty.country_sub_division)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'country', fmt(bronzeParsed.debtorCountry), fmt(silver.debtor_country), fmt(debtorParty.country)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'address (combined)', fmt(bronzeParsed.debtorAddress), fmt(silver.debtor_address), fmt(debtorParty.address)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'identification_type', '', '', fmt(debtorParty.identification_type)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'identification_number', '', '', fmt(debtorParty.identification_number)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'tax_id', '', '', fmt(debtorParty.tax_id)));
-    rows.push(row('CDM_PARTY (DEBTOR)', 'tax_id_type', '', '', fmt(debtorParty.tax_id_type)));
-
-    // ==========================================
-    // ENTITY 3: CDM_PARTY (CREDITOR)
-    // Creditor party entity
-    // ==========================================
-    const creditorParty = goldEntities.creditor_party || {};
-    rows.push(row('CDM_PARTY (CREDITOR)', 'party_id', '', '', fmt(creditorParty.party_id), fmt(gold.creditor_id)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'party_type', '', '', fmt(creditorParty.party_type)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'name', fmt(bronzeParsed.creditorName), fmt(silver.creditor_name), fmt(creditorParty.name)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'street_name', fmt(bronzeParsed.creditorStreetName), fmt(silver.creditor_street_name), fmt(creditorParty.street_name)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'building_number', '', '', fmt(creditorParty.building_number)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'post_code', fmt(bronzeParsed.creditorPostCode), fmt(silver.creditor_post_code), fmt(creditorParty.post_code)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'town_name', fmt(bronzeParsed.creditorTownName), fmt(silver.creditor_town_name), fmt(creditorParty.town_name)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'country_sub_division', '', '', fmt(creditorParty.country_sub_division)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'country', fmt(bronzeParsed.creditorCountry), fmt(silver.creditor_country), fmt(creditorParty.country)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'address (combined)', fmt(bronzeParsed.creditorAddress), fmt(silver.creditor_address), fmt(creditorParty.address)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'identification_type', '', '', fmt(creditorParty.identification_type)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'identification_number', '', '', fmt(creditorParty.identification_number)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'tax_id', '', '', fmt(creditorParty.tax_id)));
-    rows.push(row('CDM_PARTY (CREDITOR)', 'tax_id_type', '', '', fmt(creditorParty.tax_id_type)));
-
-    // ==========================================
-    // ENTITY 4: CDM_PARTY (ULTIMATE)
-    // Ultimate debtor/creditor parties
-    // ==========================================
-    const ultimateDebtor = goldEntities.ultimate_debtor || {};
-    const ultimateCreditor = goldEntities.ultimate_creditor || {};
-    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_debtor_id', '', '', fmt(ultimateDebtor.party_id), fmt(gold.ultimate_debtor_id)));
-    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_debtor_name', '', '', fmt(ultimateDebtor.name)));
-    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_debtor_party_type', '', '', fmt(ultimateDebtor.party_type)));
-    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_debtor_country', '', '', fmt(ultimateDebtor.country)));
-    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_creditor_id', '', '', fmt(ultimateCreditor.party_id), fmt(gold.ultimate_creditor_id)));
-    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_creditor_name', '', '', fmt(ultimateCreditor.name)));
-    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_creditor_party_type', '', '', fmt(ultimateCreditor.party_type)));
-    rows.push(row('CDM_PARTY (ULTIMATE)', 'ultimate_creditor_country', '', '', fmt(ultimateCreditor.country)));
-
-    // ==========================================
-    // ENTITY 5: CDM_ACCOUNT (DEBTOR)
-    // Debtor account entity
-    // ==========================================
-    const debtorAccount = goldEntities.debtor_account || {};
-    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'account_id', '', '', fmt(debtorAccount.account_id), fmt(gold.debtor_account_id)));
-    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'account_type', '', '', fmt(debtorAccount.account_type)));
-    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'iban', '', '', fmt(debtorAccount.iban)));
-    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'account_number', fmt(bronzeParsed.debtorAccount), fmt(silver.debtor_account), fmt(debtorAccount.account_number)));
-    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'sort_code', fmt(bronzeParsed.debtorSortCode), fmt(silver.debtor_sort_code), ''));
-    rows.push(row('CDM_ACCOUNT (DEBTOR)', 'currency', '', '', fmt(debtorAccount.currency)));
-
-    // ==========================================
-    // ENTITY 6: CDM_ACCOUNT (CREDITOR)
-    // Creditor account entity
-    // ==========================================
-    const creditorAccount = goldEntities.creditor_account || {};
-    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'account_id', '', '', fmt(creditorAccount.account_id), fmt(gold.creditor_account_id)));
-    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'account_type', '', '', fmt(creditorAccount.account_type)));
-    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'iban', '', '', fmt(creditorAccount.iban)));
-    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'account_number', fmt(bronzeParsed.creditorAccount), fmt(silver.creditor_account), fmt(creditorAccount.account_number)));
-    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'sort_code', fmt(bronzeParsed.creditorSortCode), fmt(silver.creditor_sort_code), ''));
-    rows.push(row('CDM_ACCOUNT (CREDITOR)', 'currency', '', '', fmt(creditorAccount.currency)));
-
-    // ==========================================
-    // ENTITY 7: CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)
-    // Debtor agent (ordering bank)
-    // ==========================================
-    const debtorAgent = goldEntities.debtor_agent || {};
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'fi_id', '', '', fmt(debtorAgent.fi_id), fmt(gold.debtor_agent_id)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'fi_type', '', '', fmt(debtorAgent.fi_type)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'institution_name', '', '', fmt(debtorAgent.name)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'bic', fmt(bronzeParsed.debtorAgentBic), fmt(silver.debtor_agent_bic), fmt(debtorAgent.bic)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'clearing_system_id', '', fmt(silver.debtor_clearing_system || 'GBDSC'), fmt(debtorAgent.clearing_system_id)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'member_id (sort_code)', fmt(bronzeParsed.debtorSortCode), fmt(silver.debtor_sort_code), fmt(debtorAgent.member_id)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'country', fmt(bronzeParsed.debtorCountry || 'GB'), fmt(silver.debtor_country || 'GB'), fmt(debtorAgent.country)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)', 'lei', '', '', fmt(debtorAgent.lei)));
-
-    // ==========================================
-    // ENTITY 8: CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)
-    // Creditor agent (beneficiary bank)
-    // ==========================================
-    const creditorAgent = goldEntities.creditor_agent || {};
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'fi_id', '', '', fmt(creditorAgent.fi_id), fmt(gold.creditor_agent_id)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'fi_type', '', '', fmt(creditorAgent.fi_type)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'institution_name', '', '', fmt(creditorAgent.name)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'bic', fmt(bronzeParsed.creditorAgentBic), fmt(silver.creditor_agent_bic), fmt(creditorAgent.bic)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'clearing_system_id', '', fmt(silver.creditor_clearing_system || 'GBDSC'), fmt(creditorAgent.clearing_system_id)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'member_id (sort_code)', fmt(bronzeParsed.creditorSortCode), fmt(silver.creditor_sort_code), fmt(creditorAgent.member_id)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'country', fmt(bronzeParsed.creditorCountry || 'GB'), fmt(silver.creditor_country || 'GB'), fmt(creditorAgent.country)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)', 'lei', '', '', fmt(creditorAgent.lei)));
-
-    // ==========================================
-    // ENTITY 9: CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)
-    // Intermediary agents
-    // ==========================================
-    const intermediary1 = goldEntities.intermediary_agent1 || {};
-    const intermediary2 = goldEntities.intermediary_agent2 || {};
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary_agent1_id', '', '', fmt(intermediary1.fi_id), fmt(gold.intermediary_agent1_id)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary1_name', '', '', fmt(intermediary1.name)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary1_bic', '', '', fmt(intermediary1.bic)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary1_country', '', '', fmt(intermediary1.country)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary_agent2_id', '', '', fmt(intermediary2.fi_id), fmt(gold.intermediary_agent2_id)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary2_name', '', '', fmt(intermediary2.name)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary2_bic', '', '', fmt(intermediary2.bic)));
-    rows.push(row('CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)', 'intermediary2_country', '', '', fmt(intermediary2.country)));
-
-    // ==========================================
-    // ENTITY 10: EXTENSION DATA
-    // Format-specific extension fields
-    // ==========================================
-    if (Object.keys(goldExtension).length > 0) {
-      const extTable = goldExtension._table || 'extension';
-      // Add extension table name as header info
-      rows.push(row('EXTENSION DATA', `[Table: gold.${extTable}]`, '', '', ''));
-      Object.entries(goldExtension).forEach(([key, value]) => {
-        if (key === '_table' || key === 'instruction_id' || key === 'extension_id' || key === 'created_at' || key === 'updated_at') return;
-        rows.push(row('EXTENSION DATA', key, '', '', fmt(value)));
-      });
-    } else {
-      rows.push(row('EXTENSION DATA', '(no extension data)', '', '', ''));
-    }
-
-    // ==========================================
-    // ENTITY 11: LINEAGE & METADATA
-    // Processing lineage and audit fields
-    // ==========================================
-    rows.push(row('LINEAGE & METADATA', 'raw_id (Bronze PK)', fmt(bronze.raw_id), fmt(silver.raw_id), fmt(gold.source_raw_id)));
-    rows.push(row('LINEAGE & METADATA', 'stg_id (Silver PK)', '', fmt(silver.stg_id), fmt(gold.source_stg_id)));
-    rows.push(row('LINEAGE & METADATA', 'source_stg_table', '', fmt(silver.source_table), fmt(gold.source_stg_table)));
-    rows.push(row('LINEAGE & METADATA', 'batch_id', fmt(bronze._batch_id), fmt(silver._batch_id), fmt(gold.lineage_batch_id)));
-    rows.push(row('LINEAGE & METADATA', 'pipeline_run_id', '', '', fmt(gold.lineage_pipeline_run_id)));
-    rows.push(row('LINEAGE & METADATA', 'source_system', fmt(bronze.source_system), '', fmt(gold.source_system)));
-    rows.push(row('LINEAGE & METADATA', '_ingested_at', fmt(bronze._ingested_at), '', ''));
-    rows.push(row('LINEAGE & METADATA', '_processed_at', '', fmt(silver._processed_at), ''));
-    rows.push(row('LINEAGE & METADATA', 'processed_to_gold_at', '', fmt(silver.processed_to_gold_at), ''));
-    rows.push(row('LINEAGE & METADATA', 'created_at', '', '', fmt(gold.created_at)));
-    rows.push(row('LINEAGE & METADATA', 'updated_at', '', '', fmt(gold.updated_at)));
-    rows.push(row('LINEAGE & METADATA', 'valid_from', '', '', fmt(gold.valid_from)));
-    rows.push(row('LINEAGE & METADATA', 'valid_to', '', '', fmt(gold.valid_to)));
-    rows.push(row('LINEAGE & METADATA', 'updated_by', '', '', fmt(gold.updated_by)));
-    rows.push(row('LINEAGE & METADATA', 'record_version', '', '', fmt(gold.record_version)));
-    rows.push(row('LINEAGE & METADATA', 'is_current', '', '', fmt(gold.is_current)));
-    rows.push(row('LINEAGE & METADATA', 'is_deleted', '', '', fmt(gold.is_deleted)));
-    rows.push(row('LINEAGE & METADATA', 'partition_year', '', '', fmt(gold.partition_year)));
-    rows.push(row('LINEAGE & METADATA', 'partition_month', '', '', fmt(gold.partition_month)));
-    rows.push(row('LINEAGE & METADATA', 'region', '', '', fmt(gold.region)));
-    rows.push(row('LINEAGE & METADATA', 'data_quality_score', '', '', fmt(gold.data_quality_score)));
-    rows.push(row('LINEAGE & METADATA', 'data_quality_issues', '', '', fmt(gold.data_quality_issues)));
-
-    return rows;
-  }, [lineage]);
-
-  // Group rows by category
-  const groupedData = useMemo(() => {
-    const groups: { category: string; rows: typeof comparisonData }[] = [];
-    let currentCategory = '';
-    let currentRows: typeof comparisonData = [];
-
-    comparisonData.forEach(row => {
-      if (row.category !== currentCategory) {
-        if (currentRows.length > 0) {
-          groups.push({ category: currentCategory, rows: currentRows });
-        }
-        currentCategory = row.category;
-        currentRows = [];
+      if (!groups[categoryKey]) {
+        groups[categoryKey] = {
+          category: categoryKey,
+          goldTable,
+          entityRole,
+          rows: []
+        };
       }
-      currentRows.push(row);
-    });
-    if (currentRows.length > 0) {
-      groups.push({ category: currentCategory, rows: currentRows });
-    }
-    return groups;
-  }, [comparisonData]);
 
-  // Count non-empty values per zone
+      // Get bronze value from parsed data using standard field path
+      const bronzePath = mapping.standard_field_path || '';
+      let bronzeValue = '';
+      if (bronzePath) {
+        // Try to get from bronze_parsed first
+        const lastPart = bronzePath.split('/').pop() || '';
+        const camelKey = lastPart.charAt(0).toLowerCase() + lastPart.slice(1);
+        bronzeValue = fmt(bronzeParsed[camelKey] || bronzeParsed[lastPart] || getNestedValue(bronzeParsed, bronzePath));
+      }
+
+      // Get silver value
+      const silverColumn = mapping.silver_column || '';
+      const silverValue = fmt(silver[silverColumn]);
+
+      // Get gold value - need to determine which object to get it from based on gold_table
+      const goldColumn = mapping.gold_column || '';
+      let goldValue = '';
+
+      if (goldTable === 'cdm_payment_instruction') {
+        goldValue = fmt(gold[goldColumn]);
+      } else if (goldTable === 'cdm_party') {
+        // Map entity roles to gold_entities keys
+        const partyKey = {
+          'DEBTOR': 'debtor_party',
+          'CREDITOR': 'creditor_party',
+          'ULTIMATE_DEBTOR': 'ultimate_debtor',
+          'ULTIMATE_CREDITOR': 'ultimate_creditor',
+          'INITIATING_PARTY': 'initiating_party'
+        }[entityRole || ''] || '';
+        const party = goldEntities[partyKey] || {};
+        goldValue = fmt(party[goldColumn]);
+      } else if (goldTable === 'cdm_account') {
+        const accountKey = {
+          'DEBTOR': 'debtor_account',
+          'CREDITOR': 'creditor_account'
+        }[entityRole || ''] || '';
+        const account = goldEntities[accountKey] || {};
+        goldValue = fmt(account[goldColumn]);
+      } else if (goldTable === 'cdm_financial_institution') {
+        const fiKey = {
+          'DEBTOR_AGENT': 'debtor_agent',
+          'CREDITOR_AGENT': 'creditor_agent',
+          'INTERMEDIARY_AGENT1': 'intermediary_agent1',
+          'INTERMEDIARY_AGENT2': 'intermediary_agent2'
+        }[entityRole || ''] || '';
+        const fi = goldEntities[fiKey] || {};
+        goldValue = fmt(fi[goldColumn]);
+      } else if (goldTable.startsWith('cdm_payment_extension')) {
+        goldValue = fmt(goldExtension[goldColumn]);
+      }
+
+      groups[categoryKey].rows.push({
+        standardField: mapping.standard_field_name || silverColumn || goldColumn,
+        standardPath: bronzePath,
+        silverColumn,
+        goldColumn,
+        bronzeValue,
+        silverValue,
+        goldValue
+      });
+    });
+
+    // Add lineage/metadata section
+    groups['LINEAGE & METADATA'] = {
+      category: 'LINEAGE & METADATA',
+      goldTable: 'metadata',
+      entityRole: null,
+      rows: [
+        { standardField: 'raw_id', standardPath: '', silverColumn: 'raw_id', goldColumn: 'source_raw_id', bronzeValue: fmt(bronze.raw_id), silverValue: fmt(silver.raw_id), goldValue: fmt(gold.source_raw_id) },
+        { standardField: 'stg_id', standardPath: '', silverColumn: 'stg_id', goldColumn: 'source_stg_id', bronzeValue: '', silverValue: fmt(silver.stg_id), goldValue: fmt(gold.source_stg_id) },
+        { standardField: 'batch_id', standardPath: '', silverColumn: '_batch_id', goldColumn: 'lineage_batch_id', bronzeValue: fmt(bronze._batch_id), silverValue: fmt(silver._batch_id), goldValue: fmt(gold.lineage_batch_id) },
+        { standardField: 'message_type', standardPath: '', silverColumn: 'message_type', goldColumn: 'source_message_type', bronzeValue: fmt(bronze.message_type), silverValue: fmt(silver.message_type), goldValue: fmt(gold.source_message_type) },
+        { standardField: 'processing_status', standardPath: '', silverColumn: 'processing_status', goldColumn: 'current_status', bronzeValue: fmt(bronze.processing_status), silverValue: fmt(silver.processing_status), goldValue: fmt(gold.current_status) },
+        { standardField: '_ingested_at', standardPath: '', silverColumn: '', goldColumn: '', bronzeValue: fmt(bronze._ingested_at), silverValue: '', goldValue: '' },
+        { standardField: '_processed_at', standardPath: '', silverColumn: '_processed_at', goldColumn: '', bronzeValue: '', silverValue: fmt(silver._processed_at), goldValue: '' },
+        { standardField: 'created_at', standardPath: '', silverColumn: '', goldColumn: 'created_at', bronzeValue: '', silverValue: '', goldValue: fmt(gold.created_at) },
+      ]
+    };
+
+    // Sort groups by a logical order
+    const order = [
+      'cdm_payment_instruction',
+      'cdm_party (DEBTOR)',
+      'cdm_party (CREDITOR)',
+      'cdm_party (INITIATING_PARTY)',
+      'cdm_party (ULTIMATE_DEBTOR)',
+      'cdm_party (ULTIMATE_CREDITOR)',
+      'cdm_account (DEBTOR)',
+      'cdm_account (CREDITOR)',
+      'cdm_financial_institution (DEBTOR_AGENT)',
+      'cdm_financial_institution (CREDITOR_AGENT)',
+      'cdm_financial_institution (INTERMEDIARY_AGENT1)',
+      'cdm_financial_institution (INTERMEDIARY_AGENT2)',
+    ];
+
+    const sortedGroups = Object.values(groups).sort((a, b) => {
+      const aIdx = order.indexOf(a.category);
+      const bIdx = order.indexOf(b.category);
+      if (aIdx === -1 && bIdx === -1) return a.category.localeCompare(b.category);
+      if (aIdx === -1) return 1;
+      if (bIdx === -1) return -1;
+      return aIdx - bIdx;
+    });
+
+    return sortedGroups;
+  }, [lineage, mappings]);
+
+  // Filter to show only populated rows if toggle is on
+  const filteredData = useMemo(() => {
+    if (!showPopulatedOnly) return comparisonData;
+    return comparisonData.map(group => ({
+      ...group,
+      rows: group.rows.filter(row => row.bronzeValue || row.silverValue || row.goldValue)
+    })).filter(group => group.rows.length > 0);
+  }, [comparisonData, showPopulatedOnly]);
+
+  // Count stats
   const stats = useMemo(() => {
-    let bronze = 0, silver = 0, gold = 0;
-    comparisonData.forEach(row => {
-      if (row.bronze) bronze++;
-      if (row.silver) silver++;
-      if (row.gold) gold++;
+    let bronze = 0, silver = 0, gold = 0, total = 0;
+    comparisonData.forEach(group => {
+      group.rows.forEach(row => {
+        total++;
+        if (row.bronzeValue) bronze++;
+        if (row.silverValue) silver++;
+        if (row.goldValue) gold++;
+      });
     });
-    return { bronze, silver, gold, total: comparisonData.length };
+    return { bronze, silver, gold, total };
   }, [comparisonData]);
 
-  // Count entities with data
-  const entityCounts = useMemo(() => {
-    const counts: Record<string, { fields: number; populated: number }> = {};
-    groupedData.forEach(group => {
-      const populated = group.rows.filter(r => r.bronze || r.silver || r.gold).length;
-      counts[group.category] = { fields: group.rows.length, populated };
-    });
-    return counts;
-  }, [groupedData]);
+  // Get icon and color for category
+  const getCategoryStyle = (category: string) => {
+    if (category.includes('payment_instruction')) return { icon: PaymentIcon, color: '#1976d2', bg: '#e3f2fd' };
+    if (category.includes('party')) {
+      if (category.includes('DEBTOR')) return { icon: PersonIcon, color: '#7b1fa2', bg: '#f3e5f5' };
+      if (category.includes('CREDITOR')) return { icon: PersonIcon, color: '#388e3c', bg: '#e8f5e9' };
+      return { icon: PersonIcon, color: '#5d4037', bg: '#efebe9' };
+    }
+    if (category.includes('account')) {
+      if (category.includes('DEBTOR')) return { icon: AccountIcon, color: '#7b1fa2', bg: '#f3e5f5' };
+      return { icon: AccountIcon, color: '#388e3c', bg: '#e8f5e9' };
+    }
+    if (category.includes('financial_institution')) {
+      if (category.includes('DEBTOR')) return { icon: BankIcon, color: '#7b1fa2', bg: '#f3e5f5' };
+      if (category.includes('CREDITOR')) return { icon: BankIcon, color: '#388e3c', bg: '#e8f5e9' };
+      return { icon: BankIcon, color: '#ff8f00', bg: '#fff3e0' };
+    }
+    if (category.includes('extension')) return { icon: ExtensionIcon, color: '#0097a7', bg: '#e0f7fa' };
+    if (category.includes('LINEAGE')) return { icon: HistoryIcon, color: '#455a64', bg: '#eceff1' };
+    return { icon: PaymentIcon, color: '#666', bg: '#f5f5f5' };
+  };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth PaperProps={{ sx: { height: '90vh' } }}>
@@ -412,9 +358,10 @@ const RecordComparisonDialog: React.FC<{
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <CompareIcon />
             <Typography variant="h6" fontWeight={600}>
-              Cross-Zone Comparison by CDM Entity
+              Field Mapping Comparison
             </Typography>
             <Chip label={messageType} size="small" color="primary" variant="outlined" />
+            <Chip label={`${stats.total} mapped fields`} size="small" variant="outlined" />
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Chip label={`Bronze: ${stats.bronze}`} size="small" sx={{ backgroundColor: zoneColors.bronze.bg }} />
@@ -425,97 +372,118 @@ const RecordComparisonDialog: React.FC<{
         </Box>
       </DialogTitle>
       <DialogContent sx={{ p: 0 }}>
-        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Tab label={`CDM Entities (${groupedData.length})`} />
-          <Tab label="Raw JSON" />
-        </Tabs>
+        <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+            <Tab label={`Field Mappings (${filteredData.length} groups)`} />
+            <Tab label="Raw JSON" />
+          </Tabs>
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" color="text.secondary">Show populated only:</Typography>
+            <ToggleButton
+              value="check"
+              selected={showPopulatedOnly}
+              onChange={() => setShowPopulatedOnly(!showPopulatedOnly)}
+              size="small"
+              sx={{ px: 1, py: 0.25 }}
+            >
+              {showPopulatedOnly ? 'ON' : 'OFF'}
+            </ToggleButton>
+          </Box>
+        </Box>
 
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box>
         ) : activeTab === 0 ? (
-          <Box sx={{ height: 'calc(90vh - 140px)', overflow: 'auto' }}>
+          <Box sx={{ height: 'calc(90vh - 160px)', overflow: 'auto' }}>
             <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <Box component="thead" sx={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <Box component="tr">
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '25%' }}>
-                    CDM Field
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '18%' }}>
+                    Standard Field
                   </Box>
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.bronze.bg, borderBottom: `2px solid ${zoneColors.bronze.border}`, width: '20%' }}>
-                    Bronze (Parsed)
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '12%' }}>
+                    Silver Column
                   </Box>
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.silver.bg, borderBottom: `2px solid ${zoneColors.silver.border}`, width: '25%' }}>
-                    Silver (stg_*)
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '12%' }}>
+                    Gold Column
                   </Box>
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.gold.bg, borderBottom: `2px solid ${zoneColors.gold.border}`, width: '30%' }}>
-                    Gold (CDM Entity)
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.bronze.bg, borderBottom: `2px solid ${zoneColors.bronze.border}`, width: '18%' }}>
+                    Bronze Value
+                  </Box>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.silver.bg, borderBottom: `2px solid ${zoneColors.silver.border}`, width: '20%' }}>
+                    Silver Value
+                  </Box>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.gold.bg, borderBottom: `2px solid ${zoneColors.gold.border}`, width: '20%' }}>
+                    Gold Value
                   </Box>
                 </Box>
               </Box>
               <Box component="tbody">
-                {groupedData.map((group, gIdx) => {
-                  const style = entityStyles[group.category as keyof typeof entityStyles] || { icon: PaymentIcon, color: '#666', bg: '#f5f5f5' };
+                {filteredData.map((group, gIdx) => {
+                  const style = getCategoryStyle(group.category);
                   const IconComponent = style.icon;
-                  const counts = entityCounts[group.category] || { fields: 0, populated: 0 };
+                  const populatedCount = group.rows.filter(r => r.bronzeValue || r.silverValue || r.goldValue).length;
 
                   return (
                     <React.Fragment key={gIdx}>
-                      {/* Entity Category Header - spans all 4 columns */}
+                      {/* Entity Category Header */}
                       <Box component="tr">
-                        <Box component="td" colSpan={4} sx={{
+                        <Box component="td" colSpan={6} sx={{
                           p: 1, py: 0.75, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5,
                           backgroundColor: style.bg, color: style.color, borderTop: gIdx > 0 ? `2px solid ${style.color}40` : 'none',
                         }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <IconComponent sx={{ fontSize: 16 }} />
                             {group.category}
-                            <Chip label={`${counts.populated}/${counts.fields}`} size="small" sx={{ ml: 1, height: 18, fontSize: 10, backgroundColor: 'white' }} />
+                            <Chip label={`${populatedCount}/${group.rows.length}`} size="small" sx={{ ml: 1, height: 18, fontSize: 10, backgroundColor: 'white' }} />
                           </Box>
                         </Box>
                       </Box>
                       {/* Data Rows */}
                       {group.rows.map((row, rIdx) => {
-                        const hasAnyData = row.bronze || row.silver || row.gold;
-                        const bronzeHasData = row.bronze;
-                        const silverMissing = !!(bronzeHasData && !row.silver);
-                        const isHeaderRow = row.field.startsWith('[');
-                        const hasFkInfo = row.fkInfo;
+                        const hasAnyData = row.bronzeValue || row.silverValue || row.goldValue;
+                        const bronzeHasData = row.bronzeValue;
+                        const silverMissing = !!(bronzeHasData && !row.silverValue);
 
                         return (
                           <Box component="tr" key={rIdx} sx={{
                             '&:hover': { backgroundColor: '#f5f5f5' },
-                            backgroundColor: silverMissing ? '#ffebee' : isHeaderRow ? '#fafafa' : 'transparent',
+                            backgroundColor: silverMissing ? '#ffebee' : 'transparent',
                             opacity: hasAnyData ? 1 : 0.5,
                           }}>
                             <Box component="td" sx={{
-                              p: 0.75, borderBottom: '1px solid #eee', fontWeight: isHeaderRow ? 600 : 500,
-                              fontStyle: isHeaderRow ? 'italic' : 'normal', color: isHeaderRow ? '#666' : 'inherit',
+                              p: 0.75, borderBottom: '1px solid #eee', fontWeight: 500,
                               fontFamily: 'monospace', fontSize: 11
                             }}>
-                              {row.field}
-                              {hasFkInfo && <Tooltip title={`FK: ${row.fkInfo}`}><Chip label="FK" size="small" sx={{ ml: 0.5, height: 14, fontSize: 8, backgroundColor: '#e3f2fd' }} /></Tooltip>}
-                              {silverMissing && <Tooltip title="Data parsed from Bronze but missing in Silver"><ErrorIcon sx={{ fontSize: 12, color: 'error.main', ml: 0.5 }} /></Tooltip>}
+                              {row.standardField}
+                              {silverMissing && <Tooltip title="Data in Bronze but missing in Silver"><ErrorIcon sx={{ fontSize: 12, color: 'error.main', ml: 0.5 }} /></Tooltip>}
+                            </Box>
+                            <Box component="td" sx={{ p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10, color: 'text.secondary' }}>
+                              {row.silverColumn || '-'}
+                            </Box>
+                            <Box component="td" sx={{ p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10, color: 'text.secondary' }}>
+                              {row.goldColumn || '-'}
                             </Box>
                             <Box component="td" sx={{
                               p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10,
-                              backgroundColor: row.bronze ? zoneColors.bronze.bg + '80' : 'transparent',
+                              backgroundColor: row.bronzeValue ? zoneColors.bronze.bg + '80' : 'transparent',
                               wordBreak: 'break-word', maxWidth: 180
                             }}>
-                              {row.bronze || '-'}
+                              {row.bronzeValue || '-'}
                             </Box>
                             <Box component="td" sx={{
                               p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10,
-                              backgroundColor: row.silver ? zoneColors.silver.bg + '80' : silverMissing ? '#ffcdd2' : 'transparent',
-                              wordBreak: 'break-word', maxWidth: 220
+                              backgroundColor: row.silverValue ? zoneColors.silver.bg + '80' : silverMissing ? '#ffcdd2' : 'transparent',
+                              wordBreak: 'break-word', maxWidth: 200
                             }}>
-                              {row.silver || (silverMissing ? '⚠️ MISSING' : '-')}
+                              {row.silverValue || (silverMissing ? '⚠️ MISSING' : '-')}
                             </Box>
                             <Box component="td" sx={{
                               p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10,
-                              backgroundColor: row.gold ? zoneColors.gold.bg + '80' : 'transparent',
-                              wordBreak: 'break-word', maxWidth: 280
+                              backgroundColor: row.goldValue ? zoneColors.gold.bg + '80' : 'transparent',
+                              wordBreak: 'break-word', maxWidth: 200
                             }}>
-                              {row.gold || '-'}
-                              {hasFkInfo && row.gold && <Chip label={row.fkInfo} size="small" sx={{ ml: 0.5, height: 14, fontSize: 8, backgroundColor: '#e3f2fd' }} />}
+                              {row.goldValue || '-'}
                             </Box>
                           </Box>
                         );
@@ -527,7 +495,7 @@ const RecordComparisonDialog: React.FC<{
             </Box>
           </Box>
         ) : (
-          <Box sx={{ p: 2, height: 'calc(90vh - 140px)', overflow: 'auto' }}>
+          <Box sx={{ p: 2, height: 'calc(90vh - 160px)', overflow: 'auto' }}>
             <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Bronze (raw_content)</Typography>
             <Paper sx={{ p: 1, mb: 2, backgroundColor: zoneColors.bronze.bg, maxHeight: 200, overflow: 'auto' }}>
               <pre style={{ fontSize: 10, margin: 0, whiteSpace: 'pre-wrap' }}>

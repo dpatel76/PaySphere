@@ -293,14 +293,15 @@ class ZoneConsumer:
         error_code: str = 'UNKNOWN_ERROR',
     ) -> None:
         """Publish failed message to Dead Letter Queue topic."""
-        producer = self._get_producer()
-        if producer is None:
-            # Create producer for DLQ even if no output zone
-            producer = KafkaProducer(
+        # Always create a dedicated DLQ producer with JSON serializer
+        # (different from the main producer which uses string serializer)
+        if not hasattr(self, '_dlq_producer') or self._dlq_producer is None:
+            self._dlq_producer = KafkaProducer(
                 bootstrap_servers=self.config.bootstrap_servers,
                 key_serializer=lambda k: k.encode('utf-8') if k else None,
                 value_serializer=lambda v: json.dumps(v).encode('utf-8') if v else None,
             )
+        producer = self._dlq_producer
 
         dlq_topic = f"dlq.{self.ZONE}"
         dlq_message = {
@@ -525,6 +526,9 @@ class BronzeConsumer(ZoneConsumer):
     Consumes raw messages from bronze.{msg_type} topics.
     Stores raw content AS-IS in bronze.raw_payment_messages.
     Publishes raw_ids to silver.{msg_type} topics.
+
+    Multi-record files (e.g., pain.001 with multiple CdtTrfTxInf) are split
+    into individual records, each becoming a separate Bronze record.
     """
 
     ZONE = 'bronze'
@@ -532,30 +536,63 @@ class BronzeConsumer(ZoneConsumer):
     OUTPUT_ZONE = 'silver'
 
     def _build_task_kwargs(self, messages: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Build kwargs for Bronze Celery task."""
+        """Build kwargs for Bronze Celery task.
+
+        Multi-record messages are split into individual transactions using MessageSplitter.
+        Each transaction becomes a separate Bronze record with parent context preserved.
+        """
+        from gps_cdm.orchestration.message_splitter import split_message
+
         # Get batch_id from first message
         batch_id = messages[0].get('batch_id', str(uuid.uuid4()))
         message_type = messages[0].get('message_type', 'UNKNOWN')
 
-        # Build records list - content stored AS-IS
+        # Build records list - split multi-record files into individual transactions
         records = []
         for msg in messages:
             content = msg['content']
+            msg_type = msg.get('message_type', message_type)
 
             # Detect format from content
             message_format = MessageFormatDetector.detect(content)
 
-            records.append({
-                'content': content,  # AS-IS, no JSON wrapping
-                'message_type': msg.get('message_type', message_type),
-                'message_format': message_format,
-                'metadata': {
-                    'kafka_topic': msg.get('kafka_topic'),
-                    'kafka_partition': msg.get('kafka_partition'),
-                    'kafka_offset': msg.get('kafka_offset'),
-                    'source_timestamp': msg.get('kafka_timestamp'),
-                }
-            })
+            # Split multi-record messages (e.g., pain.001 with multiple CdtTrfTxInf)
+            split_records = split_message(content, msg_type)
+
+            logger.debug(
+                f"[{self.ZONE}] Split {msg_type} message into {len(split_records)} records"
+            )
+
+            for split_rec in split_records:
+                split_content = split_rec.get('content', content)
+                parent_context = split_rec.get('parent_context', {})
+                record_index = split_rec.get('index', 0)
+
+                # Merge parent context into content if both are dicts
+                if isinstance(split_content, dict) and parent_context:
+                    for key, value in parent_context.items():
+                        if key not in split_content or split_content[key] is None:
+                            split_content[key] = value
+
+                records.append({
+                    'content': split_content,  # Individual transaction
+                    'message_type': msg_type,
+                    'message_format': message_format,
+                    'record_index': record_index,
+                    'parent_context': parent_context,
+                    'metadata': {
+                        'kafka_topic': msg.get('kafka_topic'),
+                        'kafka_partition': msg.get('kafka_partition'),
+                        'kafka_offset': msg.get('kafka_offset'),
+                        'source_timestamp': msg.get('kafka_timestamp'),
+                        'original_record_count': len(split_records),
+                    }
+                })
+
+        logger.info(
+            f"[{self.ZONE}] Expanded {len(messages)} Kafka messages "
+            f"to {len(records)} individual records"
+        )
 
         return {
             'batch_id': batch_id,

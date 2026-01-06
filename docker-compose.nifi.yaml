@@ -93,11 +93,11 @@ services:
     networks:
       - gps-cdm-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/nifi-api/system-diagnostics"]
+      test: ["CMD-SHELL", "curl -sf http://$$(hostname):8080/nifi-api/system-diagnostics || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 120s
 
   # Redis - Celery Broker
   redis:

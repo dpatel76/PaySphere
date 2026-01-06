@@ -101,9 +101,26 @@ class FedwireTagValueParser:
                 result['inputSequenceNumber'] = value[16:22]
         elif tag == '2000':
             # Amount: 12 digits with implied 2 decimals
+            # Handle both numeric amounts and date+reference format (YYYYMMDD+reference)
             clean = value.replace(',', '').replace('.', '').lstrip('0')
-            if clean:
+            if clean and clean.isdigit():
                 result['amount'] = float(clean) / 100
+            elif clean:
+                # Try to extract numeric portion if present
+                # Format could be YYYYMMDD followed by reference (e.g., 250105MMQFMP9T00000001)
+                numeric_match = re.match(r'^(\d+)', clean)
+                if numeric_match and len(numeric_match.group(1)) >= 8:
+                    # First 8 chars might be date, rest is reference
+                    date_part = numeric_match.group(1)[:8]
+                    if len(numeric_match.group(1)) > 8:
+                        # Extract amount if present after date portion
+                        amount_part = numeric_match.group(1)[8:]
+                        if amount_part:
+                            result['amount'] = float(amount_part) / 100
+                    result['inputCycleDate'] = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                else:
+                    result['amount'] = 0.0
+                    logger.warning(f"FEDWIRE tag 2000 has non-numeric value: {value[:50]}")
             else:
                 result['amount'] = 0.0
             result['currency'] = 'USD'  # Fedwire is always USD

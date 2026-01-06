@@ -486,7 +486,8 @@ class ChapsExtractor(BaseExtractor):
             'end_to_end_id': trunc(msg_content.get('endToEndId'), 35),
             'uetr': msg_content.get('uetr'),
             'senders_reference': trunc(msg_content.get('senders_reference') or msg_content.get('instructionId'), 35),
-            'value_date': msg_content.get('settlementDate'),
+            # value_date is VARCHAR(8) for YYYYMMDD format - strip hyphens from ISO date
+            'value_date': (msg_content.get('settlementDate') or '').replace('-', '')[:8] or None,
 
             # Remittance
             'remittance_info': msg_content.get('remittanceInfo'),

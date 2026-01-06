@@ -403,6 +403,8 @@ export const pipelineApi = {
       intermediary_agent2?: Record<string, any>;
       ultimate_debtor?: Record<string, any>;
       ultimate_creditor?: Record<string, any>;
+      initiating_party?: Record<string, any>;
+      [key: string]: Record<string, any> | undefined;
     };
     gold_extension?: Record<string, any>;  // Format-specific extension data
     field_mappings: any[];
@@ -791,6 +793,7 @@ export interface MappingDocumentationRow {
   message_format: string;
   message_format_description: string;
   format_category: string;
+  governing_body: string | null;
 
   // Standard Field Info
   standard_field_id: number | null;
@@ -805,7 +808,7 @@ export interface MappingDocumentationRow {
 
   // Bronze Info
   bronze_table: string | null;
-  bronze_column: string | null;
+  bronze_source_path: string | null;
 
   // Silver Mapping Info
   silver_mapping_id: number | null;
@@ -815,6 +818,7 @@ export interface MappingDocumentationRow {
   silver_max_length: number | null;
   silver_source_path: string | null;
   silver_transform: string | null;
+  silver_is_required: boolean | null;
   is_mapped_to_silver: boolean;
 
   // Gold Mapping Info
@@ -825,6 +829,7 @@ export interface MappingDocumentationRow {
   gold_entity_role: string | null;
   gold_purpose_code: string | null;
   gold_source_expression: string | null;
+  gold_transform: string | null;
   is_mapped_to_gold: boolean;
 
   // Metadata

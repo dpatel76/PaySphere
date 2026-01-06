@@ -48,6 +48,7 @@ import {
   FilterList as FilterIcon,
   Download as DownloadIcon,
   Edit as EditIcon,
+  Delete as DeleteIcon,
   Check as CheckIcon,
   Close as CloseIcon,
   ExpandMore as ExpandIcon,
@@ -155,7 +156,7 @@ const EditMappingDialog: React.FC<{
             Standard Field Metadata
           </Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12}>
+            <Grid size={12}>
               <TextField
                 fullWidth
                 size="small"
@@ -164,7 +165,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setStandardUpdates({ ...standardUpdates, field_description: e.target.value })}
               />
             </Grid>
-            <Grid item xs={6}>
+            <Grid size={6}>
               <TextField
                 fullWidth
                 size="small"
@@ -173,7 +174,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setStandardUpdates({ ...standardUpdates, data_type: e.target.value })}
               />
             </Grid>
-            <Grid item xs={6}>
+            <Grid size={6}>
               <TextField
                 fullWidth
                 size="small"
@@ -192,7 +193,7 @@ const EditMappingDialog: React.FC<{
             Silver Mapping
           </Typography>
           <Grid container spacing={2}>
-            <Grid item xs={6}>
+            <Grid size={6}>
               <TextField
                 fullWidth
                 size="small"
@@ -201,7 +202,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setSilverUpdates({ ...silverUpdates, target_column: e.target.value })}
               />
             </Grid>
-            <Grid item xs={6}>
+            <Grid size={6}>
               <TextField
                 fullWidth
                 size="small"
@@ -210,7 +211,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setSilverUpdates({ ...silverUpdates, source_path: e.target.value })}
               />
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <TextField
                 fullWidth
                 size="small"
@@ -219,7 +220,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setSilverUpdates({ ...silverUpdates, data_type: e.target.value })}
               />
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <TextField
                 fullWidth
                 size="small"
@@ -229,7 +230,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setSilverUpdates({ ...silverUpdates, max_length: parseInt(e.target.value) || null })}
               />
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <TextField
                 fullWidth
                 size="small"
@@ -248,7 +249,7 @@ const EditMappingDialog: React.FC<{
             Gold Mapping
           </Typography>
           <Grid container spacing={2}>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <TextField
                 fullWidth
                 size="small"
@@ -257,7 +258,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setGoldUpdates({ ...goldUpdates, gold_table: e.target.value })}
               />
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <TextField
                 fullWidth
                 size="small"
@@ -266,7 +267,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setGoldUpdates({ ...goldUpdates, gold_column: e.target.value })}
               />
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <TextField
                 fullWidth
                 size="small"
@@ -275,7 +276,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setGoldUpdates({ ...goldUpdates, entity_role: e.target.value })}
               />
             </Grid>
-            <Grid item xs={6}>
+            <Grid size={6}>
               <TextField
                 fullWidth
                 size="small"
@@ -284,7 +285,7 @@ const EditMappingDialog: React.FC<{
                 onChange={(e) => setGoldUpdates({ ...goldUpdates, source_expression: e.target.value })}
               />
             </Grid>
-            <Grid item xs={6}>
+            <Grid size={6}>
               <TextField
                 fullWidth
                 size="small"
@@ -382,7 +383,23 @@ const MappingsDocumentationPage: React.FC = () => {
     onError: () => enqueueSnackbar('Failed to update gold mapping', { variant: 'error' }),
   });
 
+  const deleteGoldMutation = useMutation({
+    mutationFn: ({ mappingId, softDelete }: { mappingId: number; softDelete: boolean }) =>
+      mappingsApi.deleteGoldMapping(mappingId, softDelete),
+    onSuccess: () => {
+      enqueueSnackbar('Gold mapping deleted', { variant: 'success' });
+      queryClient.invalidateQueries({ queryKey: ['mappingsDoc'] });
+      queryClient.invalidateQueries({ queryKey: ['coverage'] });
+    },
+    onError: () => enqueueSnackbar('Failed to delete gold mapping', { variant: 'error' }),
+  });
+
   // Handlers
+  const handleDeleteGoldMapping = useCallback((mappingId: number) => {
+    if (window.confirm('Are you sure you want to delete this Gold mapping? This will soft-delete (deactivate) the mapping.')) {
+      deleteGoldMutation.mutate({ mappingId, softDelete: true });
+    }
+  }, [deleteGoldMutation]);
   const handleSaveMapping = useCallback((updates: any) => {
     if (updates.standardUpdates && updates.standard_field_id) {
       updateStandardMutation.mutate({
@@ -482,7 +499,7 @@ const MappingsDocumentationPage: React.FC = () => {
       {/* Format Selection */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={4}>
+          <Grid size={{ xs: 12, sm: 4 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Format Category</InputLabel>
               <Select
@@ -492,22 +509,25 @@ const MappingsDocumentationPage: React.FC = () => {
                   setSelectedCategory(e.target.value);
                   setSelectedFormat('');
                 }}
+                sx={{ minWidth: 200 }}
               >
                 <MenuItem value="">All Categories</MenuItem>
                 {categories.map(cat => (
                   <MenuItem key={cat} value={cat}>
-                    <Chip
-                      label={cat}
-                      size="small"
-                      sx={{ bgcolor: CATEGORY_COLORS[cat] || '#757575', color: 'white', mr: 1 }}
-                    />
-                    {cat}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Chip
+                        label={cat}
+                        size="small"
+                        sx={{ bgcolor: CATEGORY_COLORS[cat] || '#757575', color: 'white' }}
+                      />
+                      <Typography variant="body2">{cat}</Typography>
+                    </Box>
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid size={{ xs: 12, sm: 5 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Message Format</InputLabel>
               <Select
@@ -517,16 +537,25 @@ const MappingsDocumentationPage: React.FC = () => {
                   setSelectedFormat(e.target.value);
                   setPage(0);
                 }}
+                sx={{ minWidth: 300 }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: { maxHeight: 400, minWidth: 450 }
+                  }
+                }}
               >
                 <MenuItem value="">Select a format...</MenuItem>
                 {formats?.map(f => (
-                  <MenuItem key={f.format_id} value={f.format_id}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
-                      <span>{f.format_id} - {f.format_name}</span>
+                  <MenuItem key={f.format_id} value={f.format_id} sx={{ minWidth: 400 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between', gap: 2 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {f.format_id} - {f.format_name}
+                      </Typography>
                       <Chip
                         label={`${f.total_standard_fields} fields`}
                         size="small"
                         variant="outlined"
+                        color={f.unmapped_fields === 0 ? 'success' : 'warning'}
                       />
                     </Box>
                   </MenuItem>
@@ -534,9 +563,9 @@ const MappingsDocumentationPage: React.FC = () => {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid size={{ xs: 12, sm: 3 }}>
             {selectedFormat && (
-              <Box sx={{ display: 'flex', gap: 1 }}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Chip
                   icon={<SchemaIcon />}
                   label={selectedFormatInfo?.standard_name || 'Standard'}
@@ -557,7 +586,7 @@ const MappingsDocumentationPage: React.FC = () => {
       <Collapse in={showFilters}>
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Field Category</InputLabel>
                 <Select
@@ -577,7 +606,7 @@ const MappingsDocumentationPage: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -592,7 +621,7 @@ const MappingsDocumentationPage: React.FC = () => {
                 label="Mapped Only"
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -607,7 +636,7 @@ const MappingsDocumentationPage: React.FC = () => {
                 label="Unmapped Only"
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <Button
                 variant="outlined"
                 onClick={() => {
@@ -628,7 +657,7 @@ const MappingsDocumentationPage: React.FC = () => {
       {/* Coverage Stats */}
       {coverageInfo && (
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm: 3 }}>
             <CoverageCard
               label="Standard Fields"
               value={coverageInfo.total_standard_fields}
@@ -636,7 +665,7 @@ const MappingsDocumentationPage: React.FC = () => {
               color="#1976d2"
             />
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm: 3 }}>
             <CoverageCard
               label="Mapped to Silver"
               value={coverageInfo.mapped_to_silver}
@@ -644,7 +673,7 @@ const MappingsDocumentationPage: React.FC = () => {
               color={ZONE_COLORS.silver}
             />
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm: 3 }}>
             <CoverageCard
               label="Mapped to Gold"
               value={coverageInfo.mapped_to_gold}
@@ -652,7 +681,7 @@ const MappingsDocumentationPage: React.FC = () => {
               color={ZONE_COLORS.gold}
             />
           </Grid>
-          <Grid item xs={12} sm={3}>
+          <Grid size={{ xs: 12, sm: 3 }}>
             <CoverageCard
               label="Unmapped Fields"
               value={coverageInfo.unmapped_fields}
@@ -686,6 +715,7 @@ const MappingsDocumentationPage: React.FC = () => {
                   <TableCell sx={{ fontWeight: 'bold', bgcolor: '#f5f5f5' }}>Allowed Values</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', bgcolor: '#f5f5f5' }}>Field Path</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', bgcolor: ZONE_COLORS.bronze, color: 'white' }}>Bronze</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', bgcolor: ZONE_COLORS.silver }}>Silver Table</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', bgcolor: ZONE_COLORS.silver }}>Silver Column</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', bgcolor: ZONE_COLORS.silver }}>Silver Type</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', bgcolor: ZONE_COLORS.gold }}>Gold Table</TableCell>
@@ -754,6 +784,18 @@ const MappingsDocumentationPage: React.FC = () => {
                         sx={{
                           fontFamily: 'monospace',
                           fontSize: 11,
+                          color: row.silver_table ? 'text.primary' : 'text.disabled',
+                        }}
+                      >
+                        {row.silver_table?.replace('silver.', '') || '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: 'monospace',
+                          fontSize: 11,
                           color: row.silver_column ? 'text.primary' : 'text.disabled',
                         }}
                       >
@@ -800,19 +842,36 @@ const MappingsDocumentationPage: React.FC = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() => setEditRow(row)}
-                        disabled={!row.standard_field_id && !row.silver_mapping_id}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="Edit mapping">
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => setEditRow(row)}
+                              disabled={!row.standard_field_id && !row.silver_mapping_id}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        {row.gold_mapping_id && (
+                          <Tooltip title="Delete Gold mapping">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleDeleteGoldMapping(row.gold_mapping_id!)}
+                              color="error"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
                 {paginatedData.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={13} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={14} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         No mappings found for this format
                       </Typography>

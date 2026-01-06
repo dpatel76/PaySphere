@@ -148,6 +148,8 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party (
     -- Personal Details
     date_of_birth DATE,
     place_of_birth VARCHAR(100),
+    city_of_birth VARCHAR(100),          -- CDM Enhancement v0.5
+    country_of_birth VARCHAR(3),          -- CDM Enhancement v0.5
     nationality VARCHAR(3)[],
 
     -- Organization
@@ -155,6 +157,8 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party (
     registration_number VARCHAR(50),
     registration_country VARCHAR(3),
     industry_code VARCHAR(20),
+    bic VARCHAR(11),                      -- CDM Enhancement v0.5: Party BIC (for organizations)
+    lei VARCHAR(20),                      -- CDM Enhancement v0.5: Legal Entity Identifier
 
     -- Tax
     tax_id VARCHAR(50),
@@ -190,6 +194,11 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party (
     town_name VARCHAR(100),
     country_sub_division VARCHAR(50),
     country VARCHAR(3),
+    country_of_residence VARCHAR(3),      -- CDM Enhancement v0.5: May differ from address country
+
+    -- Ultimate Party References (stored on DEBTOR/CREDITOR parties)
+    ultimate_debtor_bic VARCHAR(11),      -- CDM Enhancement v0.5: BIC of ultimate debtor
+    ultimate_creditor_bic VARCHAR(11),    -- CDM Enhancement v0.5: BIC of ultimate creditor
 
     -- Contact
     email_address VARCHAR(254),
@@ -229,6 +238,8 @@ CREATE INDEX IF NOT EXISTS idx_cdm_party_country ON gold.cdm_party(country);
 CREATE INDEX IF NOT EXISTS idx_cdm_party_pep ON gold.cdm_party(pep_flag) WHERE pep_flag = TRUE;
 CREATE INDEX IF NOT EXISTS idx_cdm_party_fatca ON gold.cdm_party(fatca_classification);
 CREATE INDEX IF NOT EXISTS idx_cdm_party_crs ON gold.cdm_party(crs_reportable) WHERE crs_reportable = TRUE;
+CREATE INDEX IF NOT EXISTS idx_cdm_party_bic ON gold.cdm_party(bic);  -- CDM Enhancement v0.5
+CREATE INDEX IF NOT EXISTS idx_cdm_party_lei ON gold.cdm_party(lei);  -- CDM Enhancement v0.5
 
 -- =====================================================
 -- CDM_ACCOUNT
@@ -238,6 +249,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_account (
 
     account_number VARCHAR(50) NOT NULL,
     iban VARCHAR(34),
+    account_name VARCHAR(200),            -- CDM Enhancement v0.5: Account holder name/label
     account_type VARCHAR(30) NOT NULL,
     currency VARCHAR(3) NOT NULL,
 

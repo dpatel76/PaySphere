@@ -90,11 +90,17 @@ class DynamicMapper:
 
     def _resolve_path(self, data: Dict[str, Any], path: str) -> Any:
         """
-        Resolve a dot-notation path to a value in nested dictionary.
+        Resolve a path to a value, trying multiple path formats.
+
+        Supports:
+        - Nested paths: debtor.name -> data['debtor']['name']
+        - Flat camelCase: debtorName -> data['debtorName']
+        - Flat snake_case: debtor_name -> data['debtor_name']
+        - Direct key: name -> data['name']
 
         Examples:
-            'debtor.name' -> data['debtor']['name']
-            'paymentInformation.paymentMethod' -> data['paymentInformation']['paymentMethod']
+            'debtor.name' -> tries data['debtor']['name'], data['debtorName'],
+                            data['debtor_name'], data['name']
         """
         if not path or not data:
             return None
@@ -103,11 +109,46 @@ class DynamicMapper:
         if path.startswith('_'):
             return None  # Will be handled separately
 
+        # 1. Try original nested path
+        value = self._get_nested(data, path)
+        if value is not None:
+            return value
+
+        # 2. Try flattened camelCase version
+        # debtor.name -> debtorName
         parts = path.split('.')
+        if len(parts) > 1:
+            camel = parts[0] + ''.join(p.capitalize() for p in parts[1:])
+            if camel in data:
+                return data[camel]
+
+        # 3. Try flattened snake_case version
+        # debtor.name -> debtor_name
+        snake = path.replace('.', '_')
+        if snake in data:
+            return data[snake]
+
+        # 4. Try direct key (last part of path)
+        if '.' in path:
+            last_part = path.split('.')[-1]
+            if last_part in data:
+                return data[last_part]
+
+        # 5. Try original path as direct key (for paths without dots)
+        if path in data:
+            return data[path]
+
+        return None
+
+    def _get_nested(self, data: Dict[str, Any], path: str) -> Any:
+        """Get value from nested dict using dot notation."""
+        if not path or not data:
+            return None
+        keys = path.split('.')
         value = data
-        for part in parts:
+        for key in keys:
             if isinstance(value, dict):
-                value = value.get(part)
+                value = value.get(key)
             else:
                 return None
             if value is None:
@@ -318,14 +359,56 @@ class DynamicMapper:
         return inserted_ids
 
     def get_silver_columns(self, format_id: str) -> List[str]:
-        """Get ordered list of Silver column names for a format."""
+        """Get ordered list of Silver column names for a format.
+
+        Always includes essential tracking columns (stg_id, raw_id)
+        that are not part of the field mappings but are required for
+        Gold processing and lineage tracking.
+
+        Note: batch_id is stored as _batch_id in Silver tables but is typically
+        not needed for Gold mapping (source_stg_id is used instead).
+        """
+        # Essential columns that should always be included
+        # Note: _batch_id has underscore prefix in Silver tables
+        essential_columns = ['stg_id', 'raw_id']
+
         mappings = self._get_silver_mappings(format_id)
-        return [m['target_column'] for m in mappings]
+        mapped_columns = [m['target_column'] for m in mappings]
+
+        # Add essential columns at the start if not already present
+        result = []
+        for col in essential_columns:
+            if col not in mapped_columns:
+                result.append(col)
+
+        # Add all mapped columns
+        result.extend(mapped_columns)
+
+        return result
 
     def get_silver_values(self, format_id: str, record: Dict[str, Any]) -> Tuple:
-        """Get ordered tuple of values for Silver INSERT."""
+        """Get ordered tuple of values for Silver INSERT.
+
+        Must return values in the same order as get_silver_columns().
+        Essential columns (stg_id, raw_id) are prepended if not in mappings.
+        """
+        # Essential columns that should always be included (must match get_silver_columns)
+        essential_columns = ['stg_id', 'raw_id']
+
         mappings = self._get_silver_mappings(format_id)
-        return tuple(record.get(m['target_column']) for m in mappings)
+        mapped_columns = [m['target_column'] for m in mappings]
+
+        # Build values in same order as get_silver_columns
+        values = []
+        for col in essential_columns:
+            if col not in mapped_columns:
+                values.append(record.get(col))
+
+        # Add values for all mapped columns
+        for m in mappings:
+            values.append(record.get(m['target_column']))
+
+        return tuple(values)
 
     def clear_cache(self):
         """Clear all cached mappings."""

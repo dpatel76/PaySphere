@@ -48,8 +48,72 @@ class UaeftsExtractor(BaseExtractor):
         stg_id: str,
         batch_id: str
     ) -> Dict[str, Any]:
-        """Extract all Silver layer fields from UAEFTS message."""
+        """Extract all Silver layer fields from UAEFTS message.
+
+        Handles both legacy JSON format and ISO 20022 parsed format.
+        """
         trunc = self.trunc
+
+        # Handle nested objects for debtor/creditor
+        debtor = msg_content.get('debtor') or {}
+        creditor = msg_content.get('creditor') or {}
+        debtor_acct = msg_content.get('debtorAccount') or {}
+        creditor_acct = msg_content.get('creditorAccount') or {}
+        debtor_agent = msg_content.get('debtorAgent') or {}
+        creditor_agent = msg_content.get('creditorAgent') or {}
+
+        # Extract amount - try multiple paths
+        amount = (
+            msg_content.get('amount') or
+            msg_content.get('interbankSettlementAmount') or
+            msg_content.get('instructedAmount')
+        )
+
+        # Extract currency - try multiple paths
+        currency = (
+            msg_content.get('currency') or
+            msg_content.get('interbankSettlementCurrency') or
+            msg_content.get('instructedCurrency') or
+            'AED'
+        )
+
+        # Extract originator/debtor info
+        originator_name = (
+            msg_content.get('originatorName') or
+            msg_content.get('debtorName') or
+            debtor.get('name')
+        )
+        originator_account = (
+            msg_content.get('originatorAccount') or
+            msg_content.get('debtorAccountNumber') or
+            debtor_acct.get('accountNumber') or
+            debtor_acct.get('iban')
+        )
+
+        # Extract beneficiary/creditor info
+        beneficiary_name = (
+            msg_content.get('beneficiaryName') or
+            msg_content.get('creditorName') or
+            creditor.get('name')
+        )
+        beneficiary_account = (
+            msg_content.get('beneficiaryAccount') or
+            msg_content.get('creditorAccountNumber') or
+            creditor_acct.get('accountNumber') or
+            creditor_acct.get('iban')
+        )
+
+        # Extract bank codes/BICs
+        sending_bank_code = (
+            msg_content.get('sendingBankCode') or
+            debtor_agent.get('bic') or
+            debtor_agent.get('memberId')
+        )
+        receiving_bank_code = (
+            msg_content.get('receivingBankCode') or
+            creditor_agent.get('bic') or
+            creditor_agent.get('memberId')
+        )
 
         return {
             'stg_id': stg_id,
@@ -63,24 +127,24 @@ class UaeftsExtractor(BaseExtractor):
             'settlement_date': msg_content.get('settlementDate'),
 
             # Amount
-            'amount': msg_content.get('amount'),
-            'currency': msg_content.get('currency') or 'AED',
+            'amount': amount,
+            'currency': currency,
 
             # Bank Codes
-            'sending_bank_code': trunc(msg_content.get('sendingBankCode'), 11),
-            'receiving_bank_code': trunc(msg_content.get('receivingBankCode'), 11),
+            'sending_bank_code': trunc(sending_bank_code, 11),
+            'receiving_bank_code': trunc(receiving_bank_code, 11),
 
             # Transaction Details
-            'transaction_reference': trunc(msg_content.get('transactionReference'), 35),
+            'transaction_reference': trunc(msg_content.get('transactionReference') or msg_content.get('endToEndId'), 35),
 
             # Originator (Debtor)
-            'originator_name': trunc(msg_content.get('originatorName'), 140),
-            'originator_account': trunc(msg_content.get('originatorAccount'), 34),
+            'originator_name': trunc(originator_name, 140),
+            'originator_account': trunc(originator_account, 34),
             'originator_address': msg_content.get('originatorAddress'),
 
             # Beneficiary (Creditor)
-            'beneficiary_name': trunc(msg_content.get('beneficiaryName'), 140),
-            'beneficiary_account': trunc(msg_content.get('beneficiaryAccount'), 34),
+            'beneficiary_name': trunc(beneficiary_name, 140),
+            'beneficiary_account': trunc(beneficiary_account, 34),
             'beneficiary_address': msg_content.get('beneficiaryAddress'),
 
             # Purpose
@@ -159,20 +223,24 @@ class UaeftsExtractor(BaseExtractor):
                 currency=silver_data.get('currency') or 'AED',
             ))
 
-        # Sending Bank
-        if silver_data.get('sending_bank_code'):
+        # Sending Bank (Debtor Agent)
+        sending_bank = silver_data.get('sending_bank_code')
+        if sending_bank:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="DEBTOR_AGENT",
-                clearing_code=silver_data.get('sending_bank_code'),
-                clearing_system='AEUAEFTS',  # UAEFTS
+                bic=sending_bank if len(sending_bank) in (8, 11) else None,
+                clearing_code=sending_bank if len(sending_bank) not in (8, 11) else None,
+                clearing_system='AEUAEFTS',
                 country='AE',
             ))
 
-        # Receiving Bank
-        if silver_data.get('receiving_bank_code'):
+        # Receiving Bank (Creditor Agent)
+        receiving_bank = silver_data.get('receiving_bank_code')
+        if receiving_bank:
             entities.financial_institutions.append(FinancialInstitutionData(
                 role="CREDITOR_AGENT",
-                clearing_code=silver_data.get('receiving_bank_code'),
+                bic=receiving_bank if len(receiving_bank) in (8, 11) else None,
+                clearing_code=receiving_bank if len(receiving_bank) not in (8, 11) else None,
                 clearing_system='AEUAEFTS',
                 country='AE',
             ))

@@ -1082,12 +1082,22 @@ def process_bronze_partition(
                     placeholders = ', '.join(['%s'] * len(silver_columns))
                     columns_str = ', '.join(silver_columns)
 
-                    cursor.execute(f"""
-                        INSERT INTO {silver_table}
-                        ({columns_str}, processing_status, _processed_at)
-                        VALUES ({placeholders}, 'PROCESSED', %s)
-                        ON CONFLICT (stg_id) DO NOTHING
-                    """, (*silver_values, datetime.utcnow()))
+                    # Only add _processed_at if not already in columns
+                    # processing_status is already in extractor columns - do NOT add it again
+                    if '_processed_at' not in silver_columns:
+                        cursor.execute(f"""
+                            INSERT INTO {silver_table}
+                            ({columns_str}, _processed_at)
+                            VALUES ({placeholders}, %s)
+                            ON CONFLICT (stg_id) DO NOTHING
+                        """, (*silver_values, datetime.utcnow()))
+                    else:
+                        cursor.execute(f"""
+                            INSERT INTO {silver_table}
+                            ({columns_str})
+                            VALUES ({placeholders})
+                            ON CONFLICT (stg_id) DO NOTHING
+                        """, silver_values)
 
                     source_stg_table = extractor.SILVER_TABLE
                 else:

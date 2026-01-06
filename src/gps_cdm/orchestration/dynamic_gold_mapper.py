@@ -5,11 +5,13 @@ This module reads from mapping.gold_field_mappings to determine which Silver
 columns should be written to which Gold tables (CDM core + extensions).
 
 Gold Tables:
-- cdm_payment_instruction: Main payment record
+- cdm_payment_instruction: Main payment record (for payment messages)
+- cdm_account_statement: Statement record (for camt.053, MT940, etc.)
 - cdm_party: Debtor, Creditor, Ultimate parties
 - cdm_account: Debtor/Creditor accounts
 - cdm_financial_institution: Agent banks
 - cdm_payment_extension_*: Format-specific extensions
+- cdm_statement_extension: Statement-specific extensions
 """
 
 import logging
@@ -48,11 +50,13 @@ class DynamicGoldMapper:
     Maps Silver records to Gold tables using database-driven mappings.
 
     Supports all Gold CDM tables:
-    - cdm_payment_instruction
+    - cdm_payment_instruction: For payment messages (pain.001, MT103, etc.)
+    - cdm_account_statement: For statement messages (camt.053, MT940, etc.)
     - cdm_party (with entity_role: DEBTOR, CREDITOR, ULTIMATE_DEBTOR, ULTIMATE_CREDITOR)
     - cdm_account (with entity_role: DEBTOR, CREDITOR)
     - cdm_financial_institution (with entity_role: DEBTOR_AGENT, CREDITOR_AGENT, etc.)
-    - cdm_payment_extension_* (format-specific)
+    - cdm_payment_extension_*: Format-specific payment extensions
+    - cdm_statement_extension: Statement-specific extensions
     """
 
     # Cache for mappings by format
@@ -107,6 +111,7 @@ class DynamicGoldMapper:
         - Generated UUID: '_GENERATED_UUID' -> new UUID
         - Context variable: '_CONTEXT.stg_id' -> context['stg_id']
         - NULL: 'NULL' or empty -> None
+        - COALESCE function: e.g., 'COALESCE(col1, col2, 'default')' -> first non-null value
         """
         if not expr or expr.upper() == 'NULL':
             return None
@@ -124,6 +129,20 @@ class DynamicGoldMapper:
             key = expr[9:]  # Remove '_CONTEXT.' prefix
             return context.get(key)
 
+        # SUBSTRING function: SUBSTRING(col, start, length) or SUBSTRING(expr, start, length)
+        # Extracts substring from position start with given length (1-indexed)
+        if expr.upper().startswith('SUBSTRING(') and expr.endswith(')'):
+            return self._evaluate_substring(expr, silver_data, context)
+
+        # COALESCE function: COALESCE(col1, col2, 'literal', ...)
+        # Returns first non-null value from the list
+        if expr.upper().startswith('COALESCE(') and expr.endswith(')'):
+            return self._evaluate_coalesce(expr, silver_data, context)
+
+        # CASE WHEN expression: CASE WHEN condition THEN value ELSE other END
+        if expr.upper().startswith('CASE WHEN') and expr.upper().endswith('END'):
+            return self._evaluate_case_when(expr, silver_data, context)
+
         # Silver column reference
         value = silver_data.get(expr)
 
@@ -131,6 +150,189 @@ class DynamicGoldMapper:
         # (handled separately in build_gold_records)
 
         return value
+
+    def _evaluate_coalesce(self, expr: str, silver_data: Dict[str, Any],
+                           context: Dict[str, Any] = None) -> Any:
+        """Evaluate COALESCE(arg1, arg2, ...) expression."""
+        args_str = expr[9:-1]  # Remove 'COALESCE(' and ')'
+        args = self._parse_coalesce_args(args_str)
+
+        for arg in args:
+            arg = arg.strip()
+            if not arg:
+                continue
+            # Check if arg is a literal string
+            if arg.startswith("'") and arg.endswith("'"):
+                return arg[1:-1]
+            # Check if arg references silver.column (remove prefix)
+            if arg.startswith('silver.'):
+                arg = arg[7:]
+            # Recursively evaluate if it's a function call
+            if '(' in arg:
+                value = self._evaluate_expression(arg, silver_data, context)
+            else:
+                # Try to get value from silver_data
+                value = silver_data.get(arg)
+            if value is not None and value != '':
+                return value
+        return None
+
+    def _evaluate_substring(self, expr: str, silver_data: Dict[str, Any],
+                            context: Dict[str, Any] = None) -> Any:
+        """
+        Evaluate SUBSTRING(source, start, length) expression.
+
+        Handles nested COALESCE and column references.
+        Note: PostgreSQL SUBSTRING is 1-indexed, Python is 0-indexed.
+        """
+        args_str = expr[10:-1]  # Remove 'SUBSTRING(' and ')'
+        args = self._parse_coalesce_args(args_str)
+
+        if len(args) < 2:
+            return None
+
+        # First arg is the source string (column or expression)
+        source_expr = args[0].strip()
+        if '(' in source_expr:
+            # Nested function call (e.g., COALESCE)
+            source_value = self._evaluate_expression(source_expr, silver_data, context)
+        else:
+            source_value = silver_data.get(source_expr)
+
+        if not source_value:
+            return None
+
+        source_value = str(source_value)
+
+        # Parse start position (1-indexed in SQL)
+        try:
+            start = int(args[1].strip()) - 1  # Convert to 0-indexed
+        except (ValueError, IndexError):
+            return None
+
+        # Parse optional length
+        length = None
+        if len(args) >= 3:
+            try:
+                length = int(args[2].strip())
+            except ValueError:
+                pass
+
+        if length is not None:
+            return source_value[start:start + length]
+        else:
+            return source_value[start:]
+
+    def _evaluate_case_when(self, expr: str, silver_data: Dict[str, Any],
+                            context: Dict[str, Any] = None) -> Any:
+        """
+        Evaluate simple CASE WHEN expressions.
+
+        Supports:
+        - CASE WHEN col IN ('a','b') THEN 'X' ELSE 'Y' END
+        - CASE WHEN col = 'value' THEN 'X' ELSE 'Y' END
+        - CASE WHEN col != 'value' THEN 'X' ELSE 'Y' END
+        - CASE WHEN expr1 != expr2 THEN true ELSE false END
+        """
+        import re
+
+        # Extract WHEN...THEN...ELSE parts
+        case_match = re.match(
+            r"CASE\s+WHEN\s+(.+?)\s+THEN\s+(.+?)\s+ELSE\s+(.+?)\s+END",
+            expr,
+            re.IGNORECASE
+        )
+        if not case_match:
+            return None
+
+        condition = case_match.group(1).strip()
+        then_value = case_match.group(2).strip()
+        else_value = case_match.group(3).strip()
+
+        # Evaluate condition
+        condition_result = self._evaluate_condition(condition, silver_data, context)
+
+        # Return appropriate value
+        result_expr = then_value if condition_result else else_value
+
+        # Parse result (could be literal, boolean, or column)
+        if result_expr.lower() == 'true':
+            return True
+        elif result_expr.lower() == 'false':
+            return False
+        elif result_expr.startswith("'") and result_expr.endswith("'"):
+            return result_expr[1:-1]
+        else:
+            return self._evaluate_expression(result_expr, silver_data, context)
+
+    def _evaluate_condition(self, condition: str, silver_data: Dict[str, Any],
+                            context: Dict[str, Any] = None) -> bool:
+        """Evaluate a simple condition expression."""
+        import re
+
+        # Handle IN clause: col IN ('a', 'b', 'c')
+        in_match = re.match(r"(.+?)\s+IN\s*\((.+?)\)", condition, re.IGNORECASE)
+        if in_match:
+            col_expr = in_match.group(1).strip()
+            values_str = in_match.group(2).strip()
+
+            col_value = self._evaluate_expression(col_expr, silver_data, context)
+            if col_value is None:
+                return False
+
+            # Parse IN values
+            values = [v.strip().strip("'\"") for v in values_str.split(',')]
+            return str(col_value) in values
+
+        # Handle != comparison
+        if '!=' in condition:
+            parts = condition.split('!=')
+            if len(parts) == 2:
+                left = self._evaluate_expression(parts[0].strip(), silver_data, context)
+                right = self._evaluate_expression(parts[1].strip(), silver_data, context)
+                return left != right
+
+        # Handle = comparison
+        if '=' in condition:
+            parts = condition.split('=')
+            if len(parts) == 2:
+                left = self._evaluate_expression(parts[0].strip(), silver_data, context)
+                right = self._evaluate_expression(parts[1].strip(), silver_data, context)
+                return left == right
+
+        return False
+
+    def _parse_coalesce_args(self, args_str: str) -> List[str]:
+        """
+        Parse COALESCE arguments, handling quoted strings and nested functions.
+
+        Example: "col1, col2, 'default'" -> ['col1', 'col2', "'default'"]
+        """
+        args = []
+        current_arg = ""
+        in_quotes = False
+        paren_depth = 0
+
+        for char in args_str:
+            if char == "'" and paren_depth == 0:
+                in_quotes = not in_quotes
+                current_arg += char
+            elif char == '(' and not in_quotes:
+                paren_depth += 1
+                current_arg += char
+            elif char == ')' and not in_quotes:
+                paren_depth -= 1
+                current_arg += char
+            elif char == ',' and not in_quotes and paren_depth == 0:
+                args.append(current_arg.strip())
+                current_arg = ""
+            else:
+                current_arg += char
+
+        if current_arg.strip():
+            args.append(current_arg.strip())
+
+        return args
 
     def _apply_transform(self, value: Any, transform: Optional[str],
                          silver_data: Dict[str, Any] = None,
@@ -146,6 +348,11 @@ class DynamicGoldMapper:
             return str(value).lower() if value else value
         elif transform == 'TRIM':
             return str(value).strip() if value else value
+        elif transform == 'COALESCE_UUID':
+            # COALESCE_UUID - returns value if not NULL, otherwise generates a UUID
+            if value:
+                return value
+            return str(uuid.uuid4())
         elif transform.startswith('COALESCE:'):
             # COALESCE:default_value - returns literal default if value is NULL
             return value if value else transform[9:]
@@ -210,6 +417,22 @@ class DynamicGoldMapper:
                 except ValueError:
                     return value
             return value
+        elif transform == 'TIME_TO_HHMM':
+            # Convert TIME value to HHMM format string (4 chars)
+            # Input can be: TIME object, datetime object, or string like "12:34:00"
+            if value is None:
+                return None
+            try:
+                if hasattr(value, 'strftime'):
+                    # datetime or time object
+                    return value.strftime('%H%M')
+                elif isinstance(value, str):
+                    # String like "12:34:00" or "12:34"
+                    parts = value.replace(':', '')[:4]  # Remove colons, take first 4 chars
+                    return parts if len(parts) >= 4 else parts.ljust(4, '0')
+            except (ValueError, AttributeError):
+                return str(value)[:4] if value else None
+            return str(value)[:4] if value else None
         elif transform == 'COUNTRY_FROM_BIC':
             # Extract country code (chars 5-6) from BIC
             # BIC format: AAAABBCC where BB is country code (positions 5-6, 1-indexed)
@@ -253,11 +476,15 @@ class DynamicGoldMapper:
         mappings = self._load_mappings(format_id)
 
         # Context for expression evaluation
+        now = datetime.utcnow()
         context = {
             'stg_id': stg_id,
             'batch_id': batch_id,
             'format_id': format_id,
-            'now': datetime.utcnow()
+            'now': now,
+            'year': now.year,
+            'month': now.month,
+            'today': now.date(),
         }
 
         # Group mappings by (table, entity_role)
@@ -316,6 +543,7 @@ class DynamicGoldMapper:
             'cdm_account': ['account_number', 'iban'],
             'cdm_financial_institution': ['bic', 'lei', 'institution_name'],
             'cdm_payment_instruction': ['instruction_id'],
+            'cdm_account_statement': ['statement_id'],
         }
 
         fields = key_fields.get(table)
@@ -344,6 +572,7 @@ class DynamicGoldMapper:
         """
         result = {
             'instruction_id': None,
+            'statement_id': None,
             'payment_id': None,
             'debtor_id': None,
             'creditor_id': None,
@@ -355,14 +584,16 @@ class DynamicGoldMapper:
             'creditor_agent_id': None,
             'intermediary_agent1_id': None,
             'intermediary_agent2_id': None,
+            'account_servicer_id': None,
         }
 
-        # Persist in order: entities first, then instruction (which references them)
+        # Persist in order: entities first, then instruction/statement (which references them)
         entity_order = [
             'cdm_party',
             'cdm_account',
             'cdm_financial_institution',
             'cdm_payment_instruction',
+            'cdm_account_statement',
         ]
 
         for table in entity_order:
@@ -383,6 +614,12 @@ class DynamicGoldMapper:
                     # Add instruction_id to extension record
                     if result['instruction_id']:
                         record.columns['instruction_id'] = result['instruction_id']
+                    self._persist_single_record(cursor, record, result)
+            elif table == 'cdm_statement_extension':
+                for record in table_records:
+                    # Add statement_id to extension record
+                    if result['statement_id']:
+                        record.columns['statement_id'] = result['statement_id']
                     self._persist_single_record(cursor, record, result)
 
         return result
@@ -416,6 +653,29 @@ class DynamicGoldMapper:
             now = datetime.utcnow()
             columns['partition_year'] = now.year
             columns['partition_month'] = now.month
+
+        # Add foreign key references for account statement
+        elif table == 'cdm_account_statement':
+            # Add account servicer FK
+            columns['account_servicer_id'] = entity_ids.get('account_servicer_id')
+            # Add account FK if available
+            columns['account_id'] = entity_ids.get('debtor_account_id')
+
+            # Add audit fields
+            columns['current_status'] = columns.get('current_status') or 'PROCESSED'
+            columns['created_at'] = datetime.utcnow()
+            columns['updated_at'] = datetime.utcnow()
+
+            # Partition fields (with defaults in case context didn't set them)
+            now = datetime.utcnow()
+            columns['partition_year'] = columns.get('partition_year') or now.year
+            columns['partition_month'] = columns.get('partition_month') or now.month
+
+            # Default region if not set
+            columns['region'] = columns.get('region') or 'GLOBAL'
+
+            # Default valid_from if not set
+            columns['valid_from'] = columns.get('valid_from') or now.date()
 
         # Get ID column name
         id_column = self._get_id_column(table)
@@ -456,12 +716,13 @@ class DynamicGoldMapper:
         """Get the primary key column name for a table."""
         id_columns = {
             'cdm_payment_instruction': 'instruction_id',
+            'cdm_account_statement': 'statement_id',
             'cdm_party': 'party_id',
             'cdm_account': 'account_id',
             'cdm_financial_institution': 'fi_id',
         }
         # Extension tables use 'extension_id'
-        if table.startswith('cdm_payment_extension_'):
+        if table.startswith('cdm_payment_extension_') or table == 'cdm_statement_extension':
             return 'extension_id'
         return id_columns.get(table, 'id')
 
@@ -469,9 +730,11 @@ class DynamicGoldMapper:
         """Generate a prefixed ID for a table."""
         prefixes = {
             'cdm_payment_instruction': 'instr_',
+            'cdm_account_statement': 'stmt_',
             'cdm_party': 'party_',
             'cdm_account': 'acct_',
             'cdm_financial_institution': 'fi_',
+            'cdm_statement_extension': 'stext_',
         }
         prefix = prefixes.get(table, 'ext_')
         return f"{prefix}{uuid.uuid4().hex[:12]}"
@@ -481,7 +744,8 @@ class DynamicGoldMapper:
         """Track entity ID in result dict based on table and role."""
         if table == 'cdm_payment_instruction':
             result['instruction_id'] = entity_id
-            # Also track payment_id if present
+        elif table == 'cdm_account_statement':
+            result['statement_id'] = entity_id
         elif table == 'cdm_party':
             role_map = {
                 'DEBTOR': 'debtor_id',
@@ -504,6 +768,7 @@ class DynamicGoldMapper:
                 'CREDITOR_AGENT': 'creditor_agent_id',
                 'INTERMEDIARY_AGENT1': 'intermediary_agent1_id',
                 'INTERMEDIARY_AGENT2': 'intermediary_agent2_id',
+                'ACCOUNT_SERVICER': 'account_servicer_id',
             }
             if role and role in role_map:
                 result[role_map[role]] = entity_id

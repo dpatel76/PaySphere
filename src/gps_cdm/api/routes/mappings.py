@@ -65,6 +65,7 @@ class MappingDocumentationRow(BaseModel):
     message_format: str
     message_format_description: str
     format_category: str
+    governing_body: Optional[str]
 
     # Standard Field Info
     standard_field_id: Optional[int]
@@ -79,7 +80,7 @@ class MappingDocumentationRow(BaseModel):
 
     # Bronze Info
     bronze_table: Optional[str]
-    bronze_column: Optional[str]
+    bronze_source_path: Optional[str]
 
     # Silver Mapping Info
     silver_mapping_id: Optional[int]
@@ -89,6 +90,7 @@ class MappingDocumentationRow(BaseModel):
     silver_max_length: Optional[int]
     silver_source_path: Optional[str]
     silver_transform: Optional[str]
+    silver_is_required: Optional[bool]
     is_mapped_to_silver: bool
 
     # Gold Mapping Info
@@ -99,6 +101,7 @@ class MappingDocumentationRow(BaseModel):
     gold_entity_role: Optional[str]
     gold_purpose_code: Optional[str]
     gold_source_expression: Optional[str]
+    gold_transform: Optional[str]
     is_mapped_to_gold: bool
 
     # Metadata

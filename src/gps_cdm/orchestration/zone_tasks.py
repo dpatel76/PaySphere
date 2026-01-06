@@ -701,6 +701,7 @@ def process_silver_records(
                     mapper = DynamicMapper(conn)
                     silver_record = mapper.extract_silver_record(message_type, msg_content, raw_id, batch_id)
                     silver_record['stg_id'] = stg_id  # Override generated stg_id
+                    silver_record['raw_id'] = raw_id  # Ensure raw_id is set for lineage
 
                     # Get table from format registry
                     format_info = mapper._get_format_info(message_type)
@@ -928,11 +929,16 @@ def process_gold_records(
                     entities_created['financial_institutions'] += 1
                 if entity_ids.get('intermediary_agent1_id'):
                     entities_created['financial_institutions'] += 1
+                if entity_ids.get('account_servicer_id'):
+                    entities_created['financial_institutions'] += 1
 
+                # Check for either instruction_id (payment messages) or statement_id (statement messages like camt.053, MT940)
                 instruction_id = entity_ids.get('instruction_id')
+                statement_id = entity_ids.get('statement_id')
+                gold_id = instruction_id or statement_id
 
-                if instruction_id:
-                    instruction_ids.append(instruction_id)
+                if gold_id:
+                    instruction_ids.append(gold_id)
 
                     # Update Silver status
                     cursor.execute(f"""
@@ -944,7 +950,7 @@ def process_gold_records(
                 else:
                     failed.append({
                         'stg_id': stg_id,
-                        'error': 'No instruction created (possible duplicate or missing data)',
+                        'error': 'No instruction or statement created (possible duplicate or missing data)',
                         'error_code': 'DUPLICATE_MESSAGE'
                     })
 

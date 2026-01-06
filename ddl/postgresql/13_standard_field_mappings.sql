@@ -143,6 +143,7 @@ COMMENT ON COLUMN mapping.gold_field_mappings.field_description IS 'Description 
 -- =============================================================================
 -- This view provides the complete mapping documentation in a single query,
 -- joining standard fields with silver and gold mappings.
+-- NOTE: Excludes 'complex' data type fields as they are containers, not leaf fields.
 CREATE OR REPLACE VIEW mapping.v_mappings_documentation AS
 SELECT
     -- Standard/Format Info
@@ -166,7 +167,7 @@ SELECT
 
     -- Bronze Info (derived from standard field path)
     mf.bronze_table,
-    sf.field_path AS bronze_column,  -- In Bronze, we store raw content; path is the accessor
+    sf.field_path AS bronze_source_path,  -- In Bronze, we store raw content; path is the accessor
 
     -- Silver Mapping Info
     sm.mapping_id AS silver_mapping_id,
@@ -199,7 +200,9 @@ SELECT
     ) AS last_updated
 
 FROM mapping.message_formats mf
-LEFT JOIN mapping.standard_fields sf ON mf.format_id = sf.format_id AND sf.is_active = TRUE
+LEFT JOIN mapping.standard_fields sf ON mf.format_id = sf.format_id
+    AND sf.is_active = TRUE
+    AND sf.data_type <> 'complex'  -- Exclude complex container types
 LEFT JOIN mapping.silver_field_mappings sm ON sf.format_id = sm.format_id
     AND (sf.standard_field_id = sm.standard_field_id OR sf.field_path = sm.source_path)
     AND sm.is_active = TRUE
@@ -209,11 +212,12 @@ LEFT JOIN mapping.gold_field_mappings gm ON sm.format_id = gm.format_id
 WHERE mf.is_active = TRUE
 ORDER BY mf.format_category, mf.format_id, sf.field_category, sf.field_name;
 
-COMMENT ON VIEW mapping.v_mappings_documentation IS 'Unified view of all field mappings from Standard → Bronze → Silver → Gold';
+COMMENT ON VIEW mapping.v_mappings_documentation IS 'Unified view of all field mappings from Standard → Bronze → Silver → Gold (excludes complex container types)';
 
 -- =============================================================================
 -- View: Mapping Coverage Summary
 -- =============================================================================
+-- NOTE: Excludes 'complex' data type fields as they are containers, not leaf fields.
 CREATE OR REPLACE VIEW mapping.v_mapping_coverage AS
 SELECT
     mf.format_id,
@@ -234,7 +238,9 @@ SELECT
     ) AS gold_coverage_pct,
     COUNT(DISTINCT sf.standard_field_id) - COUNT(DISTINCT sm.mapping_id) AS unmapped_fields
 FROM mapping.message_formats mf
-LEFT JOIN mapping.standard_fields sf ON mf.format_id = sf.format_id AND sf.is_active = TRUE
+LEFT JOIN mapping.standard_fields sf ON mf.format_id = sf.format_id
+    AND sf.is_active = TRUE
+    AND sf.data_type <> 'complex'  -- Exclude complex container types
 LEFT JOIN mapping.silver_field_mappings sm ON sf.format_id = sm.format_id
     AND (sf.standard_field_id = sm.standard_field_id OR sf.field_path = sm.source_path)
     AND sm.is_active = TRUE
@@ -245,11 +251,12 @@ WHERE mf.is_active = TRUE
 GROUP BY mf.format_id, mf.format_name, mf.standard_name, mf.country
 ORDER BY mf.format_category, mf.format_id;
 
-COMMENT ON VIEW mapping.v_mapping_coverage IS 'Coverage metrics showing how many standard fields are mapped to Silver and Gold';
+COMMENT ON VIEW mapping.v_mapping_coverage IS 'Coverage metrics showing how many standard fields are mapped to Silver and Gold (excludes complex container types)';
 
 -- =============================================================================
 -- View: Unmapped Standard Fields
 -- =============================================================================
+-- NOTE: Excludes 'complex' data type fields as they are containers, not leaf fields.
 CREATE OR REPLACE VIEW mapping.v_unmapped_fields AS
 SELECT
     mf.format_id,
@@ -262,7 +269,9 @@ SELECT
     sf.field_category,
     'NOT_MAPPED_TO_SILVER' AS gap_type
 FROM mapping.message_formats mf
-JOIN mapping.standard_fields sf ON mf.format_id = sf.format_id AND sf.is_active = TRUE
+JOIN mapping.standard_fields sf ON mf.format_id = sf.format_id
+    AND sf.is_active = TRUE
+    AND sf.data_type <> 'complex'  -- Exclude complex container types
 LEFT JOIN mapping.silver_field_mappings sm ON sf.format_id = sm.format_id
     AND (sf.standard_field_id = sm.standard_field_id OR sf.field_path = sm.source_path)
     AND sm.is_active = TRUE
@@ -289,7 +298,7 @@ WHERE mf.is_active = TRUE AND gm.mapping_id IS NULL
 
 ORDER BY format_id, gap_type, field_name;
 
-COMMENT ON VIEW mapping.v_unmapped_fields IS 'Lists standard fields not yet mapped to Silver or Silver fields not mapped to Gold';
+COMMENT ON VIEW mapping.v_unmapped_fields IS 'Lists standard fields not yet mapped to Silver or Silver fields not mapped to Gold (excludes complex container types)';
 
 -- =============================================================================
 -- Insert Sample Standard Fields for pain.001

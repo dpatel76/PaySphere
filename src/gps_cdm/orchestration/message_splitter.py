@@ -579,60 +579,22 @@ class MessageSplitter:
     def _split_iso20022_statement(cls, content: str, message_type: str) -> List[Dict[str, Any]]:
         """
         Split ISO 20022 statement messages (camt.053, camt.054) by Ntry elements.
-        Each statement entry becomes a separate record.
+
+        Unlike payment messages, statement messages are typically processed as a
+        whole statement, not individual entries. The extractor expects the full
+        XML content to properly extract statement-level fields (balances, account info).
+
+        For camt.053/camt.054, we return the full XML content and let the extractor
+        parse it properly.
         """
-        records = []
-
-        try:
-            if content.startswith('\ufeff'):
-                content = content[1:]
-
-            root = ET.fromstring(content)
-
-            # Remove namespace prefixes
-            for elem in root.iter():
-                if '}' in elem.tag:
-                    elem.tag = elem.tag.split('}')[1]
-                elem.attrib = {k.split('}')[1] if '}' in k else k: v for k, v in elem.attrib.items()}
-
-            # Extract statement header as parent context
-            stmt = root.find('.//Stmt')
-            parent_context = {}
-            if stmt is not None:
-                parent_context = {
-                    'statementId': cls._find_text_simple(stmt, 'Id'),
-                    'creationDateTime': cls._find_text_simple(stmt, 'CreDtTm'),
-                    'accountId': cls._find_text_simple(stmt, 'IBAN') or cls._find_text_simple(stmt, 'Id'),
-                }
-
-            # Find all entries
-            entries = root.findall('.//Ntry')
-            for idx, entry in enumerate(entries):
-                entry_content = {
-                    'amount': cls._find_text_simple(entry, 'Amt'),
-                    'currency': entry.find('.//Amt').get('Ccy') if entry.find('.//Amt') is not None else None,
-                    'creditDebitIndicator': cls._find_text_simple(entry, 'CdtDbtInd'),
-                    'status': cls._find_text_simple(entry, 'Sts'),
-                    'bookingDate': cls._find_text_simple(entry, 'BookgDt') or cls._find_text_simple(entry, 'Dt'),
-                    'valueDate': cls._find_text_simple(entry, 'ValDt') or cls._find_text_simple(entry, 'Dt'),
-                    'reference': cls._find_text_simple(entry, 'AcctSvcrRef'),
-                }
-                entry_content.update(parent_context)
-                records.append({
-                    'content': entry_content,
-                    'index': idx,
-                    'parent_context': parent_context,
-                })
-
-            if not records:
-                return [{'content': content, 'index': 0, 'parent_context': parent_context}]
-
-            logger.info(f"Split {message_type} into {len(records)} statement entries")
-            return records
-
-        except Exception as e:
-            logger.warning(f"Failed to split {message_type}: {e}")
-            return [{'content': content, 'index': 0, 'parent_context': {}}]
+        # Statement messages should be processed as a complete unit
+        # The Camt053Extractor will parse the full XML to extract:
+        # - Statement header (Id, MsgId, CreDtTm)
+        # - Account information (IBAN, Owner, Servicer)
+        # - Balance information (Opening/Closing balances)
+        # - Entry summary
+        logger.debug(f"Processing {message_type} statement as complete unit")
+        return [{'content': content, 'index': 0, 'parent_context': {}}]
 
     @classmethod
     def _split_bacs(cls, content: str, message_type: str) -> List[Dict[str, Any]]:
