@@ -2,54 +2,200 @@
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
   <BkToCstmrStmt>
     <GrpHdr>
-      <MsgId>STMT-MSG-FRESH-001</MsgId>
-      <CreDtTm>2025-01-06T10:00:00</CreDtTm>
+      <MsgId>CAMT053-STMT-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T18:30:00</CreDtTm>
+      <MsgPgntn>
+        <PgNb>1</PgNb>
+        <LastPgInd>true</LastPgInd>
+      </MsgPgntn>
     </GrpHdr>
     <Stmt>
-      <Id>STMT-FRESH-001</Id>
+      <Id>ACCT-STMT-20260106-001</Id>
       <ElctrncSeqNb>00001</ElctrncSeqNb>
+      <LglSeqNb>00001</LglSeqNb>
+      <CreDtTm>2026-01-06T18:30:00</CreDtTm>
       <FrToDt>
-        <FrDtTm>2025-01-01T00:00:00</FrDtTm>
-        <ToDtTm>2025-01-05T23:59:59</ToDtTm>
+        <FrDtTm>2026-01-01T00:00:00</FrDtTm>
+        <ToDtTm>2026-01-05T23:59:59</ToDtTm>
       </FrToDt>
       <Acct>
         <Id><IBAN>DE89370400440532013000</IBAN></Id>
+        <Tp><Cd>CACC</Cd></Tp>
         <Ccy>EUR</Ccy>
-        <Nm>Fresh Test Account</Nm>
-        <Ownr><Nm>Fresh Test Owner</Nm></Ownr>
+        <Nm>Acme Manufacturing Main Operating Account</Nm>
+        <Ownr>
+          <Nm>Acme Manufacturing GmbH</Nm>
+          <PstlAdr>
+            <StrtNm>Industriestrasse</StrtNm>
+            <BldgNb>42</BldgNb>
+            <PstCd>60313</PstCd>
+            <TwnNm>Frankfurt am Main</TwnNm>
+            <Ctry>DE</Ctry>
+          </PstlAdr>
+          <Id>
+            <OrgId>
+              <LEI>529900LN3S50JPU47S06</LEI>
+            </OrgId>
+          </Id>
+        </Ownr>
         <Svcr>
           <FinInstnId>
-            <BICFI>DEUTDEFFXXX</BICFI>
-            <Nm>Deutsche Bank Test</Nm>
+            <BICFI>COBADEFFXXX</BICFI>
+            <LEI>851WYGNLUQLFZBSYGB56</LEI>
+            <Nm>Commerzbank AG</Nm>
+            <PstlAdr>
+              <StrtNm>Kaiserplatz</StrtNm>
+              <PstCd>60311</PstCd>
+              <TwnNm>Frankfurt am Main</TwnNm>
+              <Ctry>DE</Ctry>
+            </PstlAdr>
           </FinInstnId>
         </Svcr>
       </Acct>
       <Bal>
         <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="EUR">10000.00</Amt>
+        <Amt Ccy="EUR">1250000.00</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
-        <Dt><Dt>2025-01-01</Dt></Dt>
+        <Dt><Dt>2026-01-01</Dt></Dt>
       </Bal>
       <Bal>
         <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="EUR">15000.00</Amt>
+        <Amt Ccy="EUR">1525000.00</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
-        <Dt><Dt>2025-01-05</Dt></Dt>
+        <Dt><Dt>2026-01-05</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLAV</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">1520000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-01-05</Dt></Dt>
       </Bal>
       <TxsSummry>
         <TtlNtries>
-          <NbOfNtries>5</NbOfNtries>
-          <Sum>5000.00</Sum>
+          <NbOfNtries>6</NbOfNtries>
+          <Sum>475000.00</Sum>
+          <TtlNetNtry>
+            <Amt>275000.00</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+          </TtlNetNtry>
         </TtlNtries>
         <TtlCdtNtries>
-          <NbOfNtries>3</NbOfNtries>
-          <Sum>6000.00</Sum>
+          <NbOfNtries>4</NbOfNtries>
+          <Sum>375000.00</Sum>
         </TtlCdtNtries>
         <TtlDbtNtries>
           <NbOfNtries>2</NbOfNtries>
-          <Sum>1000.00</Sum>
+          <Sum>100000.00</Sum>
         </TtlDbtNtries>
       </TxsSummry>
+      <Ntry>
+        <Amt Ccy="EUR">50000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-02</Dt></BookgDt>
+        <ValDt><Dt>2026-01-02</Dt></ValDt>
+        <AcctSvcrRef>COBA-REF-20260102-001</AcctSvcrRef>
+        <BkTxCd>
+          <Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>ESCT</SubFmlyCd></Fmly></Domn>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <EndToEndId>E2E-20260102-001</EndToEndId>
+              <TxId>TXN-20260102-001</TxId>
+            </Refs>
+            <Amt Ccy="EUR">50000.00</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+            <RltdPties>
+              <Dbtr>
+                <Nm>TechGlobal Industries Inc</Nm>
+                <PstlAdr>
+                  <StrtNm>1000 Technology Boulevard</StrtNm>
+                  <TwnNm>Mountain View</TwnNm>
+                  <Ctry>US</Ctry>
+                </PstlAdr>
+              </Dbtr>
+              <DbtrAcct><Id><Othr><Id>123456789012</Id></Othr></Id></DbtrAcct>
+            </RltdPties>
+            <RltdAgts>
+              <DbtrAgt><FinInstnId><BICFI>CITIUS33XXX</BICFI></FinInstnId></DbtrAgt>
+            </RltdAgts>
+            <RmtInf><Ustrd>Wire transfer from TechGlobal - Invoice payment</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">125000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-03</Dt></BookgDt>
+        <ValDt><Dt>2026-01-03</Dt></ValDt>
+        <AcctSvcrRef>COBA-REF-20260103-001</AcctSvcrRef>
+        <BkTxCd>
+          <Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>ESCT</SubFmlyCd></Fmly></Domn>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <EndToEndId>E2E-SEPA-20260103-001</EndToEndId>
+              <TxId>TXN-SEPA-20260103-001</TxId>
+            </Refs>
+            <Amt Ccy="EUR">125000.00</Amt>
+            <CdtDbtInd>CRDT</CdtDbtInd>
+            <RltdPties>
+              <Dbtr>
+                <Nm>EuroTech Solutions SARL</Nm>
+                <PstlAdr>
+                  <StrtNm>123 Avenue des Champs-Elysees</StrtNm>
+                  <TwnNm>Paris</TwnNm>
+                  <Ctry>FR</Ctry>
+                </PstlAdr>
+              </Dbtr>
+              <DbtrAcct><Id><IBAN>FR7630004000031234567890143</IBAN></Id></DbtrAcct>
+            </RltdPties>
+            <RltdAgts>
+              <DbtrAgt><FinInstnId><BICFI>BNPAFRPPXXX</BICFI></FinInstnId></DbtrAgt>
+            </RltdAgts>
+            <RmtInf><Ustrd>SEPA Credit Transfer - Contract payment Q1 2026</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">75000.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-04</Dt></BookgDt>
+        <ValDt><Dt>2026-01-04</Dt></ValDt>
+        <AcctSvcrRef>COBA-REF-20260104-001</AcctSvcrRef>
+        <BkTxCd>
+          <Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>ESCT</SubFmlyCd></Fmly></Domn>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs>
+              <EndToEndId>E2E-OUT-20260104-001</EndToEndId>
+              <TxId>TXN-OUT-20260104-001</TxId>
+            </Refs>
+            <Amt Ccy="EUR">75000.00</Amt>
+            <CdtDbtInd>DBIT</CdtDbtInd>
+            <RltdPties>
+              <Cdtr>
+                <Nm>Global Supply Chain Partners LLC</Nm>
+                <PstlAdr>
+                  <StrtNm>500 Commerce Drive</StrtNm>
+                  <TwnNm>Newark</TwnNm>
+                  <Ctry>US</Ctry>
+                </PstlAdr>
+              </Cdtr>
+              <CdtrAcct><Id><Othr><Id>987654321098</Id></Othr></Id></CdtrAcct>
+            </RltdPties>
+            <RltdAgts>
+              <CdtrAgt><FinInstnId><BICFI>CHASUS33XXX</BICFI></FinInstnId></CdtrAgt>
+            </RltdAgts>
+            <RmtInf><Ustrd>Supplier payment - PO-2026-00567</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
     </Stmt>
   </BkToCstmrStmt>
 </Document>

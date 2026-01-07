@@ -1,17 +1,66 @@
 {
-  "messageId": "KFTC-E2E-20260105-001",
+  "messageId": "KFTC-E2E-20260106-001",
   "messageType": "KFTC",
-  "creationDateTime": "2026-01-05T22:30:00",
-  "settlementDate": "2026-01-05",
-  "transactionReference": "KFTC-REF-E2E-001",
-  "transactionId": "TXN-KR-E2E-001",
-  "amount": 2500000.00,
+  "transactionId": "TXN-KR-20260106-001",
+  "transactionReference": "KFTC-REF-20260106-001",
+  "creationDateTime": "2026-01-06T10:15:00+09:00",
+  "settlementDate": "2026-01-06",
+  "valueDate": "2026-01-06",
+  "paymentType": "GIRO",
+  "priority": "NORMAL",
+  "amount": 75000000.00,
   "currency": "KRW",
+  "chargeBearer": "SHAR",
   "sendingBankCode": "004",
+  "sendingBankName": "KB Kookmin Bank",
+  "sendingBankBic": "ABORUAUX",
   "receivingBankCode": "011",
-  "payerName": "E2E Test Kim",
-  "payerAccount": "110-E2E-456789",
-  "payeeName": "E2E Test Park",
-  "payeeAccount": "333-E2E-654321",
-  "purpose": "E2E Business Payment"
+  "receivingBankName": "NH NongHyup Bank",
+  "receivingBankBic": "NACFORUX",
+  "payerName": "Seoul Electronics Corporation",
+  "payerAccount": "110-123-456789",
+  "payerAccountType": "CACC",
+  "payerBusinessNumber": "123-45-67890",
+  "payerAddress": {
+    "streetName": "Gangnam-daero",
+    "buildingNumber": "396",
+    "buildingName": "Gangnam Finance Center",
+    "floor": "35F",
+    "postalCode": "06212",
+    "city": "Seoul",
+    "district": "Gangnam-gu",
+    "country": "KR"
+  },
+  "payerContact": {
+    "name": "Kim Sung-min",
+    "phone": "+82 2 3456 7890",
+    "email": "treasury@seoulelectronics.co.kr"
+  },
+  "payeeName": "Busan Semiconductor Manufacturing Ltd",
+  "payeeAccount": "333-654-321098",
+  "payeeAccountType": "CACC",
+  "payeeBusinessNumber": "987-65-43210",
+  "payeeAddress": {
+    "streetName": "Centum Jungang-ro",
+    "buildingNumber": "79",
+    "buildingName": "Centum SKY Business Center",
+    "floor": "20F",
+    "postalCode": "48058",
+    "city": "Busan",
+    "district": "Haeundae-gu",
+    "country": "KR"
+  },
+  "payeeContact": {
+    "name": "Park Ji-hoon",
+    "phone": "+82 51 234 5678",
+    "email": "accounts@busansemi.co.kr"
+  },
+  "purpose": "SUPP",
+  "purposeDescription": "Business Payment",
+  "remittanceInfo": {
+    "invoiceNumber": "INV-BSM-2026-00567",
+    "invoiceDate": "2025-12-28",
+    "purchaseOrderNumber": "PO-SEC-2026-00234",
+    "description": "KFTC Payment for Semiconductor Components Order Q1 2026"
+  }
 }

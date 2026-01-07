@@ -1,21 +1,177 @@
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
   <FIToFICstmrCdtTrf>
     <GrpHdr>
-      <MsgId>E2E-UAEFTS-001</MsgId>
-      <CreDtTm>2025-01-06T11:00:00</CreDtTm>
+      <MsgId>UAEFTS-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T14:30:00+04:00</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
-      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+      <TtlIntrBkSttlmAmt Ccy="AED">275000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>UAEFTS</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>ABORUAEAXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>UAECB</Prtry></ClrSysId>
+            <MmbId>0010</MmbId>
+          </ClrSysMmbId>
+          <Nm>First Abu Dhabi Bank PJSC</Nm>
+          <PstlAdr>
+            <StrtNm>FAB Building, Khalidiya Street</StrtNm>
+            <PstCd>6316</PstCd>
+            <TwnNm>Abu Dhabi</TwnNm>
+            <Ctry>AE</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>EABORUAEXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>UAECB</Prtry></ClrSysId>
+            <MmbId>0020</MmbId>
+          </ClrSysMmbId>
+          <Nm>Emirates NBD Bank PJSC</Nm>
+          <PstlAdr>
+            <StrtNm>Baniyas Road, Deira</StrtNm>
+            <PstCd>777</PstCd>
+            <TwnNm>Dubai</TwnNm>
+            <Ctry>AE</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstdAgt>
     </GrpHdr>
     <CdtTrfTxInf>
-      <PmtId><EndToEndId>E2E-UAEFTS-TX001</EndToEndId></PmtId>
-      <IntrBkSttlmAmt Ccy="AED">7500.00</IntrBkSttlmAmt>
-      <Dbtr><Nm>E2E UAEFTS Debtor</Nm></Dbtr>
-      <DbtrAcct><Id><Othr><Id>AE123456789012345678901</Id></Othr></Id></DbtrAcct>
-      <DbtrAgt><FinInstnId><BICFI>ABORUAEAXXX</BICFI></FinInstnId></DbtrAgt>
-      <CdtrAgt><FinInstnId><BICFI>EABORUAEXXX</BICFI></FinInstnId></CdtrAgt>
-      <Cdtr><Nm>E2E UAEFTS Creditor</Nm></Cdtr>
-      <CdtrAcct><Id><Othr><Id>AE987654321098765432109</Id></Othr></Id></CdtrAcct>
+      <PmtId>
+        <InstrId>UAEFTS-INSTR-20260106-001</InstrId>
+        <EndToEndId>E2E-UAEFTS-20260106-001</EndToEndId>
+        <TxId>TXN-UAEFTS-20260106-001</TxId>
+        <UETR>b8c9d0e1-f2a3-4567-8901-bcdef2345678</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <InstrPrty>HIGH</InstrPrty>
+        <SvcLvl><Prtry>UAERTGS</Prtry></SvcLvl>
+        <LclInstrm><Prtry>RTGS</Prtry></LclInstrm>
+        <CtgyPurp><Cd>SUPP</Cd></CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="AED">275000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmPrty>URGT</SttlmPrty>
+      <AccptncDtTm>2026-01-06T14:30:00+04:00</AccptncDtTm>
+      <ChrgBr>SHAR</ChrgBr>
+      <Dbtr>
+        <Nm>Abu Dhabi Investment Holdings LLC</Nm>
+        <PstlAdr>
+          <StrtNm>Al Maryah Island</StrtNm>
+          <BldgNb>Tower 3, Level 25</BldgNb>
+          <PstCd>51133</PstCd>
+          <TwnNm>Abu Dhabi</TwnNm>
+          <Ctry>AE</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>549300ABUDHABI0001AE</LEI>
+            <Othr>
+              <Id>1234567</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+              <Issr>UAE Ministry of Economy</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>Ahmed Al Rashid</Nm>
+          <PhneNb>+971 2 555 1234</PhneNb>
+          <EmailAdr>treasury@adih.ae</EmailAdr>
+        </CtctDtls>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><IBAN>AE070331234567890123456</IBAN></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>AED</Ccy>
+        <Nm>ADIH Treasury Account</Nm>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>FABDAEADXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>UAECB</Prtry></ClrSysId>
+            <MmbId>0010</MmbId>
+          </ClrSysMmbId>
+          <Nm>First Abu Dhabi Bank PJSC</Nm>
+          <PstlAdr>
+            <StrtNm>FAB Building, Khalidiya Street</StrtNm>
+            <PstCd>6316</PstCd>
+            <TwnNm>Abu Dhabi</TwnNm>
+            <Ctry>AE</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>EBLOAEADXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>UAECB</Prtry></ClrSysId>
+            <MmbId>0020</MmbId>
+          </ClrSysMmbId>
+          <Nm>Emirates NBD Bank PJSC</Nm>
+          <PstlAdr>
+            <StrtNm>Baniyas Road, Deira</StrtNm>
+            <PstCd>777</PstCd>
+            <TwnNm>Dubai</TwnNm>
+            <Ctry>AE</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Dubai International Trading FZE</Nm>
+        <PstlAdr>
+          <StrtNm>Jebel Ali Free Zone</StrtNm>
+          <BldgNb>Building S-12, Office 401</BldgNb>
+          <PstCd>17000</PstCd>
+          <TwnNm>Dubai</TwnNm>
+          <Ctry>AE</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>549300DUBAITRADE002AE</LEI>
+            <Othr>
+              <Id>7654321</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+              <Issr>JAFZA Authority</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>Fatima Al Maktoum</Nm>
+          <PhneNb>+971 4 555 9876</PhneNb>
+          <EmailAdr>accounts@dubaifze.ae</EmailAdr>
+        </CtctDtls>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><IBAN>AE400260001015315000601</IBAN></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>AED</Ccy>
+        <Nm>DIT Receivables Account</Nm>
+      </CdtrAcct>
+      <Purp><Cd>SUPP</Cd></Purp>
+      <RmtInf>
+        <Strd>
+          <RfrdDocInf>
+            <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+            <Nb>INV-DIT-2026-00123</Nb>
+            <RltdDt>2025-12-28</RltdDt>
+          </RfrdDocInf>
+          <RfrdDocAmt>
+            <DuePyblAmt Ccy="AED">275000.00</DuePyblAmt>
+          </RfrdDocAmt>
+        </Strd>
+        <Ustrd>UAEFTS Payment for Trade Settlement INV-DIT-2026-00123 Q1 Goods Import</Ustrd>
+      </RmtInf>
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>

@@ -1,71 +1,115 @@
 {
   "Head": {
-    "msgId": "E2E-UPI-001",
+    "msgId": "UPI-E2E-20260106-001",
     "orgId": "NPCI",
-    "ts": "2025-01-06T11:00:00+05:30",
-    "ver": "2.0"
+    "ts": "2026-01-06T16:30:00+05:30",
+    "ver": "2.0",
+    "txnType": "PAY"
   },
   "Txn": {
-    "id": "TXN-UPI-E2E-001",
+    "id": "TXN-UPI-20260106-001",
     "type": "PAY",
-    "ts": "2025-01-06T11:00:00+05:30",
-    "note": "E2E UPI Test Payment"
+    "subType": "PAY",
+    "ts": "2026-01-06T16:30:00+05:30",
+    "note": "UPI Payment for Invoice INV-MTI-2026-00789 IT Services Q1",
+    "refId": "INV-MTI-2026-00789",
+    "refUrl": "https://payments.mumbaitech.in/invoice/MTI-2026-00789"
   },
   "Payer": {
-    "addr": "payer@okicici",
-    "name": "E2E UPI Payer",
-    "type": "PERSON",
+    "addr": "treasuryops@okicici",
+    "name": "Mumbai Tech Innovations Pvt Ltd",
+    "type": "ENTITY",
+    "vpa": "treasuryops@okicici",
     "Ac": {
       "addrType": "ACCOUNT",
       "Detail": [
-        {"name": "ACNUM", "value": "1234567890"},
-        {"name": "ACTYPE", "value": "SAVINGS"},
-        {"name": "IFSC", "value": "ICIC0001234"}
+        {"name": "ACNUM", "value": "123456789012345"},
+        {"name": "ACTYPE", "value": "CURRENT"},
+        {"name": "IFSC", "value": "ICIC0001234"},
+        {"name": "NAME", "value": "Mumbai Tech Innovations Pvt Ltd"}
       ]
     },
     "Amount": {
       "curr": "INR",
-      "value": "7500.00"
+      "value": "175000.00"
+    },
+    "Address": {
+      "line1": "Bandra Kurla Complex",
+      "line2": "Tower C, Floor 20",
+      "city": "Mumbai",
+      "state": "Maharashtra",
+      "country": "IN",
+      "postalCode": "400051"
+    },
+    "Contact": {
+      "name": "Priya Sharma",
+      "phone": "+91 22 6789 0123",
+      "email": "treasury@mumbaitech.in"
+    },
+    "OrgId": {
+      "pan": "AABCM1234A",
+      "gstin": "27AABCM1234A1Z5"
     }
   },
   "Payee": {
-    "addr": "payee@oksbi",
-    "name": "E2E UPI Payee",
-    "type": "PERSON",
+    "addr": "accounts@oksbi",
+    "name": "Bangalore Software Solutions Pvt Ltd",
+    "type": "ENTITY",
+    "vpa": "accounts@oksbi",
     "Ac": {
       "addrType": "ACCOUNT",
       "Detail": [
-        {"name": "ACNUM", "value": "9876543210"},
-        {"name": "ACTYPE", "value": "SAVINGS"},
-        {"name": "IFSC", "value": "SBIN0005678"}
+        {"name": "ACNUM", "value": "987654321098765"},
+        {"name": "ACTYPE", "value": "CURRENT"},
+        {"name": "IFSC", "value": "SBIN0005678"},
+        {"name": "NAME", "value": "Bangalore Software Solutions Pvt Ltd"}
       ]
+    },
+    "Address": {
+      "line1": "Electronics City Phase 1",
+      "line2": "Tech Park, Building 5",
+      "city": "Bangalore",
+      "state": "Karnataka",
+      "country": "IN",
+      "postalCode": "560100"
+    },
+    "Contact": {
+      "name": "Rajesh Kumar",
+      "phone": "+91 80 4567 8901",
+      "email": "receivables@bangaloresoft.in"
+    },
+    "OrgId": {
+      "pan": "AABCB9876A",
+      "gstin": "29AABCB9876A1Z9"
     }
   },
-  "headMsgId": "E2E-UPI-001",
+  "headMsgId": "UPI-E2E-20260106-001",
   "headOrgId": "NPCI",
-  "headTs": "2025-01-06T11:00:00+05:30",
+  "headTs": "2026-01-06T16:30:00+05:30",
   "headVer": "2.0",
-  "txnId": "TXN-UPI-E2E-001",
+  "txnId": "TXN-UPI-20260106-001",
   "txnType": "PAY",
-  "txnTs": "2025-01-06T11:00:00+05:30",
-  "txnNote": "E2E UPI Test Payment",
-  "payerAddr": "payer@okicici",
-  "payerName": "E2E UPI Payer",
-  "payerType": "PERSON",
+  "txnTs": "2026-01-06T16:30:00+05:30",
+  "txnNote": "UPI Payment for Invoice INV-MTI-2026-00789 IT Services Q1",
+  "payerAddr": "treasuryops@okicici",
+  "payerName": "Mumbai Tech Innovations Pvt Ltd",
+  "payerType": "ENTITY",
   "payerAcAddrType": "ACCOUNT",
-  "payerAcAcnum": "1234567890",
-  "payerAcActype": "SAVINGS",
+  "payerAcAcnum": "123456789012345",
+  "payerAcActype": "CURRENT",
   "payerAcIfsc": "ICIC0001234",
   "payerAmountCurr": "INR",
-  "payerAmountValue": 7500.00,
-  "payeeAddr": "payee@oksbi",
-  "payeeName": "E2E UPI Payee",
-  "payeeType": "PERSON",
+  "payerAmountValue": 175000.00,
+  "payeeAddr": "accounts@oksbi",
+  "payeeName": "Bangalore Software Solutions Pvt Ltd",
+  "payeeType": "ENTITY",
   "payeeAcAddrType": "ACCOUNT",
-  "payeeAcAcnum": "9876543210",
-  "payeeAcActype": "SAVINGS",
+  "payeeAcAcnum": "987654321098765",
+  "payeeAcActype": "CURRENT",
   "payeeAcIfsc": "SBIN0005678",
-  "transactionId": "E2E-UPI-001",
-  "amount": 7500.00,
-  "currency": "INR"
+  "transactionId": "UPI-E2E-20260106-001",
+  "amount": 175000.00,
+  "currency": "INR",
+  "purposeCode": "SUPP",
+  "settlementDate": "2026-01-06"
 }

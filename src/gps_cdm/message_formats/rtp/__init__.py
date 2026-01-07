@@ -96,7 +96,11 @@ class RtpXmlParser:
             sttlm_inf = self._find(grp_hdr, 'SttlmInf')
             if sttlm_inf is not None:
                 result['settlementMethod'] = self._find_text(sttlm_inf, 'SttlmMtd')
-                result['clearingSystem'] = self._find_text(sttlm_inf, 'ClrSys/Cd')
+                # Try both paths for clearing system code
+                result['clearingSystem'] = (
+                    self._find_text(sttlm_inf, 'ClrSys/Cd') or
+                    self._find_text(sttlm_inf, 'ClrSys/Prtry')
+                )
 
         # Credit Transfer Transaction Information
         cdt_trf_tx_inf = self._find(fi_transfer, 'CdtTrfTxInf')
@@ -117,17 +121,43 @@ class RtpXmlParser:
             result['transactionId'] = self._find_text(pmt_id, 'TxId')
             result['uetr'] = self._find_text(pmt_id, 'UETR')
 
-        # Amounts
-        result['interbankSettlementAmount'] = self._safe_decimal(self._find_text(tx_inf, 'IntrBkSttlmAmt'))
-        result['interbankSettlementCurrency'] = self._find_attr(tx_inf, 'IntrBkSttlmAmt', 'Ccy')
-        result['instructedAmount'] = self._safe_decimal(self._find_text(tx_inf, 'InstdAmt'))
-        result['instructedCurrency'] = self._find_attr(tx_inf, 'InstdAmt', 'Ccy')
+        # Amounts - extract both IntrBkSttlmAmt and InstdAmt
+        interbank_amt = self._safe_decimal(self._find_text(tx_inf, 'IntrBkSttlmAmt'))
+        interbank_ccy = self._find_attr(tx_inf, 'IntrBkSttlmAmt', 'Ccy')
+        instructed_amt = self._safe_decimal(self._find_text(tx_inf, 'InstdAmt'))
+        instructed_ccy = self._find_attr(tx_inf, 'InstdAmt', 'Ccy')
+
+        # Store interbank settlement amount
+        result['interbankSettlementAmount'] = interbank_amt
+        result['interbankSettlementCurrency'] = interbank_ccy
+
+        # For instructed amount, fall back to interbank if not present
+        # This is critical because RTP messages typically use IntrBkSttlmAmt
+        result['instructedAmount'] = instructed_amt if instructed_amt is not None else interbank_amt
+        result['instructedCurrency'] = instructed_ccy if instructed_ccy is not None else interbank_ccy
 
         # Settlement Date
         result['interbankSettlementDate'] = self._find_text(tx_inf, 'IntrBkSttlmDt')
 
         # Charge Bearer
         result['chargeBearer'] = self._find_text(tx_inf, 'ChrgBr')
+
+        # Payment Type Information
+        pmt_tp_inf = self._find(tx_inf, 'PmtTpInf')
+        if pmt_tp_inf is not None:
+            result['instructionPriority'] = self._find_text(pmt_tp_inf, 'InstrPrty')
+            result['serviceLevel'] = (
+                self._find_text(pmt_tp_inf, 'SvcLvl/Cd') or
+                self._find_text(pmt_tp_inf, 'SvcLvl/Prtry')
+            )
+            result['localInstrument'] = (
+                self._find_text(pmt_tp_inf, 'LclInstrm/Cd') or
+                self._find_text(pmt_tp_inf, 'LclInstrm/Prtry')
+            )
+            result['categoryPurpose'] = (
+                self._find_text(pmt_tp_inf, 'CtgyPurp/Cd') or
+                self._find_text(pmt_tp_inf, 'CtgyPurp/Prtry')
+            )
 
         # Debtor Agent (RTN)
         dbtr_agt = self._find(tx_inf, 'DbtrAgt')
@@ -163,6 +193,7 @@ class RtpXmlParser:
         purp = self._find(tx_inf, 'Purp')
         if purp is not None:
             result['purposeCode'] = self._find_text(purp, 'Cd')
+            result['purposeProprietary'] = self._find_text(purp, 'Prtry')
 
         # Remittance Information
         rmt_inf = self._find(tx_inf, 'RmtInf')
@@ -170,6 +201,12 @@ class RtpXmlParser:
             result['remittanceInformation'] = {
                 'unstructured': self._find_text(rmt_inf, 'Ustrd')
             }
+            # Structured remittance
+            strd = self._find(rmt_inf, 'Strd')
+            if strd is not None:
+                result['remittanceInformation']['referenceNumber'] = self._find_text(strd, 'RfrdDocInf/Nb')
+                result['remittanceInformation']['referenceType'] = self._find_text(strd, 'RfrdDocInf/Tp/CdOrPrtry/Cd')
+                result['remittanceInformation']['creditorReference'] = self._find_text(strd, 'CdtrRefInf/Ref')
 
         return result
 
@@ -183,10 +220,24 @@ class RtpXmlParser:
         pstl_adr = self._find(party_elem, 'PstlAdr')
         if pstl_adr is not None:
             result['streetName'] = self._find_text(pstl_adr, 'StrtNm')
+            result['buildingNumber'] = self._find_text(pstl_adr, 'BldgNb')
             result['postalCode'] = self._find_text(pstl_adr, 'PstCd')
             result['townName'] = self._find_text(pstl_adr, 'TwnNm')
             result['countrySubDivision'] = self._find_text(pstl_adr, 'CtrySubDvsn')
             result['country'] = self._find_text(pstl_adr, 'Ctry')
+
+        # Organization ID
+        org_id = self._find(party_elem, 'Id/OrgId')
+        if org_id is not None:
+            result['orgId'] = (
+                self._find_text(org_id, 'LEI') or
+                self._find_text(org_id, 'Othr/Id')
+            )
+
+        # Private ID
+        prvt_id = self._find(party_elem, 'Id/PrvtId')
+        if prvt_id is not None:
+            result['prvtId'] = self._find_text(prvt_id, 'Othr/Id')
 
         return result
 
@@ -198,6 +249,17 @@ class RtpXmlParser:
         if acct_id is not None:
             # RTP uses Othr/Id for account numbers
             result['accountNumber'] = self._find_text(acct_id, 'Othr/Id')
+            # Also try IBAN in case it's used
+            if not result.get('accountNumber'):
+                result['accountNumber'] = self._find_text(acct_id, 'IBAN')
+
+        # Account type
+        tp = self._find(acct_elem, 'Tp')
+        if tp is not None:
+            result['type'] = self._find_text(tp, 'Cd')
+
+        # Currency
+        result['currency'] = self._find_text(acct_elem, 'Ccy')
 
         return result
 
@@ -210,6 +272,15 @@ class RtpXmlParser:
             # RTP uses ClrSysMmbId/MmbId for RTN
             result['memberId'] = self._find_text(fin_instn_id, 'ClrSysMmbId/MmbId')
             result['clearingSystem'] = 'RTP'
+
+            # Also capture BIC if present
+            result['bic'] = self._find_text(fin_instn_id, 'BICFI')
+
+            # Name and country
+            result['name'] = self._find_text(fin_instn_id, 'Nm')
+            pstl_adr = self._find(fin_instn_id, 'PstlAdr')
+            if pstl_adr is not None:
+                result['country'] = self._find_text(pstl_adr, 'Ctry')
 
         return result
 
@@ -278,19 +349,30 @@ class RtpExtractor(BaseExtractor):
                 msg_content = parser.parse(raw_text)
 
         # Extract nested objects
-        debtor = msg_content.get('debtor', {})
-        debtor_account = msg_content.get('debtorAccount', {})
-        debtor_agent = msg_content.get('debtorAgent', {})
-        creditor = msg_content.get('creditor', {})
-        creditor_account = msg_content.get('creditorAccount', {})
-        creditor_agent = msg_content.get('creditorAgent', {})
-        remittance_info = msg_content.get('remittanceInformation', {})
+        debtor = msg_content.get('debtor') or {}
+        debtor_account = msg_content.get('debtorAccount') or {}
+        debtor_agent = msg_content.get('debtorAgent') or {}
+        creditor = msg_content.get('creditor') or {}
+        creditor_account = msg_content.get('creditorAccount') or {}
+        creditor_agent = msg_content.get('creditorAgent') or {}
+        remittance_info = msg_content.get('remittanceInformation') or {}
 
         # Get account number and RTN values
         debtor_acct_num = trunc(debtor_account.get('accountNumber'), 34)
         creditor_acct_num = trunc(creditor_account.get('accountNumber'), 34)
         debtor_rtn = trunc(debtor_agent.get('memberId'), 9)
         creditor_rtn = trunc(creditor_agent.get('memberId'), 9)
+
+        # Amount with fallback: instructedAmount -> interbankSettlementAmount
+        instructed_amount = (
+            msg_content.get('instructedAmount') or
+            msg_content.get('interbankSettlementAmount')
+        )
+        instructed_currency = (
+            msg_content.get('instructedCurrency') or
+            msg_content.get('interbankSettlementCurrency') or
+            'USD'
+        )
 
         return {
             'stg_id': stg_id,
@@ -308,9 +390,14 @@ class RtpExtractor(BaseExtractor):
             'uetr': msg_content.get('uetr'),
             'clearing_system_reference': msg_content.get('clearingSystemReference'),
 
-            # Amounts
-            'instructed_amount': msg_content.get('instructedAmount') or msg_content.get('interbankSettlementAmount'),
-            'instructed_currency': msg_content.get('instructedCurrency') or msg_content.get('interbankSettlementCurrency') or 'USD',
+            # Amounts - both instructed_amount and interbank columns
+            'instructed_amount': instructed_amount,
+            'instructed_currency': instructed_currency,
+            'instd_amt': msg_content.get('instructedAmount'),
+            'instd_amt_ccy': msg_content.get('instructedCurrency'),
+            'intrbnk_sttlm_amt': msg_content.get('interbankSettlementAmount'),
+            'intrbnk_sttlm_ccy': msg_content.get('interbankSettlementCurrency'),
+            'intrbnk_sttlm_dt': msg_content.get('interbankSettlementDate'),
 
             # Debtor (matching DB columns)
             'debtor_name': trunc(debtor.get('name'), 140),
@@ -328,9 +415,50 @@ class RtpExtractor(BaseExtractor):
 
             # Purpose
             'purpose_code': msg_content.get('purposeCode'),
+            'purp_cd': msg_content.get('purposeCode'),
+            'purp_prtry': msg_content.get('purposeProprietary'),
 
             # Remittance Information
             'remittance_info': trunc(remittance_info.get('unstructured'), 140) if remittance_info else None,
+            'rmt_inf_ustrd': trunc(remittance_info.get('unstructured'), 140) if remittance_info else None,
+            'rmt_inf_ref_nb': remittance_info.get('referenceNumber') if remittance_info else None,
+            'rmt_inf_ref_tp': remittance_info.get('referenceType') if remittance_info else None,
+            'rmt_inf_cdtr_ref': remittance_info.get('creditorReference') if remittance_info else None,
+
+            # Payment type info
+            'instr_prty': msg_content.get('instructionPriority'),
+            'svc_lvl_cd': msg_content.get('serviceLevel'),
+            'lcl_instrm_cd': msg_content.get('localInstrument'),
+            'ctgy_purp_cd': msg_content.get('categoryPurpose'),
+            'chrg_br': msg_content.get('chargeBearer'),
+            'sttlm_mtd': msg_content.get('settlementMethod'),
+            'clr_sys_cd': msg_content.get('clearingSystem'),
+
+            # Extended debtor info
+            'dbtr_org_id': debtor.get('orgId'),
+            'dbtr_prvt_id': debtor.get('prvtId'),
+            'dbtr_strt_nm': debtor.get('streetName'),
+            'dbtr_bldg_nb': debtor.get('buildingNumber'),
+            'dbtr_pst_cd': debtor.get('postalCode'),
+            'dbtr_twn_nm': debtor.get('townName'),
+            'dbtr_ctry_sub_dvsn': debtor.get('countrySubDivision'),
+            'dbtr_ctry': debtor.get('country'),
+            'dbtr_acct_tp': debtor_account.get('type'),
+            'dbtr_agt_nm': debtor_agent.get('name'),
+            'dbtr_agt_ctry': debtor_agent.get('country'),
+
+            # Extended creditor info
+            'cdtr_org_id': creditor.get('orgId'),
+            'cdtr_prvt_id': creditor.get('prvtId'),
+            'cdtr_strt_nm': creditor.get('streetName'),
+            'cdtr_bldg_nb': creditor.get('buildingNumber'),
+            'cdtr_pst_cd': creditor.get('postalCode'),
+            'cdtr_twn_nm': creditor.get('townName'),
+            'cdtr_ctry_sub_dvsn': creditor.get('countrySubDivision'),
+            'cdtr_ctry': creditor.get('country'),
+            'cdtr_acct_tp': creditor_account.get('type'),
+            'cdtr_agt_nm': creditor_agent.get('name'),
+            'cdtr_agt_ctry': creditor_agent.get('country'),
         }
 
     def get_silver_columns(self) -> List[str]:

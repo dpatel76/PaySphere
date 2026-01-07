@@ -30,8 +30,245 @@ from ..base import (
 logger = logging.getLogger(__name__)
 
 
+class FpsXmlParser:
+    """Parser for FPS ISO 20022 pacs.008 XML messages.
+
+    Handles namespace stripping and extracts fields from the FIToFICstmrCdtTrf
+    structure used by UK Faster Payments.
+    """
+
+    NS_PATTERN = re.compile(r'\{[^}]+\}')
+
+    def _strip_ns(self, tag: str) -> str:
+        """Remove namespace from XML tag."""
+        return self.NS_PATTERN.sub('', tag)
+
+    def _find(self, element: ET.Element, path: str) -> Optional[ET.Element]:
+        """Find element using local names (ignoring namespaces).
+
+        Args:
+            element: Parent element to search from
+            path: Slash-separated path of element names (e.g., 'GrpHdr/MsgId')
+
+        Returns:
+            Found element or None
+        """
+        if element is None:
+            return None
+        parts = path.split('/')
+        current = element
+        for part in parts:
+            found = None
+            for child in current:
+                if self._strip_ns(child.tag) == part:
+                    found = child
+                    break
+            if found is None:
+                return None
+            current = found
+        return current
+
+    def _find_text(self, element: ET.Element, path: str) -> Optional[str]:
+        """Find element text using local names."""
+        elem = self._find(element, path)
+        return elem.text if elem is not None else None
+
+    def _find_attr(self, element: ET.Element, path: str, attr: str) -> Optional[str]:
+        """Find element attribute."""
+        elem = self._find(element, path)
+        return elem.get(attr) if elem is not None else None
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse FPS XML message to dictionary.
+
+        Args:
+            content: Raw XML string or JSON string
+
+        Returns:
+            Dictionary with normalized field names (camelCase)
+        """
+        # If already dict, just return
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        # Try JSON first
+        try:
+            parsed = json.loads(raw_content)
+            return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Parse XML
+        try:
+            # Strip BOM if present
+            if raw_content.startswith('\ufeff'):
+                raw_content = raw_content[1:]
+            root = ET.fromstring(raw_content)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse FPS XML: {e}")
+            return {}
+
+        return self._parse_iso20022(root)
+
+    def _parse_iso20022(self, root: ET.Element) -> Dict[str, Any]:
+        """Parse FPS pacs.008 XML structure to normalized dict."""
+        result = {}
+
+        # Find the FIToFICstmrCdtTrf element (may be root, child of Document, or nested)
+        fi_transfer = self._find(root, 'FIToFICstmrCdtTrf')
+        if fi_transfer is None:
+            # Check if root itself is FIToFICstmrCdtTrf
+            if self._strip_ns(root.tag) == 'FIToFICstmrCdtTrf':
+                fi_transfer = root
+            else:
+                # Try Document/FIToFICstmrCdtTrf
+                for child in root:
+                    if self._strip_ns(child.tag) == 'FIToFICstmrCdtTrf':
+                        fi_transfer = child
+                        break
+
+        if fi_transfer is None:
+            logger.warning("FIToFICstmrCdtTrf element not found in FPS XML")
+            return result
+
+        # ---------------------------------------------------------------
+        # GROUP HEADER (GrpHdr)
+        # ---------------------------------------------------------------
+        grp_hdr = self._find(fi_transfer, 'GrpHdr')
+        if grp_hdr is not None:
+            result['messageId'] = self._find_text(grp_hdr, 'MsgId')
+            result['creationDateTime'] = self._find_text(grp_hdr, 'CreDtTm')
+            result['numberOfTransactions'] = self._find_text(grp_hdr, 'NbOfTxs')
+            result['settlementDate'] = self._find_text(grp_hdr, 'IntrBkSttlmDt')
+            result['settlementMethod'] = self._find_text(grp_hdr, 'SttlmInf/SttlmMtd')
+
+        # ---------------------------------------------------------------
+        # CREDIT TRANSFER TRANSACTION INFO (CdtTrfTxInf)
+        # ---------------------------------------------------------------
+        cdt_trf = self._find(fi_transfer, 'CdtTrfTxInf')
+        if cdt_trf is not None:
+            # Payment Identification
+            pmt_id = self._find(cdt_trf, 'PmtId')
+            if pmt_id is not None:
+                result['instructionId'] = self._find_text(pmt_id, 'InstrId')
+                result['endToEndId'] = self._find_text(pmt_id, 'EndToEndId')
+                result['paymentId'] = self._find_text(pmt_id, 'TxId')
+                result['uetr'] = self._find_text(pmt_id, 'UETR')
+
+            # Interbank Settlement Amount (with Ccy attribute)
+            amt_elem = self._find(cdt_trf, 'IntrBkSttlmAmt')
+            if amt_elem is not None:
+                result['amount'] = amt_elem.text
+                result['currency'] = amt_elem.get('Ccy') or 'GBP'
+
+            # ---------------------------------------------------------------
+            # DEBTOR (Dbtr) - Payer
+            # ---------------------------------------------------------------
+            dbtr = self._find(cdt_trf, 'Dbtr')
+            if dbtr is not None:
+                result['debtorName'] = self._find_text(dbtr, 'Nm')
+                result['payerName'] = result['debtorName']
+
+                # Postal Address
+                pstl_adr = self._find(dbtr, 'PstlAdr')
+                if pstl_adr is not None:
+                    result['payerAddress'] = self._find_text(pstl_adr, 'StrtNm')
+                    result['debtorStreetName'] = result['payerAddress']
+
+            # Debtor Account (DbtrAcct)
+            dbtr_acct = self._find(cdt_trf, 'DbtrAcct')
+            if dbtr_acct is not None:
+                # Try Othr/Id first (UK BBAN format)
+                acct_id = self._find_text(dbtr_acct, 'Id/Othr/Id')
+                if acct_id:
+                    result['debtorAccountNumber'] = acct_id
+                    result['payerAccount'] = acct_id
+                # Try IBAN
+                iban = self._find_text(dbtr_acct, 'Id/IBAN')
+                if iban:
+                    result['payerIban'] = iban
+                    result['debtorIban'] = iban
+
+            # Debtor Agent (DbtrAgt) - Payer's Bank
+            dbtr_agt = self._find(cdt_trf, 'DbtrAgt')
+            if dbtr_agt is not None:
+                fi_id = self._find(dbtr_agt, 'FinInstnId')
+                if fi_id is not None:
+                    result['payerBic'] = self._find_text(fi_id, 'BICFI')
+                    result['debtorAgentBic'] = result['payerBic']
+                    result['debtorAgentName'] = self._find_text(fi_id, 'Nm')
+
+                    # Sort Code (ClrSysMmbId/MmbId)
+                    sort_code = self._find_text(fi_id, 'ClrSysMmbId/MmbId')
+                    if sort_code:
+                        result['payerSortCode'] = sort_code
+                        result['debtorSortCode'] = sort_code
+
+            # ---------------------------------------------------------------
+            # CREDITOR (Cdtr) - Payee
+            # ---------------------------------------------------------------
+            cdtr = self._find(cdt_trf, 'Cdtr')
+            if cdtr is not None:
+                result['creditorName'] = self._find_text(cdtr, 'Nm')
+                result['payeeName'] = result['creditorName']
+
+                # Postal Address
+                pstl_adr = self._find(cdtr, 'PstlAdr')
+                if pstl_adr is not None:
+                    result['payeeAddress'] = self._find_text(pstl_adr, 'StrtNm')
+                    result['creditorStreetName'] = result['payeeAddress']
+
+            # Creditor Account (CdtrAcct)
+            cdtr_acct = self._find(cdt_trf, 'CdtrAcct')
+            if cdtr_acct is not None:
+                # Try Othr/Id first (UK BBAN format)
+                acct_id = self._find_text(cdtr_acct, 'Id/Othr/Id')
+                if acct_id:
+                    result['creditorAccountNumber'] = acct_id
+                    result['payeeAccount'] = acct_id
+                # Try IBAN
+                iban = self._find_text(cdtr_acct, 'Id/IBAN')
+                if iban:
+                    result['payeeIban'] = iban
+                    result['creditorIban'] = iban
+
+            # Creditor Agent (CdtrAgt) - Payee's Bank
+            cdtr_agt = self._find(cdt_trf, 'CdtrAgt')
+            if cdtr_agt is not None:
+                fi_id = self._find(cdtr_agt, 'FinInstnId')
+                if fi_id is not None:
+                    result['payeeBic'] = self._find_text(fi_id, 'BICFI')
+                    result['creditorAgentBic'] = result['payeeBic']
+                    result['creditorAgentName'] = self._find_text(fi_id, 'Nm')
+
+                    # Sort Code (ClrSysMmbId/MmbId)
+                    sort_code = self._find_text(fi_id, 'ClrSysMmbId/MmbId')
+                    if sort_code:
+                        result['payeeSortCode'] = sort_code
+                        result['creditorSortCode'] = sort_code
+
+            # ---------------------------------------------------------------
+            # REMITTANCE INFORMATION (RmtInf)
+            # ---------------------------------------------------------------
+            rmt_inf = self._find(cdt_trf, 'RmtInf')
+            if rmt_inf is not None:
+                result['remittanceInfo'] = self._find_text(rmt_inf, 'Ustrd')
+
+                # Structured reference
+                strd = self._find(rmt_inf, 'Strd')
+                if strd is not None:
+                    ref = self._find_text(strd, 'RfrdDocInf/Nb')
+                    if ref:
+                        result['paymentReference'] = ref
+
+        return result
+
+
 class FpsParser:
-    """Parser for FPS ISO 20022 pacs.008 XML messages."""
+    """Legacy parser for FPS ISO 20022 pacs.008 XML messages.
+
+    Deprecated: Use FpsXmlParser instead. This class is kept for backward compatibility.
+    """
 
     @staticmethod
     def strip_namespaces(xml_string: str) -> str:
@@ -198,6 +435,10 @@ class FpsExtractor(BaseExtractor):
     MESSAGE_TYPE = "FPS"
     SILVER_TABLE = "stg_fps"
 
+    def __init__(self):
+        """Initialize FPS extractor with XML parser."""
+        self.parser = FpsXmlParser()
+
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================
@@ -209,7 +450,7 @@ class FpsExtractor(BaseExtractor):
         """
         # Parse if string content
         if isinstance(raw_content, str):
-            parsed = FpsParser.parse(raw_content)
+            parsed = self.parser.parse(raw_content)
         else:
             parsed = raw_content
 
@@ -245,7 +486,7 @@ class FpsExtractor(BaseExtractor):
 
         # Parse content if needed
         if isinstance(msg_content, str):
-            msg_content = FpsParser.parse(msg_content)
+            msg_content = self.parser.parse(msg_content)
 
         # Extract values with proper fallbacks for None
         payer_name = msg_content.get('payerName') or msg_content.get('debtorName')

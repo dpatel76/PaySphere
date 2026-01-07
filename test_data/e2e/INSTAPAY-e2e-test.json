@@ -1,21 +1,180 @@
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
   <FIToFICstmrCdtTrf>
     <GrpHdr>
-      <MsgId>E2E-INSTAPAY-001</MsgId>
-      <CreDtTm>2025-01-06T12:30:00</CreDtTm>
+      <MsgId>INSTAPAY-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T15:45:00+08:00</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
-      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+      <TtlIntrBkSttlmAmt Ccy="PHP">125000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>INSTAPAY</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>BABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>BRSTN</Prtry></ClrSysId>
+            <MmbId>010530667</MmbId>
+          </ClrSysMmbId>
+          <Nm>BDO Unibank Inc</Nm>
+          <PstlAdr>
+            <StrtNm>BDO Corporate Center, 7899 Makati Avenue</StrtNm>
+            <PstCd>0726</PstCd>
+            <TwnNm>Makati City</TwnNm>
+            <CtrySubDvsn>Metro Manila</CtrySubDvsn>
+            <Ctry>PH</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>BPIPHPMMXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>BRSTN</Prtry></ClrSysId>
+            <MmbId>010040018</MmbId>
+          </ClrSysMmbId>
+          <Nm>Bank of the Philippine Islands</Nm>
+          <PstlAdr>
+            <StrtNm>BPI Building, Ayala Avenue</StrtNm>
+            <PstCd>1226</PstCd>
+            <TwnNm>Makati City</TwnNm>
+            <CtrySubDvsn>Metro Manila</CtrySubDvsn>
+            <Ctry>PH</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstdAgt>
     </GrpHdr>
     <CdtTrfTxInf>
-      <PmtId><EndToEndId>E2E-INSTAPAY-TX001</EndToEndId></PmtId>
-      <IntrBkSttlmAmt Ccy="PHP">75000.00</IntrBkSttlmAmt>
-      <Dbtr><Nm>E2E InstaPay Debtor Manila</Nm></Dbtr>
-      <DbtrAcct><Id><Othr><Id>PH1234567890123</Id></Othr></Id></DbtrAcct>
-      <DbtrAgt><FinInstnId><BICFI>BABORUAUXXX</BICFI></FinInstnId></DbtrAgt>
-      <CdtrAgt><FinInstnId><BICFI>BPIPHPMMXXX</BICFI></FinInstnId></CdtrAgt>
-      <Cdtr><Nm>E2E InstaPay Creditor Manila</Nm></Cdtr>
-      <CdtrAcct><Id><Othr><Id>PH9876543210987</Id></Othr></Id></CdtrAcct>
+      <PmtId>
+        <InstrId>INSTAPAY-INSTR-20260106-001</InstrId>
+        <EndToEndId>E2E-INSTAPAY-20260106-001</EndToEndId>
+        <TxId>TXN-INSTAPAY-20260106-001</TxId>
+        <UETR>c9d0e1f2-a3b4-5678-9012-cdef34567890</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <InstrPrty>NORM</InstrPrty>
+        <SvcLvl><Prtry>INST</Prtry></SvcLvl>
+        <LclInstrm><Prtry>INSTAPAY</Prtry></LclInstrm>
+        <CtgyPurp><Cd>SUPP</Cd></CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="PHP">125000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <AccptncDtTm>2026-01-06T15:45:00+08:00</AccptncDtTm>
+      <ChrgBr>SLEV</ChrgBr>
+      <Dbtr>
+        <Nm>Manila Tech Solutions Corporation</Nm>
+        <PstlAdr>
+          <StrtNm>BGC Corporate Center</StrtNm>
+          <BldgNb>32nd Floor, Tower One</BldgNb>
+          <PstCd>1634</PstCd>
+          <TwnNm>Taguig City</TwnNm>
+          <CtrySubDvsn>Metro Manila</CtrySubDvsn>
+          <Ctry>PH</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>123-456-789-000</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+              <Issr>BIR</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>Maria Santos</Nm>
+          <PhneNb>+63 2 8123 4567</PhneNb>
+          <EmailAdr>treasury@manilatech.ph</EmailAdr>
+        </CtctDtls>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><Othr><Id>010530667123456789</Id></Othr></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>PHP</Ccy>
+        <Nm>Manila Tech Corporate Account</Nm>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>ABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>BRSTN</Prtry></ClrSysId>
+            <MmbId>010530667</MmbId>
+          </ClrSysMmbId>
+          <Nm>BDO Unibank Inc</Nm>
+          <PstlAdr>
+            <StrtNm>BDO Corporate Center, 7899 Makati Avenue</StrtNm>
+            <PstCd>0726</PstCd>
+            <TwnNm>Makati City</TwnNm>
+            <CtrySubDvsn>Metro Manila</CtrySubDvsn>
+            <Ctry>PH</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>BPIPHPMMXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>BRSTN</Prtry></ClrSysId>
+            <MmbId>010040018</MmbId>
+          </ClrSysMmbId>
+          <Nm>Bank of the Philippine Islands</Nm>
+          <PstlAdr>
+            <StrtNm>BPI Building, Ayala Avenue</StrtNm>
+            <PstCd>1226</PstCd>
+            <TwnNm>Makati City</TwnNm>
+            <CtrySubDvsn>Metro Manila</CtrySubDvsn>
+            <Ctry>PH</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Cebu Distribution Services Inc</Nm>
+        <PstlAdr>
+          <StrtNm>Cebu Business Park</StrtNm>
+          <BldgNb>Unit 1501, Cebu IT Tower</BldgNb>
+          <PstCd>6000</PstCd>
+          <TwnNm>Cebu City</TwnNm>
+          <CtrySubDvsn>Cebu</CtrySubDvsn>
+          <Ctry>PH</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>987-654-321-000</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+              <Issr>BIR</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>Jose Garcia</Nm>
+          <PhneNb>+63 32 234 5678</PhneNb>
+          <EmailAdr>receivables@cebudist.ph</EmailAdr>
+        </CtctDtls>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><Othr><Id>010040018987654321</Id></Othr></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>PHP</Ccy>
+        <Nm>Cebu Distribution Receivables</Nm>
+      </CdtrAcct>
+      <Purp><Cd>SUPP</Cd></Purp>
+      <RmtInf>
+        <Strd>
+          <RfrdDocInf>
+            <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+            <Nb>INV-CDS-2026-00789</Nb>
+            <RltdDt>2025-12-20</RltdDt>
+          </RfrdDocInf>
+          <RfrdDocAmt>
+            <DuePyblAmt Ccy="PHP">125000.00</DuePyblAmt>
+          </RfrdDocAmt>
+        </Strd>
+        <Ustrd>InstaPay Payment - Invoice INV-CDS-2026-00789 Distribution Services Q1</Ustrd>
+      </RmtInf>
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>

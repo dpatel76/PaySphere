@@ -2,21 +2,191 @@
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
   <FIToFICstmrCdtTrf>
     <GrpHdr>
-      <MsgId>CHAPS-E2E-V2-001</MsgId>
-      <CreDtTm>2026-01-06T15:30:00</CreDtTm>
+      <MsgId>CHAPS-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T14:30:00Z</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
-      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+      <TtlIntrBkSttlmAmt Ccy="GBP">375000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Cd>GBP</Cd>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>BABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>GBDSC</Cd></ClrSysId>
+            <MmbId>200000</MmbId>
+          </ClrSysMmbId>
+          <Nm>Barclays Bank PLC</Nm>
+          <PstlAdr>
+            <StrtNm>1 Churchill Place</StrtNm>
+            <PstCd>E14 5HP</PstCd>
+            <TwnNm>London</TwnNm>
+            <Ctry>GB</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>LOYDGB2LXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>GBDSC</Cd></ClrSysId>
+            <MmbId>300000</MmbId>
+          </ClrSysMmbId>
+          <Nm>Lloyds Bank PLC</Nm>
+          <PstlAdr>
+            <StrtNm>25 Gresham Street</StrtNm>
+            <PstCd>EC2V 7HN</PstCd>
+            <TwnNm>London</TwnNm>
+            <Ctry>GB</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstdAgt>
     </GrpHdr>
     <CdtTrfTxInf>
-      <PmtId><EndToEndId>E2E-CHAPS-V2</EndToEndId></PmtId>
-      <IntrBkSttlmAmt Ccy="GBP">25000.00</IntrBkSttlmAmt>
-      <ChrgBr>SLEV</ChrgBr>
-      <Dbtr><Nm>E2E CHAPS Debtor Ltd</Nm></Dbtr>
-      <DbtrAcct><Id><IBAN>GB82WEST12345698765432</IBAN></Id></DbtrAcct>
-      <DbtrAgt><FinInstnId><BICFI>WESTGB2LXXX</BICFI></FinInstnId></DbtrAgt>
-      <CdtrAgt><FinInstnId><BICFI>LOYDGB2LXXX</BICFI></FinInstnId></CdtrAgt>
-      <Cdtr><Nm>E2E CHAPS Creditor Corp</Nm></Cdtr>
-      <CdtrAcct><Id><IBAN>GB29LOYD60161331926819</IBAN></Id></CdtrAcct>
+      <PmtId>
+        <InstrId>CHAPS-INSTR-20260106-001</InstrId>
+        <EndToEndId>E2E-CHAPS-20260106-001</EndToEndId>
+        <TxId>TXN-CHAPS-20260106-001</TxId>
+        <UETR>d4e5f6a7-b8c9-0123-def0-456789012345</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <InstrPrty>HIGH</InstrPrty>
+        <SvcLvl><Cd>G001</Cd></SvcLvl>
+        <LclInstrm><Prtry>CHAPS</Prtry></LclInstrm>
+        <CtgyPurp><Cd>SUPP</Cd></CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="GBP">375000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmPrty>URGT</SttlmPrty>
+      <AccptncDtTm>2026-01-06T14:30:00Z</AccptncDtTm>
+      <ChrgBr>SHAR</ChrgBr>
+      <Dbtr>
+        <Nm>London Financial Services Group PLC</Nm>
+        <PstlAdr>
+          <StrtNm>20 Fenchurch Street</StrtNm>
+          <BldgNb>Level 35</BldgNb>
+          <PstCd>EC3M 3BY</PstCd>
+          <TwnNm>London</TwnNm>
+          <Ctry>GB</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>213800WSGIIZCXF1P572</LEI>
+            <Othr>
+              <Id>12345678</Id>
+              <SchmeNm><Cd>COID</Cd></SchmeNm>
+              <Issr>Companies House</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>Elizabeth Thornton</Nm>
+          <PhneNb>+44 20 7123 4567</PhneNb>
+          <EmailAdr>treasury@londonfs.co.uk</EmailAdr>
+        </CtctDtls>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><IBAN>GB82BARC20000012345678</IBAN></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>GBP</Ccy>
+        <Nm>London FS Treasury Account</Nm>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>BABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>GBDSC</Cd></ClrSysId>
+            <MmbId>200000</MmbId>
+          </ClrSysMmbId>
+          <Nm>Barclays Bank PLC</Nm>
+          <PstlAdr>
+            <StrtNm>1 Churchill Place</StrtNm>
+            <PstCd>E14 5HP</PstCd>
+            <TwnNm>London</TwnNm>
+            <Ctry>GB</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>LOYDGB2LXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>GBDSC</Cd></ClrSysId>
+            <MmbId>300000</MmbId>
+          </ClrSysMmbId>
+          <Nm>Lloyds Bank PLC</Nm>
+          <PstlAdr>
+            <StrtNm>25 Gresham Street</StrtNm>
+            <PstCd>EC2V 7HN</PstCd>
+            <TwnNm>London</TwnNm>
+            <Ctry>GB</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Manchester Engineering Solutions Ltd</Nm>
+        <PstlAdr>
+          <StrtNm>100 Deansgate</StrtNm>
+          <BldgNb>Suite 500</BldgNb>
+          <PstCd>M3 2GP</PstCd>
+          <TwnNm>Manchester</TwnNm>
+          <Ctry>GB</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>213800QDWKHNSY7H4E12</LEI>
+            <Othr>
+              <Id>87654321</Id>
+              <SchmeNm><Cd>COID</Cd></SchmeNm>
+              <Issr>Companies House</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>James Morrison</Nm>
+          <PhneNb>+44 161 234 5678</PhneNb>
+          <EmailAdr>accounts@manchestereng.co.uk</EmailAdr>
+        </CtctDtls>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><IBAN>GB29LOYD30000087654321</IBAN></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>GBP</Ccy>
+        <Nm>Manchester Engineering Receivables</Nm>
+      </CdtrAcct>
+      <Purp><Cd>SUPP</Cd></Purp>
+      <RgltryRptg>
+        <DbtCdtRptgInd>DEBT</DbtCdtRptgInd>
+        <Authrty>
+          <Nm>Bank of England</Nm>
+          <Ctry>GB</Ctry>
+        </Authrty>
+        <Dtls>
+          <Cd>A4</Cd>
+          <Inf>Service Payments</Inf>
+        </Dtls>
+      </RgltryRptg>
+      <RmtInf>
+        <Strd>
+          <RfrdDocInf>
+            <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+            <Nb>INV-MES-2026-00234</Nb>
+            <RltdDt>2025-12-15</RltdDt>
+          </RfrdDocInf>
+          <RfrdDocAmt>
+            <DuePyblAmt Ccy="GBP">375000.00</DuePyblAmt>
+          </RfrdDocAmt>
+          <CdtrRefInf>
+            <Tp><CdOrPrtry><Cd>SCOR</Cd></CdOrPrtry></Tp>
+            <Ref>MES-CONTRACT-2026-001</Ref>
+          </CdtrRefInf>
+        </Strd>
+        <Ustrd>CHAPS Payment for Engineering Services Contract MES-CONTRACT-2026-001 Q1</Ustrd>
+      </RmtInf>
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>

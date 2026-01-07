@@ -1,16 +1,63 @@
 {
-  "messageId": "MEPS-E2E-20260105-001",
-  "creationDateTime": "2026-01-05T22:30:00+08:00",
-  "settlementDate": "2026-01-05",
-  "amount": 250000.00,
+  "messageId": "MEPS-E2E-20260106-001",
+  "transactionId": "TXN-SG-20260106-001",
+  "transactionReference": "MEPS-REF-20260106-001",
+  "creationDateTime": "2026-01-06T11:30:00+08:00",
+  "settlementDate": "2026-01-06",
+  "valueDate": "2026-01-06",
+  "paymentType": "RTGS",
+  "priority": "HIGH",
+  "amount": 1250000.00,
   "currency": "SGD",
+  "chargeBearer": "SHAR",
   "sendingBankBic": "DBSSSGSG",
+  "sendingBankName": "DBS Bank Ltd",
+  "sendingBankCode": "7171",
   "receivingBankBic": "OCBCSGSG",
-  "transactionReference": "TXN-SG-E2E-001",
-  "debtorName": "E2E Test Singapore Tech Holdings Pte Ltd",
-  "debtorAccount": "001-E2E567-001",
-  "creditorName": "E2E Test Marina Bay Trading Company",
-  "creditorAccount": "002-E2E543-002",
+  "receivingBankName": "Oversea-Chinese Banking Corporation Limited",
+  "receivingBankCode": "7339",
+  "debtorName": "Singapore Shipping Corporation Pte Ltd",
+  "debtorAccount": "001-567890-001",
+  "debtorAccountType": "CACC",
+  "debtorUen": "200312345K",
+  "debtorAddress": {
+    "streetName": "Shenton Way",
+    "buildingNumber": "1",
+    "buildingName": "One Shenton",
+    "floor": "Level 38",
+    "postalCode": "068803",
+    "city": "Singapore",
+    "country": "SG"
+  },
+  "debtorContact": {
+    "name": "Lim Kok Wee",
+    "phone": "+65 6321 4567",
+    "email": "treasury@sgshipping.com.sg"
+  },
+  "creditorName": "Marina Bay Logistics Services Pte Ltd",
+  "creditorAccount": "002-543210-002",
+  "creditorAccountType": "CACC",
+  "creditorUen": "200456789H",
+  "creditorAddress": {
+    "streetName": "Tanjong Pagar Road",
+    "buildingNumber": "80",
+    "buildingName": "Tanjong Pagar Centre",
+    "floor": "Level 25",
+    "postalCode": "088503",
+    "city": "Singapore",
+    "country": "SG"
+  },
+  "creditorContact": {
+    "name": "Tan Mei Ling",
+    "phone": "+65 6543 2109",
+    "email": "receivables@mblogistics.com.sg"
+  },
   "purposeCode": "SUPP",
-  "remittanceInfo": "E2E Test Invoice INV-2026-E2E001 payment for IT services"
+  "categoryPurpose": "SUPP",
+  "remittanceInfo": {
+    "invoiceNumber": "INV-MBL-2026-00345",
+    "invoiceDate": "2025-12-20",
+    "purchaseOrderNumber": "PO-SSC-2026-00123",
+    "unstructured": "MEPS+ Payment for Logistics Services Invoice INV-MBL-2026-00345 Q1 2026"
+  }
 }

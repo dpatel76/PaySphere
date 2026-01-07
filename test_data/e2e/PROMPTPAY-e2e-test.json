@@ -1,19 +1,69 @@
 {
-  "transactionId": "E2E-PROMPTPAY-001",
-  "creationDateTime": "2025-01-06T11:00:00+07:00",
-  "amount": 5000.00,
+  "transactionId": "PROMPTPAY-E2E-20260106-001",
+  "endToEndId": "E2E-PP-20260106-001",
+  "creationDateTime": "2026-01-06T14:15:00+07:00",
+  "settlementDate": "2026-01-06",
+  "acceptanceDateTime": "2026-01-06T14:15:00+07:00",
+  "amount": 125000.00,
   "currency": "THB",
+  "chargeBearer": "SLEV",
+  "paymentType": "INSTANT",
+  "localInstrument": "PROMPTPAY",
   "payerProxyType": "MOBILE",
-  "payerProxyValue": "0812345678",
-  "payerName": "E2E PromptPay Payer",
+  "payerProxyValue": "0891234567",
+  "payerName": "Bangkok Trading Corporation Ltd",
+  "payerTaxId": "0105556000001",
   "payerBankCode": "002",
+  "payerBankName": "Bangkok Bank Public Company Limited",
+  "payerBankBic": "BKKBTHBKXXX",
   "payerAccount": "1234567890",
-  "payeeProxyType": "MOBILE",
-  "payeeProxyValue": "0898765432",
-  "payeeName": "E2E PromptPay Payee",
+  "payerAccountType": "CACC",
+  "payerAddress": {
+    "streetName": "Silom Road",
+    "buildingNumber": "333",
+    "floor": "25th Floor",
+    "postalCode": "10500",
+    "city": "Bangkok",
+    "district": "Bang Rak",
+    "country": "TH"
+  },
+  "payerContact": {
+    "name": "Somchai Prasert",
+    "phone": "+66 2 231 4567",
+    "email": "treasury@bangkoktrading.co.th"
+  },
+  "payeeProxyType": "TAXID",
+  "payeeProxyValue": "0105557000002",
+  "payeeName": "Chiang Mai Export Services Co Ltd",
+  "payeeTaxId": "0105557000002",
   "payeeBankCode": "014",
+  "payeeBankName": "Siam Commercial Bank Public Company Limited",
+  "payeeBankBic": "SICOTHBKXXX",
   "payeeAccount": "9876543210",
-  "endToEndId": "E2E-PP-001",
-  "qrCodeData": "00020101021229370016A000000677010111011300668123456785802TH",
-  "remittanceInfo": "E2E PromptPay Test Payment"
+  "payeeAccountType": "CACC",
+  "payeeAddress": {
+    "streetName": "Chang Klan Road",
+    "buildingNumber": "199",
+    "floor": "8th Floor",
+    "postalCode": "50100",
+    "city": "Chiang Mai",
+    "district": "Muang",
+    "country": "TH"
+  },
+  "payeeContact": {
+    "name": "Nattaporn Wisut",
+    "phone": "+66 53 234 567",
+    "email": "accounts@chiangmaiexport.co.th"
+  },
+  "qrCodeData": "00020101021229370016A000000677010111011300668912345675802TH5913CHIANG MAI EXP6007BANGKOK62070703INV",
+  "remittanceInfo": {
+    "structured": {
+      "invoiceNumber": "INV-CME-2026-00345",
+      "invoiceDate": "2025-12-28",
+      "dueAmount": 125000.00
+    },
+    "unstructured": "PromptPay Payment for Invoice INV-CME-2026-00345 Export Services January 2026"
+  },
+  "purposeCode": "SUPP",
+  "categoryPurpose": "SUPP"
 }

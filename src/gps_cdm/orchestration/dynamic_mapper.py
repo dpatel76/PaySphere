@@ -224,6 +224,22 @@ class DynamicMapper:
                 except ValueError:
                     pass
             return value
+        elif data_type == 'ARRAY':
+            # Convert Python list to PostgreSQL array literal {val1,val2}
+            if isinstance(value, list):
+                # Escape any commas or braces in values
+                escaped = []
+                for v in value:
+                    s = str(v) if v is not None else ''
+                    # Quote if contains comma, brace, or whitespace
+                    if ',' in s or '{' in s or '}' in s or ' ' in s or '"' in s:
+                        s = '"' + s.replace('"', '\\"') + '"'
+                    escaped.append(s)
+                return '{' + ','.join(escaped) + '}'
+            elif value is not None:
+                # Single value - wrap in array
+                return '{' + str(value) + '}'
+            return None
         else:  # VARCHAR
             return self._truncate(str(value), max_length) if value is not None else None
 

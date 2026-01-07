@@ -1,21 +1,190 @@
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
   <FIToFICstmrCdtTrf>
     <GrpHdr>
-      <MsgId>E2E-NPP-001</MsgId>
-      <CreDtTm>2025-01-06T11:00:00</CreDtTm>
+      <MsgId>NPP-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T11:45:00+11:00</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
-      <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+      <TtlIntrBkSttlmAmt Ccy="AUD">45750.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>NPPA</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>CTBAAU2SXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>AUBSB</Prtry></ClrSysId>
+            <MmbId>064000</MmbId>
+          </ClrSysMmbId>
+          <Nm>Commonwealth Bank of Australia</Nm>
+          <PstlAdr>
+            <StrtNm>Tower 1 International Towers Sydney</StrtNm>
+            <BldgNb>201 Sussex Street</BldgNb>
+            <PstCd>2000</PstCd>
+            <TwnNm>Sydney</TwnNm>
+            <CtrySubDvsn>NSW</CtrySubDvsn>
+            <Ctry>AU</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>NABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>AUBSB</Prtry></ClrSysId>
+            <MmbId>082000</MmbId>
+          </ClrSysMmbId>
+          <Nm>National Australia Bank Limited</Nm>
+          <PstlAdr>
+            <StrtNm>395 Bourke Street</StrtNm>
+            <PstCd>3000</PstCd>
+            <TwnNm>Melbourne</TwnNm>
+            <CtrySubDvsn>VIC</CtrySubDvsn>
+            <Ctry>AU</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstdAgt>
     </GrpHdr>
     <CdtTrfTxInf>
-      <PmtId><EndToEndId>E2E-NPP-TX001</EndToEndId></PmtId>
-      <IntrBkSttlmAmt Ccy="AUD">1500.00</IntrBkSttlmAmt>
-      <Dbtr><Nm>E2E NPP Debtor</Nm></Dbtr>
-      <DbtrAcct><Id><Othr><Id>123456789</Id></Othr></Id></DbtrAcct>
-      <DbtrAgt><FinInstnId><BICFI>CTBAAU2SXXX</BICFI></FinInstnId></DbtrAgt>
-      <CdtrAgt><FinInstnId><BICFI>NABORUAUXXX</BICFI></FinInstnId></CdtrAgt>
-      <Cdtr><Nm>E2E NPP Creditor</Nm></Cdtr>
-      <CdtrAcct><Id><Othr><Id>987654321</Id></Othr></Id></CdtrAcct>
+      <PmtId>
+        <InstrId>NPP-INSTR-20260106-001</InstrId>
+        <EndToEndId>E2E-NPP-20260106-001</EndToEndId>
+        <TxId>TXN-NPP-20260106-001</TxId>
+        <UETR>c3d4e5f6-a7b8-9012-cdef-345678901234</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <InstrPrty>NORM</InstrPrty>
+        <SvcLvl><Prtry>NPPO</Prtry></SvcLvl>
+        <LclInstrm><Prtry>OSKO</Prtry></LclInstrm>
+        <CtgyPurp><Cd>SUPP</Cd></CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="AUD">45750.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <AccptncDtTm>2026-01-06T11:45:00+11:00</AccptncDtTm>
+      <ChrgBr>SLEV</ChrgBr>
+      <Dbtr>
+        <Nm>Sydney Harbour Trading Pty Ltd</Nm>
+        <PstlAdr>
+          <StrtNm>1 Macquarie Place</StrtNm>
+          <BldgNb>Level 25</BldgNb>
+          <PstCd>2000</PstCd>
+          <TwnNm>Sydney</TwnNm>
+          <CtrySubDvsn>NSW</CtrySubDvsn>
+          <Ctry>AU</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>12 345 678 901</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+              <Issr>ATO</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>Jennifer Walsh</Nm>
+          <PhneNb>+61 2 9876 5432</PhneNb>
+          <EmailAdr>accounts@sydneyharbour.com.au</EmailAdr>
+        </CtctDtls>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><Othr><Id>064000123456789</Id></Othr></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>AUD</Ccy>
+        <Nm>Sydney Harbour Trading Operations</Nm>
+        <Prxy>
+          <Tp><Cd>EMAL</Cd></Tp>
+          <Id>pay@sydneyharbour.com.au</Id>
+        </Prxy>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>CTBAAU2SXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>AUBSB</Prtry></ClrSysId>
+            <MmbId>064000</MmbId>
+          </ClrSysMmbId>
+          <Nm>Commonwealth Bank of Australia</Nm>
+          <PstlAdr>
+            <StrtNm>Tower 1 International Towers Sydney</StrtNm>
+            <BldgNb>201 Sussex Street</BldgNb>
+            <PstCd>2000</PstCd>
+            <TwnNm>Sydney</TwnNm>
+            <CtrySubDvsn>NSW</CtrySubDvsn>
+            <Ctry>AU</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>NABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Prtry>AUBSB</Prtry></ClrSysId>
+            <MmbId>082000</MmbId>
+          </ClrSysMmbId>
+          <Nm>National Australia Bank Limited</Nm>
+          <PstlAdr>
+            <StrtNm>395 Bourke Street</StrtNm>
+            <PstCd>3000</PstCd>
+            <TwnNm>Melbourne</TwnNm>
+            <CtrySubDvsn>VIC</CtrySubDvsn>
+            <Ctry>AU</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Melbourne Manufacturing Group Pty Ltd</Nm>
+        <PstlAdr>
+          <StrtNm>100 Collins Street</StrtNm>
+          <BldgNb>Suite 3500</BldgNb>
+          <PstCd>3000</PstCd>
+          <TwnNm>Melbourne</TwnNm>
+          <CtrySubDvsn>VIC</CtrySubDvsn>
+          <Ctry>AU</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>98 765 432 109</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+              <Issr>ATO</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>David Thompson</Nm>
+          <PhneNb>+61 3 8765 4321</PhneNb>
+          <EmailAdr>receivables@melbournemfg.com.au</EmailAdr>
+        </CtctDtls>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><Othr><Id>082000987654321</Id></Othr></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>AUD</Ccy>
+        <Nm>Melbourne Manufacturing Receivables</Nm>
+        <Prxy>
+          <Tp><Cd>EMAL</Cd></Tp>
+          <Id>receive@melbournemfg.com.au</Id>
+        </Prxy>
+      </CdtrAcct>
+      <Purp><Cd>SUPP</Cd></Purp>
+      <RmtInf>
+        <Strd>
+          <RfrdDocInf>
+            <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+            <Nb>INV-MMG-2026-00789</Nb>
+            <RltdDt>2025-12-20</RltdDt>
+          </RfrdDocInf>
+          <RfrdDocAmt>
+            <DuePyblAmt Ccy="AUD">45750.00</DuePyblAmt>
+          </RfrdDocAmt>
+        </Strd>
+        <Ustrd>NPP Osko Payment - Invoice INV-MMG-2026-00789 Manufacturing Components</Ustrd>
+      </RmtInf>
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>

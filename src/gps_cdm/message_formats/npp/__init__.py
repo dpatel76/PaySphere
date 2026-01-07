@@ -1,4 +1,16 @@
-"""NPP (Australia New Payments Platform) Extractor - ISO 20022 based."""
+"""NPP (Australia New Payments Platform) Extractor - ISO 20022 pacs.008 based.
+
+NPP uses the ISO 20022 pacs.008 FIToFICstmrCdtTrf message format with Australian-specific
+BSB (Bank-State-Branch) + Account Number identification. This is the standard for Australian
+real-time payments including Osko.
+
+Key characteristics:
+- BSB: 6 digits identifying the bank branch (e.g., 064-000)
+- Account Number: 9 digits (e.g., 123456789)
+- Currency: AUD (Australian Dollar)
+- Clearing System: AUBSB (Australian BSB) / NPPA (NPP Australia)
+- PayID: Alternative addressing (email, phone, ABN, etc.)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -19,23 +31,393 @@ from ..base import (
 logger = logging.getLogger(__name__)
 
 
+class NppXmlParser:
+    """Parser for NPP ISO 20022 pacs.008 XML messages.
+
+    Handles namespace stripping and extracts fields from the FIToFICstmrCdtTrf
+    structure used by Australia's New Payments Platform.
+    """
+
+    NS_PATTERN = re.compile(r'\{[^}]+\}')
+
+    def _strip_ns(self, tag: str) -> str:
+        """Remove namespace from XML tag."""
+        return self.NS_PATTERN.sub('', tag)
+
+    def _find(self, element: ET.Element, path: str) -> Optional[ET.Element]:
+        """Find element using local names (ignoring namespaces).
+
+        Args:
+            element: Parent element to search from
+            path: Slash-separated path of element names (e.g., 'GrpHdr/MsgId')
+
+        Returns:
+            Found element or None
+        """
+        if element is None:
+            return None
+        parts = path.split('/')
+        current = element
+        for part in parts:
+            found = None
+            for child in current:
+                if self._strip_ns(child.tag) == part:
+                    found = child
+                    break
+            if found is None:
+                return None
+            current = found
+        return current
+
+    def _find_text(self, element: ET.Element, path: str) -> Optional[str]:
+        """Find element text using local names."""
+        elem = self._find(element, path)
+        return elem.text if elem is not None else None
+
+    def _find_attr(self, element: ET.Element, path: str, attr: str) -> Optional[str]:
+        """Find element attribute."""
+        elem = self._find(element, path)
+        return elem.get(attr) if elem is not None else None
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse NPP XML message to dictionary.
+
+        Args:
+            raw_content: Raw XML string or JSON string
+
+        Returns:
+            Dictionary with normalized field names (camelCase)
+        """
+        # If already dict, just return
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        # Try JSON first
+        try:
+            parsed = json.loads(raw_content)
+            return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # Parse XML
+        try:
+            # Strip BOM if present
+            if raw_content.startswith('\ufeff'):
+                raw_content = raw_content[1:]
+            root = ET.fromstring(raw_content)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse NPP XML: {e}")
+            return {}
+
+        return self._parse_iso20022(root)
+
+    def _parse_iso20022(self, root: ET.Element) -> Dict[str, Any]:
+        """Parse NPP pacs.008 XML structure to normalized dict."""
+        result = {}
+
+        # Find the FIToFICstmrCdtTrf element (may be root, child of Document, or nested)
+        fi_transfer = self._find(root, 'FIToFICstmrCdtTrf')
+        if fi_transfer is None:
+            # Check if root itself is FIToFICstmrCdtTrf
+            if self._strip_ns(root.tag) == 'FIToFICstmrCdtTrf':
+                fi_transfer = root
+            else:
+                # Try Document/FIToFICstmrCdtTrf
+                for child in root:
+                    if self._strip_ns(child.tag) == 'FIToFICstmrCdtTrf':
+                        fi_transfer = child
+                        break
+
+        if fi_transfer is None:
+            logger.warning("FIToFICstmrCdtTrf element not found in NPP XML")
+            return result
+
+        # ---------------------------------------------------------------
+        # GROUP HEADER (GrpHdr)
+        # ---------------------------------------------------------------
+        grp_hdr = self._find(fi_transfer, 'GrpHdr')
+        if grp_hdr is not None:
+            result['messageId'] = self._find_text(grp_hdr, 'MsgId')
+            result['creationDateTime'] = self._find_text(grp_hdr, 'CreDtTm')
+            result['numberOfTransactions'] = self._find_text(grp_hdr, 'NbOfTxs')
+            result['settlementDate'] = self._find_text(grp_hdr, 'IntrBkSttlmDt')
+            result['settlementMethod'] = self._find_text(grp_hdr, 'SttlmInf/SttlmMtd')
+            result['clearingSystem'] = self._find_text(grp_hdr, 'SttlmInf/ClrSys/Prtry')
+
+            # Total Interbank Settlement Amount
+            ttl_amt = self._find(grp_hdr, 'TtlIntrBkSttlmAmt')
+            if ttl_amt is not None:
+                result['totalAmount'] = ttl_amt.text
+                result['totalCurrency'] = ttl_amt.get('Ccy') or 'AUD'
+
+            # Instructing Agent (sender bank)
+            instg_agt = self._find(grp_hdr, 'InstgAgt/FinInstnId')
+            if instg_agt is not None:
+                result['instructingAgentBic'] = self._find_text(instg_agt, 'BICFI')
+                result['instructingAgentName'] = self._find_text(instg_agt, 'Nm')
+                result['instructingAgentBsb'] = self._find_text(instg_agt, 'ClrSysMmbId/MmbId')
+
+            # Instructed Agent (receiver bank)
+            instd_agt = self._find(grp_hdr, 'InstdAgt/FinInstnId')
+            if instd_agt is not None:
+                result['instructedAgentBic'] = self._find_text(instd_agt, 'BICFI')
+                result['instructedAgentName'] = self._find_text(instd_agt, 'Nm')
+                result['instructedAgentBsb'] = self._find_text(instd_agt, 'ClrSysMmbId/MmbId')
+
+        # ---------------------------------------------------------------
+        # CREDIT TRANSFER TRANSACTION INFO (CdtTrfTxInf)
+        # ---------------------------------------------------------------
+        cdt_trf = self._find(fi_transfer, 'CdtTrfTxInf')
+        if cdt_trf is not None:
+            # Payment Identification
+            pmt_id = self._find(cdt_trf, 'PmtId')
+            if pmt_id is not None:
+                result['instructionId'] = self._find_text(pmt_id, 'InstrId')
+                result['endToEndId'] = self._find_text(pmt_id, 'EndToEndId')
+                result['paymentId'] = self._find_text(pmt_id, 'TxId')
+                result['uetr'] = self._find_text(pmt_id, 'UETR')
+
+            # Payment Type Information
+            pmt_tp = self._find(cdt_trf, 'PmtTpInf')
+            if pmt_tp is not None:
+                result['instructionPriority'] = self._find_text(pmt_tp, 'InstrPrty')
+                result['serviceLevel'] = self._find_text(pmt_tp, 'SvcLvl/Prtry')
+                result['localInstrument'] = self._find_text(pmt_tp, 'LclInstrm/Prtry')
+                result['categoryPurpose'] = self._find_text(pmt_tp, 'CtgyPurp/Cd')
+
+            # Interbank Settlement Amount (with Ccy attribute)
+            amt_elem = self._find(cdt_trf, 'IntrBkSttlmAmt')
+            if amt_elem is not None:
+                result['amount'] = amt_elem.text
+                result['currency'] = amt_elem.get('Ccy') or 'AUD'
+
+            # Charge Bearer
+            result['chargeBearer'] = self._find_text(cdt_trf, 'ChrgBr')
+
+            # ---------------------------------------------------------------
+            # DEBTOR (Dbtr) - Payer
+            # ---------------------------------------------------------------
+            dbtr = self._find(cdt_trf, 'Dbtr')
+            if dbtr is not None:
+                result['debtorName'] = self._find_text(dbtr, 'Nm')
+                result['payerName'] = result['debtorName']
+
+                # Postal Address
+                pstl_adr = self._find(dbtr, 'PstlAdr')
+                if pstl_adr is not None:
+                    result['debtorStreetName'] = self._find_text(pstl_adr, 'StrtNm')
+                    result['debtorBuildingNumber'] = self._find_text(pstl_adr, 'BldgNb')
+                    result['debtorPostCode'] = self._find_text(pstl_adr, 'PstCd')
+                    result['debtorTownName'] = self._find_text(pstl_adr, 'TwnNm')
+                    result['debtorCountrySubDivision'] = self._find_text(pstl_adr, 'CtrySubDvsn')
+                    result['debtorCountry'] = self._find_text(pstl_adr, 'Ctry')
+                    result['payerAddress'] = result['debtorStreetName']
+
+                # Organisation ID (ABN/ACN)
+                org_id = self._find(dbtr, 'Id/OrgId/Othr')
+                if org_id is not None:
+                    result['debtorOrgId'] = self._find_text(org_id, 'Id')
+                    result['debtorOrgIdScheme'] = self._find_text(org_id, 'SchmeNm/Cd')
+                    result['debtorOrgIdIssuer'] = self._find_text(org_id, 'Issr')
+
+                # Contact Details
+                ctct = self._find(dbtr, 'CtctDtls')
+                if ctct is not None:
+                    result['debtorContactName'] = self._find_text(ctct, 'Nm')
+                    result['debtorContactPhone'] = self._find_text(ctct, 'PhneNb')
+                    result['debtorContactEmail'] = self._find_text(ctct, 'EmailAdr')
+
+            # Debtor Account (DbtrAcct)
+            dbtr_acct = self._find(cdt_trf, 'DbtrAcct')
+            if dbtr_acct is not None:
+                # Try Othr/Id first (BSB + Account Number format)
+                acct_id = self._find_text(dbtr_acct, 'Id/Othr/Id')
+                if acct_id:
+                    result['debtorAccountNumber'] = acct_id
+                    result['payerAccount'] = acct_id
+                    # Extract BSB from combined format (BBBBBBNNNNNNNNN)
+                    if len(acct_id) >= 6:
+                        result['payerBsb'] = acct_id[:6]
+                # Try IBAN (rare for NPP but possible)
+                iban = self._find_text(dbtr_acct, 'Id/IBAN')
+                if iban:
+                    result['debtorIban'] = iban
+
+                # Account type and currency
+                result['debtorAccountType'] = self._find_text(dbtr_acct, 'Tp/Cd')
+                result['debtorAccountCurrency'] = self._find_text(dbtr_acct, 'Ccy')
+                result['debtorAccountName'] = self._find_text(dbtr_acct, 'Nm')
+
+                # PayID (Proxy)
+                prxy = self._find(dbtr_acct, 'Prxy')
+                if prxy is not None:
+                    result['payerPayidType'] = self._find_text(prxy, 'Tp/Cd')
+                    result['payerPayid'] = self._find_text(prxy, 'Id')
+
+            # Debtor Agent (DbtrAgt) - Payer's Bank
+            dbtr_agt = self._find(cdt_trf, 'DbtrAgt')
+            if dbtr_agt is not None:
+                fi_id = self._find(dbtr_agt, 'FinInstnId')
+                if fi_id is not None:
+                    result['debtorAgentBic'] = self._find_text(fi_id, 'BICFI')
+                    result['debtorAgentName'] = self._find_text(fi_id, 'Nm')
+
+                    # BSB (ClrSysMmbId/MmbId)
+                    bsb = self._find_text(fi_id, 'ClrSysMmbId/MmbId')
+                    if bsb:
+                        result['debtorAgentBsb'] = bsb
+                        result['payerBsb'] = result.get('payerBsb') or bsb
+
+            # ---------------------------------------------------------------
+            # CREDITOR (Cdtr) - Payee
+            # ---------------------------------------------------------------
+            cdtr = self._find(cdt_trf, 'Cdtr')
+            if cdtr is not None:
+                result['creditorName'] = self._find_text(cdtr, 'Nm')
+                result['payeeName'] = result['creditorName']
+
+                # Postal Address
+                pstl_adr = self._find(cdtr, 'PstlAdr')
+                if pstl_adr is not None:
+                    result['creditorStreetName'] = self._find_text(pstl_adr, 'StrtNm')
+                    result['creditorBuildingNumber'] = self._find_text(pstl_adr, 'BldgNb')
+                    result['creditorPostCode'] = self._find_text(pstl_adr, 'PstCd')
+                    result['creditorTownName'] = self._find_text(pstl_adr, 'TwnNm')
+                    result['creditorCountrySubDivision'] = self._find_text(pstl_adr, 'CtrySubDvsn')
+                    result['creditorCountry'] = self._find_text(pstl_adr, 'Ctry')
+                    result['payeeAddress'] = result['creditorStreetName']
+
+                # Organisation ID (ABN/ACN)
+                org_id = self._find(cdtr, 'Id/OrgId/Othr')
+                if org_id is not None:
+                    result['creditorOrgId'] = self._find_text(org_id, 'Id')
+                    result['creditorOrgIdScheme'] = self._find_text(org_id, 'SchmeNm/Cd')
+                    result['creditorOrgIdIssuer'] = self._find_text(org_id, 'Issr')
+
+                # Contact Details
+                ctct = self._find(cdtr, 'CtctDtls')
+                if ctct is not None:
+                    result['creditorContactName'] = self._find_text(ctct, 'Nm')
+                    result['creditorContactPhone'] = self._find_text(ctct, 'PhneNb')
+                    result['creditorContactEmail'] = self._find_text(ctct, 'EmailAdr')
+
+            # Creditor Account (CdtrAcct)
+            cdtr_acct = self._find(cdt_trf, 'CdtrAcct')
+            if cdtr_acct is not None:
+                # Try Othr/Id first (BSB + Account Number format)
+                acct_id = self._find_text(cdtr_acct, 'Id/Othr/Id')
+                if acct_id:
+                    result['creditorAccountNumber'] = acct_id
+                    result['payeeAccount'] = acct_id
+                    # Extract BSB from combined format
+                    if len(acct_id) >= 6:
+                        result['payeeBsb'] = acct_id[:6]
+                # Try IBAN
+                iban = self._find_text(cdtr_acct, 'Id/IBAN')
+                if iban:
+                    result['creditorIban'] = iban
+
+                # Account type and currency
+                result['creditorAccountType'] = self._find_text(cdtr_acct, 'Tp/Cd')
+                result['creditorAccountCurrency'] = self._find_text(cdtr_acct, 'Ccy')
+                result['creditorAccountName'] = self._find_text(cdtr_acct, 'Nm')
+
+                # PayID (Proxy)
+                prxy = self._find(cdtr_acct, 'Prxy')
+                if prxy is not None:
+                    result['payeePayidType'] = self._find_text(prxy, 'Tp/Cd')
+                    result['payeePayid'] = self._find_text(prxy, 'Id')
+
+            # Creditor Agent (CdtrAgt) - Payee's Bank
+            cdtr_agt = self._find(cdt_trf, 'CdtrAgt')
+            if cdtr_agt is not None:
+                fi_id = self._find(cdtr_agt, 'FinInstnId')
+                if fi_id is not None:
+                    result['creditorAgentBic'] = self._find_text(fi_id, 'BICFI')
+                    result['creditorAgentName'] = self._find_text(fi_id, 'Nm')
+
+                    # BSB (ClrSysMmbId/MmbId)
+                    bsb = self._find_text(fi_id, 'ClrSysMmbId/MmbId')
+                    if bsb:
+                        result['creditorAgentBsb'] = bsb
+                        result['payeeBsb'] = result.get('payeeBsb') or bsb
+
+            # ---------------------------------------------------------------
+            # PURPOSE (Purp)
+            # ---------------------------------------------------------------
+            result['purposeCode'] = self._find_text(cdt_trf, 'Purp/Cd')
+
+            # ---------------------------------------------------------------
+            # REMITTANCE INFORMATION (RmtInf)
+            # ---------------------------------------------------------------
+            rmt_inf = self._find(cdt_trf, 'RmtInf')
+            if rmt_inf is not None:
+                result['remittanceInfo'] = self._find_text(rmt_inf, 'Ustrd')
+
+                # Structured reference
+                strd = self._find(rmt_inf, 'Strd')
+                if strd is not None:
+                    # Invoice reference
+                    ref_doc = self._find(strd, 'RfrdDocInf')
+                    if ref_doc is not None:
+                        result['referenceDocumentType'] = self._find_text(ref_doc, 'Tp/CdOrPrtry/Cd')
+                        result['paymentReference'] = self._find_text(ref_doc, 'Nb')
+                        result['referenceDocumentDate'] = self._find_text(ref_doc, 'RltdDt')
+
+                    # Amount due
+                    ref_amt = self._find(strd, 'RfrdDocAmt')
+                    if ref_amt is not None:
+                        due_amt = self._find(ref_amt, 'DuePyblAmt')
+                        if due_amt is not None:
+                            result['amountDue'] = due_amt.text
+                            result['amountDueCurrency'] = due_amt.get('Ccy')
+
+        return result
+
+
 class NppExtractor(BaseExtractor):
-    """Extractor for Australia NPP instant payment messages."""
+    """Extractor for Australia NPP instant payment messages.
+
+    NPP is Australia's real-time payment system using ISO 20022 pacs.008 format.
+    Key features:
+    - BSB (6 digits) identifies the bank/branch
+    - Account Number (9 digits)
+    - PayID for alias-based addressing (email, phone, ABN)
+    - Clearing system: AUBSB (Australian BSB) / NPPA
+    """
 
     MESSAGE_TYPE = "NPP"
     SILVER_TABLE = "stg_npp"
+
+    def __init__(self):
+        """Initialize NPP extractor with XML parser."""
+        self.parser = NppXmlParser()
 
     # =========================================================================
     # BRONZE EXTRACTION
     # =========================================================================
 
     def extract_bronze(self, raw_content: Dict[str, Any], batch_id: str) -> Dict[str, Any]:
-        """Extract Bronze layer record from raw NPP content."""
-        msg_id = raw_content.get('paymentId', '') or raw_content.get('endToEndId', '')
+        """Extract Bronze layer record from raw NPP content.
+
+        Accepts both pre-parsed dict and raw XML/JSON strings.
+        """
+        # Parse if string content
+        if isinstance(raw_content, str):
+            parsed = self.parser.parse(raw_content)
+        else:
+            parsed = raw_content
+
+        msg_id = (
+            parsed.get('paymentId') or
+            parsed.get('endToEndId') or
+            parsed.get('messageId') or
+            ''
+        )
         return {
             'raw_id': self.generate_raw_id(msg_id),
             'message_type': self.MESSAGE_TYPE,
-            'raw_content': json.dumps(raw_content) if isinstance(raw_content, dict) else raw_content,
+            'raw_content': json.dumps(parsed) if isinstance(parsed, dict) else raw_content,
             'batch_id': batch_id,
         }
 
@@ -50,8 +432,24 @@ class NppExtractor(BaseExtractor):
         stg_id: str,
         batch_id: str
     ) -> Dict[str, Any]:
-        """Extract all Silver layer fields from NPP message."""
+        """Extract all Silver layer fields from NPP message.
+
+        This method maps to ALL columns in silver.stg_npp table.
+        """
         trunc = self.trunc
+
+        # Parse content if needed
+        if isinstance(msg_content, str):
+            msg_content = self.parser.parse(msg_content)
+
+        # Extract values with proper fallbacks for None
+        payer_name = msg_content.get('payerName') or msg_content.get('debtorName')
+        payer_account = msg_content.get('payerAccount') or msg_content.get('debtorAccountNumber')
+        payer_bsb = msg_content.get('payerBsb') or msg_content.get('debtorAgentBsb')
+
+        payee_name = msg_content.get('payeeName') or msg_content.get('creditorName')
+        payee_account = msg_content.get('payeeAccount') or msg_content.get('creditorAccountNumber')
+        payee_bsb = msg_content.get('payeeBsb') or msg_content.get('creditorAgentBsb')
 
         return {
             'stg_id': stg_id,
@@ -60,7 +458,7 @@ class NppExtractor(BaseExtractor):
 
             # Message Type
             'message_type': 'NPP',
-            'payment_id': trunc(msg_content.get('paymentId'), 35),
+            'payment_id': trunc(msg_content.get('paymentId') or msg_content.get('messageId'), 35),
             'creation_date_time': msg_content.get('creationDateTime'),
 
             # Amount
@@ -68,16 +466,16 @@ class NppExtractor(BaseExtractor):
             'currency': msg_content.get('currency') or 'AUD',
 
             # Payer (Debtor)
-            'payer_bsb': trunc(msg_content.get('payerBsb'), 6),
-            'payer_account': trunc(msg_content.get('payerAccount'), 34),
-            'payer_name': trunc(msg_content.get('payerName'), 140),
+            'payer_bsb': trunc(payer_bsb, 6),
+            'payer_account': trunc(payer_account, 34),
+            'payer_name': trunc(payer_name, 140),
             'payer_payid': trunc(msg_content.get('payerPayid'), 256),
             'payer_payid_type': trunc(msg_content.get('payerPayidType'), 10),
 
             # Payee (Creditor)
-            'payee_bsb': trunc(msg_content.get('payeeBsb'), 6),
-            'payee_account': trunc(msg_content.get('payeeAccount'), 34),
-            'payee_name': trunc(msg_content.get('payeeName'), 140),
+            'payee_bsb': trunc(payee_bsb, 6),
+            'payee_account': trunc(payee_account, 34),
+            'payee_name': trunc(payee_name, 140),
             'payee_payid': trunc(msg_content.get('payeePayid'), 256),
             'payee_payid_type': trunc(msg_content.get('payeePayidType'), 10),
 
@@ -184,3 +582,6 @@ class NppExtractor(BaseExtractor):
 # Register the extractor
 ExtractorRegistry.register('NPP', NppExtractor())
 ExtractorRegistry.register('npp', NppExtractor())
+ExtractorRegistry.register('OSKO', NppExtractor())
+ExtractorRegistry.register('osko', NppExtractor())
+ExtractorRegistry.register('AU_NPP', NppExtractor())

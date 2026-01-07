@@ -1,17 +1,68 @@
 {
-  "messageId": "CNAPS-E2E-V2-001",
+  "messageId": "CNAPS-E2E-20260106-001",
   "messageType": "CNAPS",
-  "creationDateTime": "2026-01-06T15:30:00",
-  "amount": 100000.00,
-  "currency": "CNY",
+  "transactionId": "TXN-CNAPS-20260106-001",
+  "creationDateTime": "2026-01-06T15:30:00+08:00",
+  "settlementDate": "2026-01-06",
   "businessType": "CT",
-  "payerName": "E2E CNAPS Payer Co",
-  "payerAccount": "6225880123456789",
+  "paymentType": "HVPS",
+  "priority": "HIGH",
+  "amount": 2500000.00,
+  "currency": "CNY",
+  "chargeBearer": "SHAR",
+  "payerName": "Beijing Technology Corporation Ltd",
+  "payerAccount": "6225880123456789012",
+  "payerAccountType": "CACC",
   "payerBankCode": "102100099996",
-  "payerBankName": "ICBC Beijing",
-  "payeeName": "E2E CNAPS Payee Ltd",
-  "payeeAccount": "6228480654321098",
+  "payerBankName": "Industrial and Commercial Bank of China",
+  "payerBankBic": "ICBKCNBJXXX",
+  "payerTaxId": "91110000MA01234567",
+  "payerAddress": {
+    "streetName": "Jianguomenwai Avenue",
+    "buildingNumber": "1",
+    "buildingName": "China World Trade Center Tower 3",
+    "floor": "Floor 28",
+    "postalCode": "100004",
+    "city": "Beijing",
+    "province": "Beijing",
+    "country": "CN"
+  },
+  "payerContact": {
+    "name": "Wang Wei",
+    "phone": "+86 10 6505 1234",
+    "email": "treasury@beijingtech.cn"
+  },
+  "payeeName": "Shanghai Manufacturing Group Co Ltd",
+  "payeeAccount": "6228480654321098765",
+  "payeeAccountType": "CACC",
   "payeeBankCode": "105100000017",
-  "payeeBankName": "CCB Shanghai",
-  "remittanceInfo": "E2E Test Payment V2"
+  "payeeBankName": "China Construction Bank",
+  "payeeBankBic": "PCBCCNBJXXX",
+  "payeeTaxId": "91310000MA09876543",
+  "payeeAddress": {
+    "streetName": "Century Avenue",
+    "buildingNumber": "100",
+    "buildingName": "Shanghai World Financial Center",
+    "floor": "Floor 50",
+    "postalCode": "200120",
+    "city": "Shanghai",
+    "province": "Shanghai",
+    "country": "CN"
+  },
+  "payeeContact": {
+    "name": "Li Ming",
+    "phone": "+86 21 6879 0123",
+    "email": "receivables@shanghaimfg.cn"
+  },
+  "remittanceInfo": {
+    "invoiceNumber": "INV-SMG-2026-00456",
+    "invoiceDate": "2025-12-20",
+    "purchaseOrderNumber": "PO-BTC-2026-00123",
+    "description": "CNAPS Payment for Manufacturing Equipment Order PO-BTC-2026-00123"
+  },
+  "purposeCode": "GDDS",
+  "regulatoryReporting": {
+    "code": "121030",
+    "description": "Domestic Trade Goods Payment"
+  }
 }

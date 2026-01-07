@@ -425,12 +425,15 @@ class MT103Extractor(BaseExtractor):
         chaps_debtor_agent_bic = msg_content.get('debtorAgentBic')
         chaps_creditor_agent_bic = msg_content.get('creditorAgentBic')
 
-        # Instruction codes can be an array - join them
+        # Instruction codes - format as PostgreSQL array literal {val1,val2}
         instruction_codes = msg_content.get('instructionCode', [])
-        if isinstance(instruction_codes, list):
-            instruction_code_str = ','.join(str(c) for c in instruction_codes[:4])
+        if isinstance(instruction_codes, list) and instruction_codes:
+            # PostgreSQL array format: {val1,val2,val3}
+            instruction_code_str = '{' + ','.join(str(c) for c in instruction_codes[:4]) + '}'
+        elif instruction_codes:
+            instruction_code_str = '{' + str(instruction_codes) + '}'
         else:
-            instruction_code_str = str(instruction_codes) if instruction_codes else None
+            instruction_code_str = None
 
         return {
             'stg_id': stg_id,

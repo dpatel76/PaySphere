@@ -1,18 +1,67 @@
 {
-  "transactionId": "E2E-PAYNOW-001",
-  "creationDateTime": "2025-01-06T11:00:00+08:00",
-  "amount": 2000.00,
+  "transactionId": "PAYNOW-E2E-20260106-001",
+  "endToEndId": "E2E-PN-20260106-001",
+  "creationDateTime": "2026-01-06T10:45:00+08:00",
+  "settlementDate": "2026-01-06",
+  "acceptanceDateTime": "2026-01-06T10:45:00+08:00",
+  "amount": 85000.00,
   "currency": "SGD",
-  "payerProxyType": "MOBILE",
-  "payerProxyValue": "+6591234567",
-  "payerName": "E2E PayNow Payer",
+  "chargeBearer": "SLEV",
+  "paymentType": "INSTANT",
+  "localInstrument": "PAYNOW",
+  "payerProxyType": "UEN",
+  "payerProxyValue": "202012345G",
+  "payerName": "Singapore Tech Holdings Pte Ltd",
+  "payerUen": "202012345G",
   "payerBankCode": "DBSSSGSG",
+  "payerBankName": "DBS Bank Ltd",
+  "payerBankBic": "DBSSSGSGXXX",
   "payerAccount": "1234567890",
+  "payerAccountType": "CACC",
+  "payerAddress": {
+    "streetName": "Marina Boulevard",
+    "buildingNumber": "12",
+    "buildingName": "Marina Bay Financial Centre Tower 3",
+    "floor": "Level 45",
+    "postalCode": "018982",
+    "city": "Singapore",
+    "country": "SG"
+  },
+  "payerContact": {
+    "name": "Lee Wei Ming",
+    "phone": "+65 6789 0123",
+    "email": "treasury@sgtechholdings.com.sg"
+  },
   "payeeProxyType": "NRIC",
-  "payeeProxyValue": "S1234567D",
-  "payeeName": "E2E PayNow Payee",
+  "payeeProxyValue": "S8712345D",
+  "payeeName": "Tan Ah Kow",
   "payeeBankCode": "OCBCSGSG",
+  "payeeBankName": "Oversea-Chinese Banking Corporation Limited",
+  "payeeBankBic": "OCBCSGSGXXX",
   "payeeAccount": "9876543210",
-  "endToEndId": "E2E-PN-001",
-  "remittanceInfo": "E2E PayNow Test Payment"
+  "payeeAccountType": "SVGS",
+  "payeeAddress": {
+    "streetName": "Orchard Road",
+    "buildingNumber": "391",
+    "buildingName": "Ngee Ann City Tower A",
+    "floor": "Unit 12-05",
+    "postalCode": "238872",
+    "city": "Singapore",
+    "country": "SG"
+  },
+  "payeeContact": {
+    "name": "Tan Ah Kow",
+    "phone": "+65 9123 4567",
+    "email": "ahkow.tan@email.sg"
+  },
+  "remittanceInfo": {
+    "structured": {
+      "invoiceNumber": "INV-TAK-2026-00123",
+      "invoiceDate": "2025-12-28",
+      "dueAmount": 85000.00
+    },
+    "unstructured": "PayNow Payment - Consultant Services Invoice INV-TAK-2026-00123"
+  },
+  "purposeCode": "SUPP",
+  "categoryPurpose": "SALA"
 }

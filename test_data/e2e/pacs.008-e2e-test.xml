@@ -1,23 +1,185 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.02">
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
   <FIToFICstmrCdtTrf>
     <GrpHdr>
-      <MsgId>PACS008-E2E-TEST-001</MsgId>
-      <CreDtTm>2026-01-06T10:00:00</CreDtTm>
+      <MsgId>PACS008-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T10:15:30</CreDtTm>
       <NbOfTxs>1</NbOfTxs>
-      <SttlmInf><SttlmMtd>INDA</SttlmMtd></SttlmInf>
+      <TtlIntrBkSttlmAmt Ccy="USD">250000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Cd>FDW</Cd>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>CITIUS33XXX</BICFI>
+          <LEI>6SHGI4ZSSLCXXQSBB395</LEI>
+          <Nm>Citibank NA</Nm>
+          <PstlAdr>
+            <StrtNm>388 Greenwich Street</StrtNm>
+            <PstCd>10013</PstCd>
+            <TwnNm>New York</TwnNm>
+            <CtrySubDvsn>NY</CtrySubDvsn>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>CHASUS33XXX</BICFI>
+          <Nm>JPMorgan Chase Bank NA</Nm>
+          <PstlAdr>
+            <TwnNm>New York</TwnNm>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstdAgt>
     </GrpHdr>
     <CdtTrfTxInf>
-      <PmtId><EndToEndId>E2E-PACS008-001</EndToEndId><TxId>TXN-PACS008-001</TxId></PmtId>
-      <IntrBkSttlmAmt Ccy="USD">7500.00</IntrBkSttlmAmt>
-      <IntrBkSttlmDt>2026-01-07</IntrBkSttlmDt>
-      <Dbtr><Nm>E2E Test Debtor pacs008</Nm></Dbtr>
-      <DbtrAcct><Id><IBAN>US12345678901234567890</IBAN></Id></DbtrAcct>
-      <DbtrAgt><FinInstnId><BIC>CHABORNYXXX</BIC></FinInstnId></DbtrAgt>
-      <CdtrAgt><FinInstnId><BIC>CITABORUXXX</BIC></FinInstnId></CdtrAgt>
-      <Cdtr><Nm>E2E Test Creditor pacs008</Nm></Cdtr>
-      <CdtrAcct><Id><IBAN>US09876543210987654321</IBAN></Id></CdtrAcct>
-      <RmtInf><Ustrd>E2E Test pacs.008</Ustrd></RmtInf>
+      <PmtId>
+        <InstrId>INSTR-PACS008-20260106-001</InstrId>
+        <EndToEndId>E2E-PACS008-20260106-001</EndToEndId>
+        <TxId>TXN-PACS008-20260106-001</TxId>
+        <UETR>a1b2c3d4-e5f6-7890-abcd-ef1234567890</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <InstrPrty>NORM</InstrPrty>
+        <SvcLvl><Cd>G001</Cd></SvcLvl>
+        <LclInstrm><Cd>FDWP</Cd></LclInstrm>
+        <CtgyPurp><Cd>TRAD</Cd></CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="USD">250000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <InstdAmt Ccy="USD">250000.00</InstdAmt>
+      <XchgRate>1.0000</XchgRate>
+      <ChrgBr>SHAR</ChrgBr>
+      <ChrgsInf>
+        <Amt Ccy="USD">25.00</Amt>
+        <Agt>
+          <FinInstnId><BICFI>CITIUS33XXX</BICFI></FinInstnId>
+        </Agt>
+      </ChrgsInf>
+      <Dbtr>
+        <Nm>TechGlobal Industries Inc</Nm>
+        <PstlAdr>
+          <StrtNm>1000 Technology Boulevard</StrtNm>
+          <BldgNb>Suite 500</BldgNb>
+          <PstCd>94043</PstCd>
+          <TwnNm>Mountain View</TwnNm>
+          <CtrySubDvsn>CA</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>549300MLUDYVRQOOXS22</LEI>
+            <Othr>
+              <Id>US-EIN-123456789</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>John Smith</Nm>
+          <PhneNb>+1 650 555 1234</PhneNb>
+          <EmailAdr>treasury@techglobal.com</EmailAdr>
+        </CtctDtls>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>123456789012</Id>
+            <SchmeNm><Cd>BBAN</Cd></SchmeNm>
+          </Othr>
+        </Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>USD</Ccy>
+        <Nm>TechGlobal Treasury Account</Nm>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>CITIUS33XXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>USABA</Cd></ClrSysId>
+            <MmbId>021000089</MmbId>
+          </ClrSysMmbId>
+          <Nm>Citibank NA</Nm>
+          <PstlAdr>
+            <StrtNm>388 Greenwich Street</StrtNm>
+            <PstCd>10013</PstCd>
+            <TwnNm>New York</TwnNm>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>CHASUS33XXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>USABA</Cd></ClrSysId>
+            <MmbId>021000021</MmbId>
+          </ClrSysMmbId>
+          <Nm>JPMorgan Chase Bank NA</Nm>
+          <PstlAdr>
+            <StrtNm>383 Madison Avenue</StrtNm>
+            <PstCd>10179</PstCd>
+            <TwnNm>New York</TwnNm>
+            <Ctry>US</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Global Supply Chain Partners LLC</Nm>
+        <PstlAdr>
+          <StrtNm>500 Commerce Drive</StrtNm>
+          <BldgNb>Building B</BldgNb>
+          <PstCd>07102</PstCd>
+          <TwnNm>Newark</TwnNm>
+          <CtrySubDvsn>NJ</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>213800ZBVUWCXKLSKY04</LEI>
+            <Othr>
+              <Id>US-EIN-987654321</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>Sarah Johnson</Nm>
+          <PhneNb>+1 973 555 9876</PhneNb>
+          <EmailAdr>accounts@globalscp.com</EmailAdr>
+        </CtctDtls>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>987654321098</Id>
+            <SchmeNm><Cd>BBAN</Cd></SchmeNm>
+          </Othr>
+        </Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>USD</Ccy>
+        <Nm>Global SCP Receivables</Nm>
+      </CdtrAcct>
+      <Purp><Cd>GDDS</Cd></Purp>
+      <RmtInf>
+        <Strd>
+          <RfrdDocInf>
+            <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+            <Nb>PO-2026-00567</Nb>
+            <RltdDt>2025-12-20</RltdDt>
+          </RfrdDocInf>
+          <RfrdDocAmt>
+            <DuePyblAmt Ccy="USD">250000.00</DuePyblAmt>
+          </RfrdDocAmt>
+        </Strd>
+        <Ustrd>Payment for Purchase Order PO-2026-00567 - Q1 Inventory Replenishment</Ustrd>
+      </RmtInf>
     </CdtTrfTxInf>
   </FIToFICstmrCdtTrf>
 </Document>

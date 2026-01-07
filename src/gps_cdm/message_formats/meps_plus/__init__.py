@@ -17,11 +17,47 @@ from ..base import (
 logger = logging.getLogger(__name__)
 
 
+class MepsPlusParser:
+    """Parser for Singapore MEPS+ JSON messages."""
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse MEPS+ message content.
+
+        Handles:
+        1. Dict input (already parsed)
+        2. JSON string input
+        3. Returns empty dict with message type on parse failure
+        """
+        # Handle dict input (already parsed)
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        # Handle string input
+        if isinstance(raw_content, str):
+            content = raw_content.strip()
+
+            # Try JSON parsing
+            if content.startswith('{'):
+                try:
+                    parsed = json.loads(content)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse MEPS+ JSON: {e}")
+
+        # Return minimal dict on failure
+        return {'messageType': 'MEPS_PLUS'}
+
+
 class MepsPlusExtractor(BaseExtractor):
     """Extractor for Singapore MEPS+ payment messages."""
 
     MESSAGE_TYPE = "MEPS_PLUS"
     SILVER_TABLE = "stg_meps_plus"
+
+    def __init__(self):
+        """Initialize extractor with parser."""
+        self.parser = MepsPlusParser()
 
     # =========================================================================
     # BRONZE EXTRACTION

@@ -1,24 +1,80 @@
 {
   "header": {
     "messageType": "BOJNET",
-    "batchId": "BOJNET-E2E-20260105",
+    "batchId": "BOJNET-E2E-20260106",
     "recordCount": 1,
-    "creationDateTime": "2026-01-05T22:30:00Z"
+    "creationDateTime": "2026-01-06T09:30:00+09:00",
+    "settlementDate": "2026-01-06",
+    "priority": "HIGH"
   },
   "transactions": [
     {
-      "messageId": "BOJNET-E2E-20260105-001",
-      "transactionReference": "TXN-JP-E2E-001",
-      "creationDateTime": "2026-01-05T22:30:00Z",
-      "settlementDate": "2026-01-05",
-      "amount": 5000000.00,
+      "messageId": "BOJNET-E2E-20260106-001",
+      "transactionReference": "TXN-JP-20260106-001",
+      "creationDateTime": "2026-01-06T09:30:00+09:00",
+      "settlementDate": "2026-01-06",
+      "valueDate": "2026-01-06",
+      "amount": 125000000.00,
       "currency": "JPY",
+      "chargeBearer": "SHAR",
       "sendingParticipantCode": "MUFGJPJT",
+      "sendingParticipantName": "MUFG Bank Ltd",
+      "sendingParticipantBic": "BOABORUAUXXX",
       "receivingParticipantCode": "SMBCJPJT",
-      "debitAccount": "E2E1234567890",
-      "creditAccount": "E2E9876543210",
+      "receivingParticipantName": "Sumitomo Mitsui Banking Corporation",
+      "receivingParticipantBic": "SABORUAUXXX",
+      "debitAccount": "1234567890123",
+      "creditAccount": "9876543210987",
       "paymentType": "RTGS",
-      "relatedReference": "REL-E2E-001"
+      "relatedReference": "REL-20260106-001",
+      "payer": {
+        "name": "Tokyo Technology Corporation",
+        "accountNumber": "1234567890123",
+        "accountType": "CACC",
+        "address": {
+          "streetName": "Marunouchi",
+          "buildingNumber": "2-7-1",
+          "buildingName": "Mitsubishi Building",
+          "floor": "20F",
+          "postalCode": "100-0005",
+          "city": "Chiyoda-ku",
+          "prefecture": "Tokyo",
+          "country": "JP"
+        },
+        "contact": {
+          "name": "Tanaka Hiroshi",
+          "phone": "+81 3 3240 1234",
+          "email": "treasury@tokyotech.co.jp"
+        },
+        "corporateNumber": "1234567890123"
+      },
+      "payee": {
+        "name": "Osaka Manufacturing Industries Ltd",
+        "accountNumber": "9876543210987",
+        "accountType": "CACC",
+        "address": {
+          "streetName": "Kitahama",
+          "buildingNumber": "4-5-33",
+          "buildingName": "Sumitomo Building",
+          "floor": "15F",
+          "postalCode": "541-0041",
+          "city": "Chuo-ku",
+          "prefecture": "Osaka",
+          "country": "JP"
+        },
+        "contact": {
+          "name": "Yamamoto Kenji",
+          "phone": "+81 6 6220 5678",
+          "email": "accounts@osakamfg.co.jp"
+        },
+        "corporateNumber": "9876543210987"
+      },
+      "remittanceInfo": {
+        "invoiceNumber": "INV-OMI-2026-00789",
+        "invoiceDate": "2025-12-25",
+        "description": "BOJ-NET Payment for Industrial Equipment Order Q1 2026"
+      },
+      "purposeCode": "GDDS"
     }
   ]
 }

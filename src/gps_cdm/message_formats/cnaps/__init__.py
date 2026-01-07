@@ -17,11 +17,98 @@ from ..base import (
 logger = logging.getLogger(__name__)
 
 
+class CnapsJsonParser:
+    """Parser for CNAPS JSON messages.
+
+    Parses JSON content and maps keys to the expected field names
+    used by the extractor's extract_silver method.
+    """
+
+    def parse(self, content: str) -> Dict[str, Any]:
+        """Parse CNAPS JSON content and normalize field names.
+
+        Args:
+            content: JSON string or dict containing CNAPS message
+
+        Returns:
+            Dict with normalized field names for Silver extraction
+        """
+        # Handle both string and dict input
+        if isinstance(content, str):
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse CNAPS JSON: {e}")
+                return {}
+        else:
+            data = content
+
+        # Map JSON keys to expected Silver field names
+        result = {
+            # Message identification
+            'messageId': data.get('messageId') or data.get('transactionId') or '',
+            'creationDateTime': data.get('creationDateTime'),
+            'settlementDate': data.get('settlementDate'),
+            'businessType': data.get('businessType'),
+
+            # Amount
+            'amount': data.get('amount'),
+            'currency': data.get('currency') or 'CNY',
+
+            # Bank codes - map payerBankCode/payeeBankCode to sending/receiving
+            'sendingBankCode': data.get('payerBankCode') or data.get('sendingBankCode'),
+            'receivingBankCode': data.get('payeeBankCode') or data.get('receivingBankCode'),
+
+            # Payer information
+            'payerName': data.get('payerName'),
+            'payerAccount': data.get('payerAccount'),
+            'payerBankName': data.get('payerBankName'),
+
+            # Payee information
+            'payeeName': data.get('payeeName'),
+            'payeeAccount': data.get('payeeAccount'),
+            'payeeBankName': data.get('payeeBankName'),
+
+            # Transaction details
+            'transactionReference': data.get('transactionId') or data.get('transactionReference') or data.get('messageId'),
+            'purpose': self._extract_purpose(data),
+        }
+
+        return result
+
+    def _extract_purpose(self, data: Dict[str, Any]) -> Optional[str]:
+        """Extract purpose from various possible locations in the JSON."""
+        # Try direct purpose field
+        if data.get('purpose'):
+            return data.get('purpose')
+
+        # Try purposeCode
+        if data.get('purposeCode'):
+            return data.get('purposeCode')
+
+        # Try remittanceInfo.description
+        remittance = data.get('remittanceInfo', {})
+        if isinstance(remittance, dict) and remittance.get('description'):
+            return remittance.get('description')
+
+        # Try regulatoryReporting.description
+        regulatory = data.get('regulatoryReporting', {})
+        if isinstance(regulatory, dict) and regulatory.get('description'):
+            return regulatory.get('description')
+
+        return None
+
+
 class CnapsExtractor(BaseExtractor):
     """Extractor for China CNAPS payment messages."""
 
     MESSAGE_TYPE = "CNAPS"
     SILVER_TABLE = "stg_cnaps"
+
+    def __init__(self):
+        """Initialize the CNAPS extractor with parser."""
+        super().__init__()
+        self.parser = CnapsJsonParser()
 
     # =========================================================================
     # BRONZE EXTRACTION
@@ -48,7 +135,19 @@ class CnapsExtractor(BaseExtractor):
         stg_id: str,
         batch_id: str
     ) -> Dict[str, Any]:
-        """Extract all Silver layer fields from CNAPS message."""
+        """Extract all Silver layer fields from CNAPS message.
+
+        Args:
+            msg_content: Raw message content (will be parsed if needed)
+            raw_id: Bronze record ID
+            stg_id: Silver staging ID
+            batch_id: Batch identifier
+
+        Returns:
+            Dict with Silver table column values
+        """
+        # Parse the content using the parser to normalize field names
+        parsed = self.parser.parse(msg_content)
         trunc = self.trunc
 
         return {
@@ -58,32 +157,32 @@ class CnapsExtractor(BaseExtractor):
 
             # Message Type
             'message_type': 'CNAPS',
-            'message_id': trunc(msg_content.get('messageId'), 35),
-            'creation_date_time': msg_content.get('creationDateTime'),
-            'settlement_date': msg_content.get('settlementDate'),
-            'business_type': trunc(msg_content.get('businessType'), 10),
+            'message_id': trunc(parsed.get('messageId'), 35),
+            'creation_date_time': parsed.get('creationDateTime'),
+            'settlement_date': parsed.get('settlementDate'),
+            'business_type': trunc(parsed.get('businessType'), 10),
 
             # Amount
-            'amount': msg_content.get('amount'),
-            'currency': msg_content.get('currency') or 'CNY',
+            'amount': parsed.get('amount'),
+            'currency': parsed.get('currency') or 'CNY',
 
             # Bank Codes
-            'sending_bank_code': trunc(msg_content.get('sendingBankCode'), 14),
-            'receiving_bank_code': trunc(msg_content.get('receivingBankCode'), 14),
+            'sending_bank_code': trunc(parsed.get('sendingBankCode'), 14),
+            'receiving_bank_code': trunc(parsed.get('receivingBankCode'), 14),
 
             # Payer
-            'payer_name': trunc(msg_content.get('payerName'), 140),
-            'payer_account': trunc(msg_content.get('payerAccount'), 34),
-            'payer_bank_name': trunc(msg_content.get('payerBankName'), 140),
+            'payer_name': trunc(parsed.get('payerName'), 140),
+            'payer_account': trunc(parsed.get('payerAccount'), 34),
+            'payer_bank_name': trunc(parsed.get('payerBankName'), 140),
 
             # Payee
-            'payee_name': trunc(msg_content.get('payeeName'), 140),
-            'payee_account': trunc(msg_content.get('payeeAccount'), 34),
-            'payee_bank_name': trunc(msg_content.get('payeeBankName'), 140),
+            'payee_name': trunc(parsed.get('payeeName'), 140),
+            'payee_account': trunc(parsed.get('payeeAccount'), 34),
+            'payee_bank_name': trunc(parsed.get('payeeBankName'), 140),
 
             # Transaction Details
-            'transaction_reference': trunc(msg_content.get('transactionReference'), 35),
-            'purpose': msg_content.get('purpose'),
+            'transaction_reference': trunc(parsed.get('transactionReference'), 35),
+            'purpose': parsed.get('purpose'),
         }
 
     def get_silver_columns(self) -> List[str]:
