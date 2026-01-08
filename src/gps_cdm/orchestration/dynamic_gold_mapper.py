@@ -66,23 +66,73 @@ class DynamicGoldMapper:
         """Initialize with database connection."""
         self.conn = conn
 
-    def _load_mappings(self, format_id: str) -> List[GoldMapping]:
-        """Load Gold mappings from database for a format."""
-        if format_id in self._mappings_cache:
-            return self._mappings_cache[format_id]
+    def _load_mappings(self, format_id: str, use_inheritance: bool = True) -> List[GoldMapping]:
+        """Load Gold mappings from database for a format with ISO 20022 inheritance support.
+
+        ISO 20022 Inheritance:
+            When use_inheritance=True, mappings are resolved using the
+            mapping.v_effective_gold_mappings view which automatically
+            includes inherited mappings from parent formats (e.g., pacs.008.base).
+
+            Example: FEDWIRE inherits from pacs.008.base
+            - Direct FEDWIRE Gold mappings take precedence
+            - Unmapped Gold fields fall back to pacs.008.base mappings
+
+        Args:
+            format_id: Message format identifier (e.g., 'FEDWIRE', 'pain.001')
+            use_inheritance: If True, include inherited mappings from parent formats
+
+        Returns:
+            List of GoldMapping objects
+        """
+        cache_key = f"{format_id}:{'inherit' if use_inheritance else 'direct'}"
+        if cache_key in self._mappings_cache:
+            return self._mappings_cache[cache_key]
 
         cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT gold_table, gold_column, source_expression, entity_role,
-                   data_type, is_required, default_value, transform_expression,
-                   ordinal_position
-            FROM mapping.gold_field_mappings
-            WHERE format_id = %s AND is_active = TRUE
-            ORDER BY gold_table, entity_role NULLS FIRST, ordinal_position
-        """, (format_id,))
+
+        if use_inheritance:
+            # Use the effective mappings view which resolves inheritance
+            cursor.execute("""
+                SELECT
+                    em.gold_table,
+                    em.gold_column,
+                    em.source_expression,
+                    em.entity_role,
+                    COALESCE(gfm.data_type, 'VARCHAR') as data_type,
+                    COALESCE(em.is_inherited, FALSE) as is_required,
+                    COALESCE(em.default_value, gfm.default_value) as default_value,
+                    COALESCE(em.transform_expression, gfm.transform_expression) as transform_expression,
+                    gfm.ordinal_position,
+                    em.is_inherited,
+                    em.effective_from_format
+                FROM mapping.v_effective_gold_mappings em
+                LEFT JOIN mapping.gold_field_mappings gfm
+                    ON gfm.format_id = em.effective_from_format
+                    AND gfm.gold_table = em.gold_table
+                    AND gfm.gold_column = em.gold_column
+                    AND COALESCE(gfm.entity_role, '') = COALESCE(em.entity_role, '')
+                    AND gfm.is_active = TRUE
+                WHERE em.format_id = %s
+                ORDER BY em.gold_table, em.entity_role NULLS FIRST, gfm.ordinal_position NULLS LAST
+            """, (format_id,))
+        else:
+            # Direct mappings only (no inheritance)
+            cursor.execute("""
+                SELECT gold_table, gold_column, source_expression, entity_role,
+                       data_type, is_required, default_value, transform_expression,
+                       ordinal_position, FALSE as is_inherited, format_id as effective_from_format
+                FROM mapping.gold_field_mappings
+                WHERE format_id = %s AND is_active = TRUE
+                ORDER BY gold_table, entity_role NULLS FIRST, ordinal_position
+            """, (format_id,))
 
         mappings = []
+        inherited_count = 0
         for row in cursor.fetchall():
+            is_inherited = row[9] if len(row) > 9 else False
+            if is_inherited:
+                inherited_count += 1
             mappings.append(GoldMapping(
                 gold_table=row[0],
                 gold_column=row[1],
@@ -96,8 +146,16 @@ class DynamicGoldMapper:
             ))
 
         cursor.close()
-        self._mappings_cache[format_id] = mappings
-        logger.debug(f"Loaded {len(mappings)} Gold mappings for {format_id}")
+        self._mappings_cache[cache_key] = mappings
+
+        if inherited_count > 0:
+            logger.debug(
+                f"Loaded {len(mappings)} Gold mappings for {format_id} "
+                f"({inherited_count} inherited from parent format)"
+            )
+        else:
+            logger.debug(f"Loaded {len(mappings)} Gold mappings for {format_id}")
+
         return mappings
 
     def _evaluate_expression(self, expr: str, silver_data: Dict[str, Any],
@@ -942,6 +1000,230 @@ def process_silver_to_gold(cursor, silver_data: Dict[str, Any], format_id: str,
     # Persist to database
     entity_ids = mapper.persist_gold_records(cursor, gold_records, format_id)
 
+    # Populate normalized identifier tables
+    persist_identifiers(cursor, silver_data, entity_ids, format_id, stg_id)
+
     logger.info(f"Processed {format_id} to Gold: instruction={entity_ids.get('instruction_id')}")
 
     return entity_ids
+
+
+def persist_identifiers(cursor, silver_data: Dict[str, Any], entity_ids: Dict[str, Any],
+                       format_id: str, stg_id: str) -> None:
+    """
+    Populate normalized identifier tables from Silver data.
+
+    Extracts identifiers (BIC, LEI, IBAN, etc.) and stores them in the
+    type/value normalized tables (cdm_party_id, cdm_account_id, cdm_fi_id, cdm_payment_id).
+    """
+    # Payment identifiers
+    instruction_id = entity_ids.get('instruction_id')
+    if instruction_id:
+        _persist_payment_identifiers(cursor, silver_data, instruction_id, format_id, stg_id)
+
+    # Party identifiers (debtor/creditor)
+    if entity_ids.get('debtor_id'):
+        _persist_party_identifiers(cursor, silver_data, entity_ids['debtor_id'],
+                                   'DEBTOR', format_id, stg_id)
+    if entity_ids.get('creditor_id'):
+        _persist_party_identifiers(cursor, silver_data, entity_ids['creditor_id'],
+                                   'CREDITOR', format_id, stg_id)
+
+    # Account identifiers
+    if entity_ids.get('debtor_account_id'):
+        _persist_account_identifiers(cursor, silver_data, entity_ids['debtor_account_id'],
+                                     'DEBTOR', format_id, stg_id)
+    if entity_ids.get('creditor_account_id'):
+        _persist_account_identifiers(cursor, silver_data, entity_ids['creditor_account_id'],
+                                     'CREDITOR', format_id, stg_id)
+
+    # Financial institution identifiers
+    if entity_ids.get('debtor_agent_id'):
+        _persist_fi_identifiers(cursor, silver_data, entity_ids['debtor_agent_id'],
+                                'DEBTOR_AGENT', format_id, stg_id)
+    if entity_ids.get('creditor_agent_id'):
+        _persist_fi_identifiers(cursor, silver_data, entity_ids['creditor_agent_id'],
+                                'CREDITOR_AGENT', format_id, stg_id)
+
+
+def _persist_payment_identifiers(cursor, silver_data: Dict[str, Any],
+                                instruction_id: str, format_id: str, stg_id: str) -> None:
+    """Persist payment/transaction identifiers."""
+    # Map Silver columns to identifier types
+    payment_id_fields = [
+        ('message_id', 'MSG_ID'),
+        ('payment_information_id', 'PMT_INF_ID'),
+        ('instruction_id', 'INSTR_ID'),
+        ('end_to_end_id', 'END_TO_END_ID'),
+        ('transaction_id', 'TX_ID'),
+        ('uetr', 'UETR'),
+        ('clearing_system_reference', 'CLR_SYS_REF'),
+        # Alternative field names
+        ('msg_id', 'MSG_ID'),
+        ('pmt_inf_id', 'PMT_INF_ID'),
+        ('instr_id', 'INSTR_ID'),
+        ('e2e_id', 'END_TO_END_ID'),
+        ('tx_id', 'TX_ID'),
+    ]
+
+    for field_name, id_type in payment_id_fields:
+        value = silver_data.get(field_name)
+        if value:
+            _upsert_payment_id(cursor, instruction_id, id_type, str(value),
+                              format_id, stg_id)
+
+
+def _persist_party_identifiers(cursor, silver_data: Dict[str, Any],
+                               party_id: str, role: str, format_id: str, stg_id: str) -> None:
+    """Persist party identifiers (LEI, BIC, tax ID, etc.)."""
+    prefix = role.lower()  # 'debtor' or 'creditor'
+
+    # Organization identifiers
+    org_id_fields = [
+        (f'{prefix}_lei', 'LEI', 'ORG_ID'),
+        (f'{prefix}_bic', 'BIC_PARTY', 'ORG_ID'),
+        (f'{prefix}_tax_id', 'TAX_ID_ORG', 'ORG_ID'),
+        (f'{prefix}_org_id', 'PRTRY_ORG', 'ORG_ID'),
+        # ISO 20022 field names
+        (f'{prefix}_org_id_lei', 'LEI', 'ORG_ID'),
+        (f'{prefix}_org_id_any_bic', 'BIC_PARTY', 'ORG_ID'),
+        (f'{prefix}_org_id_other_id', 'PRTRY_ORG', 'ORG_ID'),
+    ]
+
+    # Private identifiers (for individuals)
+    prvt_id_fields = [
+        (f'{prefix}_passport', 'PASSPORT', 'PRVT_ID'),
+        (f'{prefix}_national_id', 'NATIONAL_ID', 'PRVT_ID'),
+        (f'{prefix}_prvt_id_other_id', 'PRTRY_PRVT', 'PRVT_ID'),
+    ]
+
+    all_fields = org_id_fields + prvt_id_fields
+
+    for field_name, id_type, category in all_fields:
+        value = silver_data.get(field_name)
+        if value:
+            _upsert_party_id(cursor, party_id, id_type, str(value), category,
+                            format_id, stg_id)
+
+
+def _persist_account_identifiers(cursor, silver_data: Dict[str, Any],
+                                 account_id: str, role: str, format_id: str, stg_id: str) -> None:
+    """Persist account identifiers (IBAN, BBAN, proxy IDs)."""
+    prefix = role.lower()  # 'debtor' or 'creditor'
+
+    account_id_fields = [
+        (f'{prefix}_account_iban', 'IBAN'),
+        (f'{prefix}_iban', 'IBAN'),
+        (f'{prefix}_account_bban', 'BBAN'),
+        (f'{prefix}_account_number', 'ACCT_NBR'),
+        (f'{prefix}_account_id', 'ACCT_NBR'),
+        # Proxy identifiers
+        (f'{prefix}_proxy_id', 'PAY_ID'),
+        (f'{prefix}_pix_key', 'PIX_KEY'),
+        (f'{prefix}_upi_vpa', 'UPI_VPA'),
+    ]
+
+    for field_name, id_type in account_id_fields:
+        value = silver_data.get(field_name)
+        if value:
+            _upsert_account_id(cursor, account_id, id_type, str(value),
+                              format_id, stg_id)
+
+
+def _persist_fi_identifiers(cursor, silver_data: Dict[str, Any],
+                           fi_id: str, role: str, format_id: str, stg_id: str) -> None:
+    """Persist financial institution identifiers (BIC, LEI, national clearing codes)."""
+    prefix = role.lower().replace('_agent', '_agent')  # debtor_agent or creditor_agent
+
+    # Map roles to field name patterns
+    role_prefixes = {
+        'DEBTOR_AGENT': ['debtor_agent', 'ordering_institution', 'sender'],
+        'CREDITOR_AGENT': ['creditor_agent', 'account_with_institution', 'receiver', 'beneficiary_institution'],
+        'INTERMEDIARY_AGENT1': ['intermediary_agent1', 'intermediary'],
+        'INTERMEDIARY_AGENT2': ['intermediary_agent2'],
+        'ACCOUNT_SERVICER': ['sender', 'account_servicer'],
+    }
+
+    prefixes = role_prefixes.get(role, [prefix])
+
+    for pref in prefixes:
+        fi_id_fields = [
+            (f'{pref}_bic', 'BIC', None),
+            (f'{pref}_lei', 'LEI_FI', None),
+            (f'{pref}_aba', 'USABA', 'USABA'),
+            (f'{pref}_sort_code', 'GBDSC', 'GBDSC'),
+            (f'{pref}_ifsc', 'INFSC', 'INFSC'),
+            (f'{pref}_cnaps_code', 'CNAPS', 'CNAPS'),
+            (f'{pref}_bsb', 'AUBSB', 'AUBSB'),
+            (f'{pref}_clearing_code', 'NCC', None),
+        ]
+
+        for field_name, id_type, clearing_sys in fi_id_fields:
+            value = silver_data.get(field_name)
+            if value:
+                _upsert_fi_id(cursor, fi_id, id_type, str(value),
+                             clearing_sys, format_id, stg_id)
+
+
+def _upsert_payment_id(cursor, instruction_id: str, id_type: str, id_value: str,
+                       format_id: str, stg_id: str) -> None:
+    """Insert or update payment identifier."""
+    try:
+        cursor.execute("""
+            INSERT INTO gold.cdm_payment_identifiers
+                (instruction_id, identifier_type, identifier_value, identifier_scope,
+                 source_message_type, source_stg_id)
+            VALUES (%s, %s, %s, 'INITIATING_PARTY', %s, %s)
+            ON CONFLICT (instruction_id, identifier_type, identifier_value, identifier_scope)
+            DO NOTHING
+        """, (instruction_id, id_type, id_value, format_id, stg_id))
+    except Exception as e:
+        logger.debug(f"Could not insert payment identifier {id_type}: {e}")
+
+
+def _upsert_party_id(cursor, party_id: str, id_type: str, id_value: str,
+                     category: str, format_id: str, stg_id: str) -> None:
+    """Insert or update party identifier."""
+    try:
+        cursor.execute("""
+            INSERT INTO gold.cdm_party_identifiers
+                (party_id, identifier_type, identifier_value,
+                 source_message_type, source_stg_id)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (party_id, identifier_type, identifier_value)
+            DO NOTHING
+        """, (party_id, id_type, id_value, format_id, stg_id))
+    except Exception as e:
+        logger.debug(f"Could not insert party identifier {id_type}: {e}")
+
+
+def _upsert_account_id(cursor, account_id: str, id_type: str, id_value: str,
+                       format_id: str, stg_id: str) -> None:
+    """Insert or update account identifier."""
+    try:
+        cursor.execute("""
+            INSERT INTO gold.cdm_account_identifiers
+                (account_id, identifier_type, identifier_value,
+                 source_message_type, source_stg_id)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (account_id, identifier_type, identifier_value)
+            DO NOTHING
+        """, (account_id, id_type, id_value, format_id, stg_id))
+    except Exception as e:
+        logger.debug(f"Could not insert account identifier {id_type}: {e}")
+
+
+def _upsert_fi_id(cursor, fi_id: str, id_type: str, id_value: str,
+                  clearing_system: Optional[str], format_id: str, stg_id: str) -> None:
+    """Insert or update financial institution identifier."""
+    try:
+        cursor.execute("""
+            INSERT INTO gold.cdm_fi_identifiers
+                (fi_id, identifier_type, identifier_value, clearing_system,
+                 source_message_type, source_stg_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (fi_id, identifier_type, identifier_value)
+            DO NOTHING
+        """, (fi_id, id_type, id_value, clearing_system, format_id, stg_id))
+    except Exception as e:
+        logger.debug(f"Could not insert FI identifier {id_type}: {e}")

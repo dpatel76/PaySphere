@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>INSTAPAY-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T14:45:00+08:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="PHP">125000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Cd>PHINSTAPAY</Cd>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>BABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>PHINSTAPAY</Cd></ClrSysId>
+            <MmbId>010530667</MmbId>
+          </ClrSysMmbId>
+          <Nm>BDO Unibank Inc</Nm>
+          <PstlAdr>
+            <StrtNm>7899 Makati Avenue</StrtNm>
+            <TwnNm>Makati City</TwnNm>
+            <Ctry>PH</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>MABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>PHINSTAPAY</Cd></ClrSysId>
+            <MmbId>010040018</MmbId>
+          </ClrSysMmbId>
+          <Nm>Metropolitan Bank and Trust Company</Nm>
+          <PstlAdr>
+            <StrtNm>Metrobank Plaza</StrtNm>
+            <TwnNm>Makati City</TwnNm>
+            <Ctry>PH</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>INSTAPAY-INSTR-20260106-001</InstrId>
+        <EndToEndId>E2E-INSTAPAY-20260106-001</EndToEndId>
+        <TxId>TXN-INSTAPAY-20260106-001</TxId>
+        <UETR>d4e5f6a7-b8c9-0123-defg-456789012345</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <InstrPrty>NORM</InstrPrty>
+        <SvcLvl><Cd>INST</Cd></SvcLvl>
+        <LclInstrm><Prtry>INSTAPAY</Prtry></LclInstrm>
+        <CtgyPurp><Cd>SUPP</Cd></CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="PHP">125000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <AccptncDtTm>2026-01-06T14:45:00+08:00</AccptncDtTm>
+      <ChrgBr>SLEV</ChrgBr>
+      <Dbtr>
+        <Nm>Manila Tech Solutions Corp</Nm>
+        <PstlAdr>
+          <StrtNm>123 Ayala Avenue</StrtNm>
+          <BldgNb>Tower One Exchange Plaza</BldgNb>
+          <TwnNm>Makati City</TwnNm>
+          <Ctry>PH</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>CS201234567</Id>
+              <SchmeNm><Cd>COID</Cd></SchmeNm>
+              <Issr>SEC Philippines</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><Othr><Id>001234567890</Id><SchmeNm><Cd>BBAN</Cd></SchmeNm></Othr></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>PHP</Ccy>
+        <Nm>Manila Tech Operations</Nm>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>BABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>PHINSTAPAY</Cd></ClrSysId>
+            <MmbId>010530667</MmbId>
+          </ClrSysMmbId>
+          <Nm>BDO Unibank Inc</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>MABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>PHINSTAPAY</Cd></ClrSysId>
+            <MmbId>010040018</MmbId>
+          </ClrSysMmbId>
+          <Nm>Metropolitan Bank and Trust Company</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Cebu IT Services Inc</Nm>
+        <PstlAdr>
+          <StrtNm>IT Park</StrtNm>
+          <BldgNb>Building 5</BldgNb>
+          <TwnNm>Cebu City</TwnNm>
+          <Ctry>PH</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>CS200987654</Id>
+              <SchmeNm><Cd>COID</Cd></SchmeNm>
+              <Issr>SEC Philippines</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><Othr><Id>009876543210</Id><SchmeNm><Cd>BBAN</Cd></SchmeNm></Othr></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>PHP</Ccy>
+        <Nm>Cebu IT Receivables</Nm>
+      </CdtrAcct>
+      <Purp><Cd>SUPP</Cd></Purp>
+      <RmtInf>
+        <Strd>
+          <RfrdDocInf>
+            <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+            <Nb>CEBU-INV-2026-001</Nb>
+            <RltdDt>2025-12-28</RltdDt>
+          </RfrdDocInf>
+        </Strd>
+        <Ustrd>IT Services Payment January 2026</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

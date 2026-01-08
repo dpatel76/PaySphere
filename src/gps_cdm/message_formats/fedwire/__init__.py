@@ -13,7 +13,20 @@ This extractor supports BOTH formats for backward compatibility:
 1. ISO 20022 XML (pacs.008/pacs.009) - Current standard as of March 2025
 2. Legacy FAIM tag-value format - For historical data processing
 
-Reference: https://www.frbservices.org/resources/financial-services/wires/iso-20022-implementation-center
+ISO 20022 INHERITANCE:
+    Fedwire inherits from pacs.008 (FI to FI Customer Credit Transfer) base message.
+    The FedwireISO20022Parser class inherits from Pacs008Parser for ISO 20022 parsing.
+    This ensures compliance with the Federal Reserve's ISO 20022 usage guidelines.
+
+Usage Guidelines Reference:
+    - https://www.frbservices.org/resources/financial-services/wires/iso-20022-implementation-center
+    - ISO 20022 version: pacs.008.001.08
+
+Fedwire-Specific Elements (beyond standard pacs.008):
+    - IMAD (Input Message Accountability Data) - Unique identifier format YYYYMMDDSSSSSSSSNNNNNN
+    - ABA Routing Numbers - US clearing system identifier (9 digits)
+    - FAIM business function codes - CTR, BTR, DRC, etc.
+    - US-specific address format (State codes, ZIP codes)
 """
 
 from typing import Dict, Any, List, Optional
@@ -32,26 +45,57 @@ from ..base import (
     FinancialInstitutionData,
 )
 
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
-class FedwireISO20022Parser:
+# Base class for Fedwire ISO 20022 parser
+_FedwireParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class FedwireISO20022Parser(_FedwireParserBase):
     """Parser for Fedwire ISO 20022 pacs.008/pacs.009 messages (current standard as of March 2025).
 
     Fedwire uses standard ISO 20022 messages with Federal Reserve-specific usage guidelines.
+    Inherits from Pacs008Parser to reuse common pacs.008 parsing logic.
+
     Key message types:
     - pacs.008: FI to FI Customer Credit Transfer
     - pacs.009: FI Credit Transfer (interbank)
+
+    Fedwire-Specific Additions (beyond base pacs.008):
+    - Maps MsgId to IMAD (Fedwire unique identifier)
+    - Default currency is always USD
+    - Sender/Receiver FI from InstgAgt/InstdAgt
+    - ABA routing numbers via ClrSysMmbId/MmbId
+
+    Inheritance: Pacs008Parser -> FedwireISO20022Parser
     """
 
+    # Clearing system identifier for Fedwire
+    CLEARING_SYSTEM = "USABA"
+    DEFAULT_CURRENCY = "USD"
+
+    # Fedwire-specific namespace pattern (for standalone use if base not available)
     NS_PATTERN = re.compile(r'\{[^}]+\}')
 
     def _strip_ns(self, tag: str) -> str:
         """Remove namespace from XML tag."""
+        if ISO20022_BASE_AVAILABLE:
+            return super()._strip_ns(tag)
         return self.NS_PATTERN.sub('', tag)
 
     def _find(self, element: ET.Element, path: str) -> Optional[ET.Element]:
         """Find element using local names (ignoring namespaces)."""
+        if ISO20022_BASE_AVAILABLE:
+            return super()._find(element, path)
+        # Fallback implementation for standalone use
         if element is None:
             return None
         parts = path.split('/')
@@ -69,16 +113,24 @@ class FedwireISO20022Parser:
 
     def _find_text(self, element: ET.Element, path: str) -> Optional[str]:
         """Find element text using local names."""
+        if ISO20022_BASE_AVAILABLE:
+            return super()._find_text(element, path)
         elem = self._find(element, path)
         return elem.text if elem is not None else None
 
     def _find_attr(self, element: ET.Element, path: str, attr: str) -> Optional[str]:
         """Find element attribute."""
+        if ISO20022_BASE_AVAILABLE:
+            return super()._find_attr(element, path, attr)
         elem = self._find(element, path)
         return elem.get(attr) if elem is not None else None
 
     def parse(self, xml_content: str) -> Dict[str, Any]:
-        """Parse Fedwire ISO 20022 pacs.008 or pacs.009 message."""
+        """Parse Fedwire ISO 20022 pacs.008 or pacs.009 message.
+
+        Uses base Pacs008Parser.parse() for standard pacs.008 extraction,
+        then adds Fedwire-specific post-processing.
+        """
         try:
             if xml_content.startswith('\ufeff'):
                 xml_content = xml_content[1:]
@@ -105,21 +157,30 @@ class FedwireISO20022Parser:
         return self._parse_transfer(fi_transfer)
 
     def _parse_transfer(self, fi_transfer: ET.Element) -> Dict[str, Any]:
-        """Parse credit transfer element (common to pacs.008 and pacs.009)."""
+        """Parse credit transfer element with Fedwire-specific mappings.
+
+        Extends standard pacs.008 parsing with Fedwire-specific fields:
+        - IMAD mapping from MsgId
+        - Sender/Receiver FI from InstgAgt/InstdAgt
+        - US-specific address handling
+        """
         result = {
             'currency': 'USD',  # Fedwire is always USD
             'isISO20022': True,
+            'clearingSystem': 'FEDWIRE',
         }
 
-        # Group Header
+        # Group Header with Fedwire-specific field mapping
         grp_hdr = self._find(fi_transfer, 'GrpHdr')
         if grp_hdr is not None:
-            result['imad'] = self._find_text(grp_hdr, 'MsgId')  # Map to IMAD
+            # Map MsgId to IMAD (Fedwire-specific identifier)
+            result['imad'] = self._find_text(grp_hdr, 'MsgId')
+            result['messageId'] = result['imad']  # Also set standard field
             result['creationDateTime'] = self._find_text(grp_hdr, 'CreDtTm')
             result['settlementDate'] = self._find_text(grp_hdr, 'IntrBkSttlmDt')
             result['settlementMethod'] = self._find_text(grp_hdr, 'SttlmInf/SttlmMtd')
 
-            # Instructing Agent (Sender FI)
+            # Instructing Agent (Sender FI) - Fedwire uses this for the sending bank
             instg_agt = self._find(grp_hdr, 'InstgAgt/FinInstnId')
             if instg_agt is not None:
                 result['sender'] = {
@@ -130,7 +191,7 @@ class FedwireISO20022Parser:
                     'address': self._parse_address(instg_agt),
                 }
 
-            # Instructed Agent (Receiver FI)
+            # Instructed Agent (Receiver FI) - Fedwire uses this for the receiving bank
             instd_agt = self._find(grp_hdr, 'InstdAgt/FinInstnId')
             if instd_agt is not None:
                 result['receiver'] = {
@@ -188,64 +249,120 @@ class FedwireISO20022Parser:
         # Debtor Agent (Originator's Bank)
         dbtr_agt = self._find(cdt_trf, 'DbtrAgt/FinInstnId')
         if dbtr_agt is not None:
+            dbtr_agt_bic = self._find_text(dbtr_agt, 'BICFI')
+            dbtr_agt_routing = self._find_text(dbtr_agt, 'ClrSysMmbId/MmbId')
+            dbtr_agt_name = self._find_text(dbtr_agt, 'Nm')
+            dbtr_agt_clr_sys = self._find_text(dbtr_agt, 'ClrSysMmbId/ClrSysId/Cd')
+            # Fedwire-specific naming
             result['originatorFi'] = {
-                'bic': self._find_text(dbtr_agt, 'BICFI'),
-                'routingNumber': self._find_text(dbtr_agt, 'ClrSysMmbId/MmbId'),
-                'name': self._find_text(dbtr_agt, 'Nm'),
+                'bic': dbtr_agt_bic,
+                'routingNumber': dbtr_agt_routing,
+                'name': dbtr_agt_name,
             }
+            # Standard ISO 20022 flat keys for DynamicMapper inheritance
+            result['debtorAgentBic'] = dbtr_agt_bic
+            result['debtorAgentName'] = dbtr_agt_name
+            result['debtorAgentMemberId'] = dbtr_agt_routing
+            result['debtorAgentClearingSystemId'] = dbtr_agt_clr_sys
 
         # Debtor (Originator)
         dbtr = self._find(cdt_trf, 'Dbtr')
         if dbtr is not None:
+            dbtr_name = self._find_text(dbtr, 'Nm')
+            dbtr_addr = self._parse_address(dbtr)
             result['originator'] = {
-                'name': self._find_text(dbtr, 'Nm'),
-                'address': self._parse_address(dbtr),
+                'name': dbtr_name,
+                'address': dbtr_addr,
             }
+            # Standard ISO 20022 flat keys for DynamicMapper inheritance
+            result['debtorName'] = dbtr_name
+            result['debtorStreetName'] = dbtr_addr.get('line1')
+            result['debtorBuildingNumber'] = dbtr_addr.get('line2')
+            result['debtorTownName'] = dbtr_addr.get('city')
+            result['debtorCountrySubDivision'] = dbtr_addr.get('state')
+            result['debtorPostCode'] = dbtr_addr.get('zipCode')
+            result['debtorCountry'] = dbtr_addr.get('country')
             # Organization ID
             org_id = self._find(dbtr, 'Id/OrgId')
             if org_id is not None:
-                result['originator']['lei'] = self._find_text(org_id, 'LEI')
-                result['originator']['identifier'] = self._find_text(org_id, 'Othr/Id')
+                lei = self._find_text(org_id, 'LEI')
+                other_id = self._find_text(org_id, 'Othr/Id')
+                result['originator']['lei'] = lei
+                result['originator']['identifier'] = other_id
+                result['debtorLei'] = lei
+                result['debtorOtherId'] = other_id
 
         # Debtor Account
         dbtr_acct = self._find(cdt_trf, 'DbtrAcct/Id')
         if dbtr_acct is not None:
             acct = self._find_text(dbtr_acct, 'Othr/Id') or self._find_text(dbtr_acct, 'IBAN')
+            iban = self._find_text(dbtr_acct, 'IBAN')
             if result.get('originator'):
                 result['originator']['accountNumber'] = acct
             else:
                 result['originator'] = {'accountNumber': acct, 'address': {}}
+            # Standard ISO 20022 flat keys
+            result['debtorAccountOther'] = acct
+            result['debtorAccountIban'] = iban
 
         # Creditor Agent (Beneficiary's Bank)
         cdtr_agt = self._find(cdt_trf, 'CdtrAgt/FinInstnId')
         if cdtr_agt is not None:
+            cdtr_agt_bic = self._find_text(cdtr_agt, 'BICFI')
+            cdtr_agt_routing = self._find_text(cdtr_agt, 'ClrSysMmbId/MmbId')
+            cdtr_agt_name = self._find_text(cdtr_agt, 'Nm')
+            cdtr_agt_clr_sys = self._find_text(cdtr_agt, 'ClrSysMmbId/ClrSysId/Cd')
+            # Fedwire-specific naming
             result['beneficiaryBank'] = {
-                'bic': self._find_text(cdtr_agt, 'BICFI'),
-                'routingNumber': self._find_text(cdtr_agt, 'ClrSysMmbId/MmbId'),
-                'name': self._find_text(cdtr_agt, 'Nm'),
+                'bic': cdtr_agt_bic,
+                'routingNumber': cdtr_agt_routing,
+                'name': cdtr_agt_name,
             }
+            # Standard ISO 20022 flat keys for DynamicMapper inheritance
+            result['creditorAgentBic'] = cdtr_agt_bic
+            result['creditorAgentName'] = cdtr_agt_name
+            result['creditorAgentMemberId'] = cdtr_agt_routing
+            result['creditorAgentClearingSystemId'] = cdtr_agt_clr_sys
 
         # Creditor (Beneficiary)
         cdtr = self._find(cdt_trf, 'Cdtr')
         if cdtr is not None:
+            cdtr_name = self._find_text(cdtr, 'Nm')
+            cdtr_addr = self._parse_address(cdtr)
             result['beneficiary'] = {
-                'name': self._find_text(cdtr, 'Nm'),
-                'address': self._parse_address(cdtr),
+                'name': cdtr_name,
+                'address': cdtr_addr,
             }
+            # Standard ISO 20022 flat keys for DynamicMapper inheritance
+            result['creditorName'] = cdtr_name
+            result['creditorStreetName'] = cdtr_addr.get('line1')
+            result['creditorBuildingNumber'] = cdtr_addr.get('line2')
+            result['creditorTownName'] = cdtr_addr.get('city')
+            result['creditorCountrySubDivision'] = cdtr_addr.get('state')
+            result['creditorPostCode'] = cdtr_addr.get('zipCode')
+            result['creditorCountry'] = cdtr_addr.get('country')
             # Organization ID
             org_id = self._find(cdtr, 'Id/OrgId')
             if org_id is not None:
-                result['beneficiary']['lei'] = self._find_text(org_id, 'LEI')
-                result['beneficiary']['identifier'] = self._find_text(org_id, 'Othr/Id')
+                lei = self._find_text(org_id, 'LEI')
+                other_id = self._find_text(org_id, 'Othr/Id')
+                result['beneficiary']['lei'] = lei
+                result['beneficiary']['identifier'] = other_id
+                result['creditorLei'] = lei
+                result['creditorOtherId'] = other_id
 
         # Creditor Account
         cdtr_acct = self._find(cdt_trf, 'CdtrAcct/Id')
         if cdtr_acct is not None:
             acct = self._find_text(cdtr_acct, 'Othr/Id') or self._find_text(cdtr_acct, 'IBAN')
+            iban = self._find_text(cdtr_acct, 'IBAN')
             if result.get('beneficiary'):
                 result['beneficiary']['accountNumber'] = acct
             else:
                 result['beneficiary'] = {'accountNumber': acct, 'address': {}}
+            # Standard ISO 20022 flat keys
+            result['creditorAccountOther'] = acct
+            result['creditorAccountIban'] = iban
 
         # Remittance Information
         rmt_inf = self._find(cdt_trf, 'RmtInf')
@@ -617,14 +734,37 @@ class FedwireTagValueParser:
 
 
 class FedwireExtractor(BaseExtractor):
-    """Extractor for Fedwire messages.
+    """Extractor for Fedwire Funds Service messages.
 
-    Supports both current ISO 20022 format (pacs.008/pacs.009) and legacy FAIM format.
-    Auto-detects format based on content structure.
+    ISO 20022 INHERITANCE:
+        FEDWIRE inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The FedwireISO20022Parser inherits from Pacs008Parser.
+        Uses Federal Reserve ISO 20022 usage guidelines.
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008/pacs.009) - Current standard (March 2025+)
+        2. Legacy FAIM tag-value format - For historical data processing
+
+    Fedwire-Specific Elements:
+        - IMAD (Input Message Accountability Data) - Unique identifier
+        - ABA Routing Numbers - US clearing system (USABA)
+        - Currency always USD
+        - US-specific address format (State codes, ZIP codes)
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_fedwire
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_fedwire
+
+    Inheritance Hierarchy:
+        BaseExtractor -> FedwireExtractor
+        (Parser: Pacs008Parser -> FedwireISO20022Parser)
     """
 
     MESSAGE_TYPE = "FEDWIRE"
-    SILVER_TABLE = "stg_fedwire"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "USD"
+    CLEARING_SYSTEM = "USABA"  # US ABA routing number system
 
     def __init__(self):
         self.iso20022_parser = FedwireISO20022Parser()

@@ -1,4 +1,34 @@
-"""Eurozone TARGET2 (Trans-European Automated Real-time Gross Settlement Express Transfer) Extractor - ISO 20022 based."""
+"""Eurozone TARGET2 (Trans-European Automated Real-time Gross Settlement Express Transfer) Extractor.
+
+ISO 20022 INHERITANCE HIERARCHY:
+    TARGET2 uses ECB's ISO 20022 usage guidelines based on pacs.009.
+    The Target2ISO20022Parser inherits from Pacs009Parser.
+
+    IMPORTANT: TARGET2 uses pacs.009 (FI Credit Transfer - bank-to-bank)
+               NOT pacs.008 (FI to FI Customer Credit Transfer)
+
+    BaseISO20022Parser
+        └── Pacs009Parser (FI Credit Transfer - pacs.009.001.08)
+            └── Target2ISO20022Parser (ECB TARGET2 usage guidelines)
+
+TARGET2-SPECIFIC ELEMENTS:
+    - BIC codes for all financial institutions
+    - EUR currency (Eurozone)
+    - RTGS via European Central Bank
+    - Settlement Method: CLRG (through TARGET2)
+
+CLEARING SYSTEM:
+    - TARGET2 - Trans-European Automated Real-time Gross settlement Express Transfer system 2
+    - Operated by ECB and Eurosystem central banks
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_target2
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_target2
+
+MAPPING INHERITANCE:
+    TARGET2 -> pacs.009.base (COMPLETE)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -17,6 +47,88 @@ from ..base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Import ISO 20022 base classes for inheritance
+# TARGET2 uses pacs.009 (FI Credit Transfer), NOT pacs.008
+try:
+    from ..iso20022 import Pacs009Parser, Pacs009Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - TARGET2 will use standalone implementation")
+
+
+# =============================================================================
+# TARGET2 ISO 20022 PARSER (inherits from Pacs009Parser)
+# =============================================================================
+
+# Use conditional inheritance pattern for backward compatibility
+_Target2ParserBase = Pacs009Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class Target2ISO20022Parser(_Target2ParserBase):
+    """TARGET2 ISO 20022 pacs.009 parser with ECB usage guidelines.
+
+    Inherits from Pacs009Parser (NOT Pacs008Parser!) and adds TARGET2-specific processing.
+
+    IMPORTANT: TARGET2 uses pacs.009 FICdtTrf (Financial Institution Credit Transfer)
+    for bank-to-bank transfers, NOT pacs.008 FIToFICstmrCdtTrf (customer transfers).
+
+    ISO 20022 Version: pacs.009.001.08
+    Usage Guidelines: ECB TARGET2
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pacs009Parser -> Target2ISO20022Parser
+    """
+
+    # TARGET2-specific constants
+    CLEARING_SYSTEM = "TARGET2"
+    DEFAULT_CURRENCY = "EUR"
+    MESSAGE_TYPE = "TARGET2"
+    ROOT_ELEMENT = "FICdtTrf"  # pacs.009 root element
+
+    def __init__(self):
+        """Initialize TARGET2 parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse TARGET2 ISO 20022 pacs.009 message.
+
+        Uses inherited pacs.009 parsing from Pacs009Parser and adds
+        TARGET2-specific fields.
+        """
+        # Handle JSON/dict input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pacs.009 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add TARGET2-specific fields
+        result['isTarget2'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available."""
+        legacy_parser = Target2XmlParser()
+        return legacy_parser.parse(raw_content)
+
+
+# =============================================================================
+# LEGACY XML PARSER (kept for backward compatibility)
+# =============================================================================
 
 
 class Target2XmlParser:
@@ -189,14 +301,49 @@ class Target2XmlParser:
 
 
 class Target2Extractor(BaseExtractor):
-    """Extractor for Eurozone TARGET2 payment messages."""
+    """Extractor for Eurozone TARGET2 (ECB RTGS) payment messages.
+
+    ISO 20022 INHERITANCE:
+        TARGET2 inherits from pacs.009 (FI Credit Transfer - bank-to-bank).
+        The Target2ISO20022Parser inherits from Pacs009Parser.
+        Uses ECB TARGET2 usage guidelines.
+
+    IMPORTANT: TARGET2 uses pacs.009 NOT pacs.008!
+        - pacs.009 FICdtTrf: Bank-to-bank transfers
+        - pacs.008 FIToFICstmrCdtTrf: Customer-originated transfers
+
+    Format Support:
+        1. ISO 20022 XML (pacs.009.001.08) - Current standard
+
+    TARGET2-Specific Elements:
+        - BIC codes for all financial institutions
+        - EUR currency (Eurozone)
+        - RTGS settlement via ECB
+        - Settlement Method: CLRG
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_target2
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_target2
+
+    Inheritance Hierarchy:
+        BaseExtractor -> Target2Extractor
+        (Parser: Pacs009Parser -> Target2ISO20022Parser)
+    """
 
     MESSAGE_TYPE = "TARGET2"
-    SILVER_TABLE = "stg_target2"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "EUR"
+    CLEARING_SYSTEM = "TARGET2"
 
     def __init__(self):
         super().__init__()
-        self.parser = Target2XmlParser()
+        # Primary: ISO 20022 pacs.009 parser
+        self.iso20022_parser = Target2ISO20022Parser()
+        # Legacy: XML parser (kept for backward compatibility)
+        self.legacy_parser = Target2XmlParser()
+        # Default to ISO 20022 parser
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION

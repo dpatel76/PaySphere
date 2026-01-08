@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>RTGS-HK-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T11:30:00+08:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="HKD">2850000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Cd>HKCHATS</Cd>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>HABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>HKCHATS</Cd></ClrSysId>
+            <MmbId>004</MmbId>
+          </ClrSysMmbId>
+          <Nm>The Hongkong and Shanghai Banking Corporation Ltd</Nm>
+          <PstlAdr>
+            <StrtNm>1 Queen's Road Central</StrtNm>
+            <TwnNm>Hong Kong</TwnNm>
+            <Ctry>HK</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>SCBLHKHKXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>HKCHATS</Cd></ClrSysId>
+            <MmbId>003</MmbId>
+          </ClrSysMmbId>
+          <Nm>Standard Chartered Bank (Hong Kong) Ltd</Nm>
+          <PstlAdr>
+            <StrtNm>15th Floor Standard Chartered Bank Building</StrtNm>
+            <TwnNm>Hong Kong</TwnNm>
+            <Ctry>HK</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>RTGSHK-INSTR-20260106-001</InstrId>
+        <EndToEndId>E2E-RTGSHK-20260106-001</EndToEndId>
+        <TxId>TXN-RTGSHK-20260106-001</TxId>
+        <UETR>c3d4e5f6-a7b8-9012-cdef-345678901234</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <InstrPrty>HIGH</InstrPrty>
+        <SvcLvl><Cd>URGP</Cd></SvcLvl>
+        <LclInstrm><Prtry>CHATS</Prtry></LclInstrm>
+        <CtgyPurp><Cd>CORT</Cd></CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="HKD">2850000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmPrty>URGT</SttlmPrty>
+      <AccptncDtTm>2026-01-06T11:30:00+08:00</AccptncDtTm>
+      <ChrgBr>SHAR</ChrgBr>
+      <Dbtr>
+        <Nm>Hong Kong Property Development Ltd</Nm>
+        <PstlAdr>
+          <StrtNm>88 Queensway</StrtNm>
+          <BldgNb>Two Pacific Place Suite 3001</BldgNb>
+          <TwnNm>Hong Kong</TwnNm>
+          <Ctry>HK</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>549300HKPROPERTYLEI1</LEI>
+            <Othr>
+              <Id>12345678</Id>
+              <SchmeNm><Cd>COID</Cd></SchmeNm>
+              <Issr>Companies Registry</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><Othr><Id>004-123-456789-001</Id><SchmeNm><Cd>BBAN</Cd></SchmeNm></Othr></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>HKD</Ccy>
+        <Nm>HK Property Development Operations</Nm>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>HABORUAUXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>HKCHATS</Cd></ClrSysId>
+            <MmbId>004</MmbId>
+          </ClrSysMmbId>
+          <Nm>The Hongkong and Shanghai Banking Corporation Ltd</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>SCBLHKHKXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>HKCHATS</Cd></ClrSysId>
+            <MmbId>003</MmbId>
+          </ClrSysMmbId>
+          <Nm>Standard Chartered Bank (Hong Kong) Ltd</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>Asia Construction Materials Co Ltd</Nm>
+        <PstlAdr>
+          <StrtNm>15 Hung To Road</StrtNm>
+          <TwnNm>Kwun Tong</TwnNm>
+          <Ctry>HK</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>87654321</Id>
+              <SchmeNm><Cd>COID</Cd></SchmeNm>
+              <Issr>Companies Registry</Issr>
+            </Othr>
+          </OrgId>
+        </Id>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><Othr><Id>003-987-654321-001</Id><SchmeNm><Cd>BBAN</Cd></SchmeNm></Othr></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>HKD</Ccy>
+        <Nm>Asia Construction Receivables</Nm>
+      </CdtrAcct>
+      <Purp><Cd>CORT</Cd></Purp>
+      <RmtInf>
+        <Strd>
+          <RfrdDocInf>
+            <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+            <Nb>ACM-2026-00123</Nb>
+            <RltdDt>2025-12-30</RltdDt>
+          </RfrdDocInf>
+        </Strd>
+        <Ustrd>Construction Materials Payment Project HK-Tower-2026</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

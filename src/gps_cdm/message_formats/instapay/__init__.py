@@ -1,4 +1,31 @@
-"""Philippines InstaPay Extractor - ISO 20022 pacs.008 based."""
+"""Philippines InstaPay Extractor - ISO 20022 pacs.008 based.
+
+ISO 20022 INHERITANCE HIERARCHY:
+    InstaPay uses Philippine Clearing House ISO 20022 usage guidelines based on pacs.008.
+    The InstapayISO20022Parser inherits from Pacs008Parser.
+
+    BaseISO20022Parser
+        └── Pacs008Parser (FI to FI Customer Credit Transfer - pacs.008.001.08)
+            └── InstapayISO20022Parser (Philippine Clearing House instant payments guidelines)
+
+INSTAPAY-SPECIFIC ELEMENTS:
+    - Philippine Peso (PHP) currency
+    - PHPCH clearing system (Philippines Clearing House)
+    - Real-time instant payments
+    - Bank clearing member IDs
+
+CLEARING SYSTEM:
+    - PHPCH (Philippines Clearing House Corporation)
+    - Operated by PCHC (Philippine Clearing House Corporation)
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_instapay
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_instapay
+
+MAPPING INHERITANCE:
+    INSTAPAY -> pacs.008.base (COMPLETE)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -18,9 +45,89 @@ from ..base import (
 
 logger = logging.getLogger(__name__)
 
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - InstaPay will use standalone implementation")
+
+
+# =============================================================================
+# INSTAPAY ISO 20022 PARSER (inherits from Pacs008Parser)
+# =============================================================================
+
+# Use conditional inheritance pattern for backward compatibility
+_InstapayParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class InstapayISO20022Parser(_InstapayParserBase):
+    """InstaPay ISO 20022 pacs.008 parser with Philippine Clearing House usage guidelines.
+
+    Inherits from Pacs008Parser and adds InstaPay-specific processing:
+    - PHPCH clearing system identification
+    - PHP currency defaults
+    - Philippine bank clearing member ID extraction
+
+    ISO 20022 Version: pacs.008.001.08
+    Usage Guidelines: Philippine Clearing House Corporation (PCHC)
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pacs008Parser -> InstapayISO20022Parser
+    """
+
+    # InstaPay-specific constants
+    CLEARING_SYSTEM = "PHPCH"  # Philippines Clearing House
+    DEFAULT_CURRENCY = "PHP"
+    MESSAGE_TYPE = "INSTAPAY"
+
+    def __init__(self):
+        """Initialize InstaPay parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse InstaPay ISO 20022 pacs.008 message.
+
+        Uses inherited pacs.008 parsing from Pacs008Parser and adds
+        InstaPay-specific fields.
+        """
+        # Handle JSON/dict input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pacs.008 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add InstaPay-specific fields
+        result['isInstaPay'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available."""
+        legacy_parser = InstaPayParser()
+        return legacy_parser.parse(raw_content)
+
+
+# =============================================================================
+# LEGACY XML PARSER (kept for backward compatibility)
+# =============================================================================
+
 
 class InstaPayParser:
-    """Parser for InstaPay ISO 20022 pacs.008 XML messages."""
+    """Parser for InstaPay ISO 20022 pacs.008 XML messages (legacy standalone)."""
 
     def parse(self, raw_content: str) -> Dict[str, Any]:
         """Parse InstaPay XML/JSON content into flat dictionary."""
@@ -246,14 +353,44 @@ class InstaPayParser:
 
 
 class InstaPayExtractor(BaseExtractor):
-    """Extractor for Philippines InstaPay instant payment messages (ISO 20022 pacs.008)."""
+    """Extractor for Philippines InstaPay instant payment messages (ISO 20022 pacs.008).
+
+    ISO 20022 INHERITANCE:
+        InstaPay inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The InstapayISO20022Parser inherits from Pacs008Parser.
+        Uses Philippine Clearing House Corporation (PCHC) usage guidelines.
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008.001.08) - Current standard
+        2. Legacy JSON format - Backward compatibility
+
+    InstaPay-Specific Elements:
+        - PHPCH clearing system (Philippines Clearing House)
+        - PHP currency (Philippine Peso)
+        - Real-time instant payments
+        - Bank clearing member IDs
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_instapay
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_instapay
+
+    Inheritance Hierarchy:
+        BaseExtractor -> InstaPayExtractor
+        (Parser: Pacs008Parser -> InstapayISO20022Parser)
+    """
 
     MESSAGE_TYPE = "INSTAPAY"
-    SILVER_TABLE = "stg_instapay"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "PHP"
+    CLEARING_SYSTEM = "PHPCH"
 
     def __init__(self):
+        """Initialize InstaPay extractor with ISO 20022 parser."""
         super().__init__()
-        self.parser = InstaPayParser()
+        self.iso20022_parser = InstapayISO20022Parser()
+        self.legacy_parser = InstaPayParser()
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION

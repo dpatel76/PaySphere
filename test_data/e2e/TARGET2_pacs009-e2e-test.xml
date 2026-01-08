@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08">
+  <FICdtTrf>
+    <GrpHdr>
+      <MsgId>TARGET2-PACS009-E2E-20260108-001</MsgId>
+      <CreDtTm>2026-01-08T11:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys><Cd>TGT</Cd></ClrSys>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TARGET2-FI-INSTR-001</InstrId>
+        <EndToEndId>TARGET2-FI-E2E-20260108-001</EndToEndId>
+        <TxId>TARGET2-FI-TXN-20260108-001</TxId>
+        <UETR>d4e5f6a7-b8c9-0123-def4-567890123456</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <SvcLvl><Cd>URGP</Cd></SvcLvl>
+        <ClrChanl>RTGS</ClrChanl>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">5000000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-08</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>BNPAFRPPXXX</BICFI>
+          <Nm>BNP Paribas SA</Nm>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+          <Nm>Commerzbank AG</Nm>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <FinInstnId>
+          <BICFI>BNPAFRPPXXX</BICFI>
+          <Nm>BNP Paribas SA</Nm>
+          <PstlAdr>
+            <Ctry>FR</Ctry>
+            <AdrLine>16 Boulevard des Italiens</AdrLine>
+            <AdrLine>Paris 75009</AdrLine>
+          </PstlAdr>
+        </FinInstnId>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><Othr><Id>BNPAFRPPXXXRTGS</Id></Othr></Id>
+      </DbtrAcct>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+          <Nm>Commerzbank AG</Nm>
+          <PstlAdr>
+            <Ctry>DE</Ctry>
+            <AdrLine>Kaiserplatz</AdrLine>
+            <AdrLine>Frankfurt am Main 60261</AdrLine>
+          </PstlAdr>
+        </FinInstnId>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><Othr><Id>COBADEFFXXXRTGS</Id></Othr></Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>TARGET2 FI Credit Transfer - Liquidity Management</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FICdtTrf>
+</Document>

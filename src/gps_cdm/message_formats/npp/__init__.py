@@ -1,15 +1,31 @@
 """NPP (Australia New Payments Platform) Extractor - ISO 20022 pacs.008 based.
 
-NPP uses the ISO 20022 pacs.008 FIToFICstmrCdtTrf message format with Australian-specific
-BSB (Bank-State-Branch) + Account Number identification. This is the standard for Australian
-real-time payments including Osko.
+ISO 20022 INHERITANCE HIERARCHY:
+    NPP uses ISO 20022 pacs.008 FIToFICstmrCdtTrf message format with Australian-specific
+    BSB (Bank-State-Branch) + Account Number identification. The NppISO20022Parser
+    inherits from Pacs008Parser.
 
-Key characteristics:
-- BSB: 6 digits identifying the bank branch (e.g., 064-000)
-- Account Number: 9 digits (e.g., 123456789)
-- Currency: AUD (Australian Dollar)
-- Clearing System: AUBSB (Australian BSB) / NPPA (NPP Australia)
-- PayID: Alternative addressing (email, phone, ABN, etc.)
+    BaseISO20022Parser
+        └── Pacs008Parser (FI to FI Customer Credit Transfer - pacs.008.001.08)
+            └── NppISO20022Parser (Australian NPP usage guidelines)
+
+NPP-SPECIFIC ELEMENTS:
+    - BSB: 6 digits identifying the bank branch (e.g., 064-000)
+    - Account Number: 9 digits (e.g., 123456789)
+    - PayID: Alternative addressing (email, phone, ABN, etc.)
+
+CLEARING SYSTEM:
+    - AUBSB (Australian BSB) / NPPA (NPP Australia)
+    - Currency: AUD (Australian Dollar)
+    - Real-time instant payments including Osko
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_npp
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_npp
+
+MAPPING INHERITANCE:
+    NPP -> pacs.008.base (COMPLETE)
 """
 
 from typing import Dict, Any, List, Optional
@@ -29,6 +45,14 @@ from ..base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - NPP will use standalone implementation")
 
 
 class NppXmlParser:
@@ -375,23 +399,110 @@ class NppXmlParser:
         return result
 
 
+# =============================================================================
+# NPP ISO 20022 PARSER (inherits from Pacs008Parser)
+# =============================================================================
+
+# Use conditional inheritance pattern for backward compatibility
+_NppParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class NppISO20022Parser(_NppParserBase):
+    """NPP ISO 20022 pacs.008 parser with Australian usage guidelines.
+
+    Inherits from Pacs008Parser and adds NPP-specific processing:
+    - BSB (Bank-State-Branch) extraction (AUBSB scheme)
+    - PayID alternative addressing support
+    - Australian-specific clearing system identification
+
+    ISO 20022 Version: pacs.008.001.08
+    Usage Guidelines: Australian NPP (New Payments Platform)
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pacs008Parser -> NppISO20022Parser
+    """
+
+    # NPP-specific constants
+    CLEARING_SYSTEM = "AUBSB"  # Australian BSB system
+    DEFAULT_CURRENCY = "AUD"
+    MESSAGE_TYPE = "NPP"
+
+    def __init__(self):
+        """Initialize NPP parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse NPP ISO 20022 pacs.008 message.
+
+        Uses inherited pacs.008 parsing from Pacs008Parser and adds
+        NPP-specific fields.
+        """
+        # Handle JSON/dict input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pacs.008 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add NPP-specific fields
+        result['isNpp'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available."""
+        legacy_parser = NppXmlParser()
+        return legacy_parser.parse(raw_content)
+
+
 class NppExtractor(BaseExtractor):
     """Extractor for Australia NPP instant payment messages.
 
-    NPP is Australia's real-time payment system using ISO 20022 pacs.008 format.
-    Key features:
-    - BSB (6 digits) identifies the bank/branch
-    - Account Number (9 digits)
-    - PayID for alias-based addressing (email, phone, ABN)
-    - Clearing system: AUBSB (Australian BSB) / NPPA
+    ISO 20022 INHERITANCE:
+        NPP inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The NppISO20022Parser inherits from Pacs008Parser.
+        Uses Australian NPP (New Payments Platform) usage guidelines.
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008.001.08) - Current standard
+
+    NPP-Specific Elements:
+        - BSB (6 digits) identifies the bank/branch
+        - Account Number (9 digits)
+        - PayID for alias-based addressing (email, phone, ABN)
+        - Clearing system: AUBSB (Australian BSB) / NPPA
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_npp
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_npp
+
+    Inheritance Hierarchy:
+        BaseExtractor -> NppExtractor
+        (Parser: Pacs008Parser -> NppISO20022Parser)
     """
 
     MESSAGE_TYPE = "NPP"
-    SILVER_TABLE = "stg_npp"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "AUD"
+    CLEARING_SYSTEM = "AUBSB"
 
     def __init__(self):
-        """Initialize NPP extractor with XML parser."""
-        self.parser = NppXmlParser()
+        """Initialize NPP extractor with ISO 20022 parser."""
+        self.iso20022_parser = NppISO20022Parser()
+        self.legacy_parser = NppXmlParser()
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION

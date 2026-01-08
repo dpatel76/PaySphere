@@ -1,4 +1,33 @@
-"""SEPA Credit Transfer (pain.001 with SEPA rules) Extractor."""
+"""SEPA Credit Transfer (pain.001 with SEPA rules) Extractor.
+
+ISO 20022 INHERITANCE HIERARCHY:
+    SEPA uses European Payments Council (EPC) ISO 20022 usage guidelines based on pain.001.
+    The SepaISO20022Parser inherits from Pain001Parser.
+
+    BaseISO20022Parser
+        └── Pain001Parser (Customer Credit Transfer Initiation - pain.001.001.09)
+            └── SepaISO20022Parser (EPC SEPA Credit Transfer guidelines)
+
+SEPA-SPECIFIC ELEMENTS:
+    - IBAN account numbers (mandatory)
+    - BIC codes for financial institutions
+    - EUR currency (Euro zone)
+    - SEPA AT/RT elements (Additional Transaction/Remittance information)
+    - EPC Scheme Rules compliance
+
+CLEARING SYSTEM:
+    - STEP2 (Pan-European clearing)
+    - TARGET2 (High-value payments)
+    - National clearing systems (with SEPA compliance)
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_sepa
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_sepa
+
+MAPPING INHERITANCE:
+    SEPA -> pain.001.base (PARTIAL - SEPA adds EPC-specific fields)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -18,9 +47,110 @@ from ..base import (
 
 logger = logging.getLogger(__name__)
 
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pain001Parser, Pain001Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - SEPA will use standalone implementation")
+
+
+# =============================================================================
+# SEPA ISO 20022 PARSER (inherits from Pain001Parser)
+# =============================================================================
+
+# Use conditional inheritance pattern for backward compatibility
+_SepaParserBase = Pain001Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class SepaISO20022Parser(_SepaParserBase):
+    """SEPA ISO 20022 pain.001 parser with EPC (European Payments Council) usage guidelines.
+
+    Inherits from Pain001Parser and adds SEPA-specific processing:
+    - IBAN validation and extraction
+    - BIC code handling for Eurozone FIs
+    - SEPA-specific clearing system identification
+    - EPC scheme compliance checks
+
+    ISO 20022 Version: pain.001.001.09
+    Usage Guidelines: EPC SEPA Credit Transfer Rulebook
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pain001Parser -> SepaISO20022Parser
+    """
+
+    # SEPA-specific constants
+    CLEARING_SYSTEM = "SEPA"  # SEPA Credit Transfer Scheme
+    DEFAULT_CURRENCY = "EUR"
+    MESSAGE_TYPE = "SEPA"
+
+    def __init__(self):
+        """Initialize SEPA parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse SEPA ISO 20022 pain.001 message.
+
+        Uses inherited pain.001 parsing from Pain001Parser and adds
+        SEPA-specific fields.
+        """
+        # Handle JSON/dict input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if isinstance(raw_content, str) and raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pain.001 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add SEPA-specific fields
+        result['isSepa'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        # Ensure IBAN fields are populated
+        self._ensure_iban_fields(result)
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available."""
+        legacy_parser = SepaXmlParser()
+        return legacy_parser.parse(raw_content)
+
+    def _ensure_iban_fields(self, result: Dict[str, Any]) -> None:
+        """Ensure SEPA-specific IBAN fields are populated from generic fields."""
+        # SEPA mandates IBAN for account identification
+        if 'debtorIBAN' not in result and 'debtorAccount' in result:
+            debtor_acct = result.get('debtorAccount', {})
+            if isinstance(debtor_acct, dict):
+                result['debtorIBAN'] = debtor_acct.get('iban')
+
+        if 'creditorIBAN' not in result and 'creditorAccount' in result:
+            creditor_acct = result.get('creditorAccount', {})
+            if isinstance(creditor_acct, dict):
+                result['creditorIBAN'] = creditor_acct.get('iban')
+
+
+# =============================================================================
+# LEGACY XML PARSER (kept for backward compatibility)
+# =============================================================================
+
 
 class SepaXmlParser:
-    """Parser for SEPA Credit Transfer XML messages (pain.001 variant)."""
+    """Parser for SEPA Credit Transfer XML messages (pain.001 variant).
+
+    Legacy parser kept for backward compatibility when ISO 20022 base classes
+    are not available.
+    """
 
     NS_PATTERN = re.compile(r'\{[^}]+\}')
 
@@ -268,13 +398,43 @@ class SepaXmlParser:
 
 
 class SepaExtractor(BaseExtractor):
-    """Extractor for SEPA Credit Transfer messages."""
+    """Extractor for SEPA Credit Transfer messages.
+
+    ISO 20022 INHERITANCE:
+        SEPA inherits from pain.001 (Customer Credit Transfer Initiation).
+        The SepaISO20022Parser inherits from Pain001Parser.
+        Uses European Payments Council (EPC) SEPA Credit Transfer Rulebook.
+
+    Format Support:
+        1. ISO 20022 XML (pain.001.001.09) - Current standard
+        2. Legacy pain.001 versions (003 through 008) - Backward compatibility
+
+    SEPA-Specific Elements:
+        - IBAN account numbers (mandatory for SEPA)
+        - BIC codes for Eurozone financial institutions
+        - EUR currency (Euro zone only)
+        - EPC scheme rules compliance
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_sepa
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_sepa
+
+    Inheritance Hierarchy:
+        BaseExtractor -> SepaExtractor
+        (Parser: Pain001Parser -> SepaISO20022Parser)
+    """
 
     MESSAGE_TYPE = "SEPA"
     SILVER_TABLE = "stg_sepa"
+    DEFAULT_CURRENCY = "EUR"
+    CLEARING_SYSTEM = "SEPA"
 
     def __init__(self):
-        self.parser = SepaXmlParser()
+        """Initialize SEPA extractor with ISO 20022 parser."""
+        self.iso20022_parser = SepaISO20022Parser()
+        self.legacy_parser = SepaXmlParser()
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>TARGET2-PACS008-E2E-20260108-001</MsgId>
+      <CreDtTm>2026-01-08T10:30:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys><Cd>TGT</Cd></ClrSys>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>TARGET2-INSTR-001</InstrId>
+        <EndToEndId>TARGET2-E2E-20260108-001</EndToEndId>
+        <TxId>TARGET2-TXN-20260108-001</TxId>
+        <UETR>c3d4e5f6-a7b8-9012-cdef-345678901234</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <SvcLvl><Cd>URGP</Cd></SvcLvl>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">1000000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-08</IntrBkSttlmDt>
+      <SttlmTmIndctn>
+        <DbtDtTm>2026-01-08T10:30:00</DbtDtTm>
+      </SttlmTmIndctn>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+          <Nm>Commerzbank AG</Nm>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+          <Nm>Deutsche Bank AG</Nm>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>TARGET2 Debtor Corporation GmbH</Nm>
+        <PstlAdr>
+          <Ctry>DE</Ctry>
+          <AdrLine>Kaiserstrasse 1</AdrLine>
+          <AdrLine>Frankfurt am Main 60311</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><IBAN>DE89370400440532013000</IBAN></Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>TARGET2 Creditor Ltd</Nm>
+        <PstlAdr>
+          <Ctry>FR</Ctry>
+          <AdrLine>Avenue des Champs-Elysees 100</AdrLine>
+          <AdrLine>Paris 75008</AdrLine>
+        </PstlAdr>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><IBAN>FR7630006000011234567890189</IBAN></Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>TARGET2 RTGS Payment - Treasury Transfer</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

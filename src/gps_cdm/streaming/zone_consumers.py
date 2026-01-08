@@ -33,6 +33,110 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# LOGGING UTILITIES
+# =============================================================================
+
+class PipelineLogger:
+    """Structured logging for pipeline observability.
+
+    All log messages include:
+    - [ZONE] prefix
+    - EVENT type (RECEIVED, PROCESSING, PROCESSED, PUBLISHED, ERROR)
+    - Message identifiers (batch_id, message_type, raw_id/stg_id)
+    - Timestamps for latency tracking
+    """
+
+    @staticmethod
+    def received(zone: str, message_type: str, batch_id: str, kafka_offset: int,
+                 kafka_partition: int, kafka_topic: str) -> None:
+        """Log message received from Kafka."""
+        logger.info(
+            f"[{zone}] EVENT=RECEIVED | "
+            f"message_type={message_type} | batch_id={batch_id} | "
+            f"topic={kafka_topic} | partition={kafka_partition} | offset={kafka_offset} | "
+            f"timestamp={datetime.utcnow().isoformat()}Z"
+        )
+
+    @staticmethod
+    def batch_start(zone: str, message_type: str, batch_id: str, record_count: int) -> None:
+        """Log batch processing started."""
+        logger.info(
+            f"[{zone}] EVENT=BATCH_START | "
+            f"message_type={message_type} | batch_id={batch_id} | "
+            f"record_count={record_count} | "
+            f"timestamp={datetime.utcnow().isoformat()}Z"
+        )
+
+    @staticmethod
+    def batch_complete(zone: str, message_type: str, batch_id: str,
+                       success_count: int, failed_count: int,
+                       output_ids: List[str], duration_ms: float) -> None:
+        """Log batch processing completed."""
+        id_preview = output_ids[:3] if output_ids else []
+        logger.info(
+            f"[{zone}] EVENT=BATCH_COMPLETE | "
+            f"message_type={message_type} | batch_id={batch_id} | "
+            f"success={success_count} | failed={failed_count} | "
+            f"output_ids={id_preview}{'...' if len(output_ids) > 3 else ''} | "
+            f"duration_ms={duration_ms:.1f} | "
+            f"timestamp={datetime.utcnow().isoformat()}Z"
+        )
+
+    @staticmethod
+    def published(zone: str, output_zone: str, message_type: str,
+                  batch_id: str, id_count: int) -> None:
+        """Log IDs published to next zone."""
+        logger.info(
+            f"[{zone}] EVENT=PUBLISHED | "
+            f"to_zone={output_zone} | message_type={message_type} | "
+            f"batch_id={batch_id} | id_count={id_count} | "
+            f"topic={output_zone}.{message_type} | "
+            f"timestamp={datetime.utcnow().isoformat()}Z"
+        )
+
+    @staticmethod
+    def error(zone: str, message_type: str, batch_id: str,
+              error: str, error_code: str = 'UNKNOWN') -> None:
+        """Log processing error."""
+        logger.error(
+            f"[{zone}] EVENT=ERROR | "
+            f"message_type={message_type} | batch_id={batch_id} | "
+            f"error_code={error_code} | error={error[:200]} | "
+            f"timestamp={datetime.utcnow().isoformat()}Z"
+        )
+
+    @staticmethod
+    def dlq(zone: str, message_type: str, batch_id: str, error: str) -> None:
+        """Log message sent to DLQ."""
+        logger.warning(
+            f"[{zone}] EVENT=DLQ | "
+            f"message_type={message_type} | batch_id={batch_id} | "
+            f"error={error[:100]} | "
+            f"timestamp={datetime.utcnow().isoformat()}Z"
+        )
+
+    @staticmethod
+    def consumer_started(zone: str, topics: List[str], message_types: List[str]) -> None:
+        """Log consumer started."""
+        logger.info(
+            f"[{zone}] EVENT=CONSUMER_STARTED | "
+            f"topics={topics[:5]}{'...' if len(topics) > 5 else ''} | "
+            f"message_types={message_types} | "
+            f"timestamp={datetime.utcnow().isoformat()}Z"
+        )
+
+    @staticmethod
+    def consumer_stopped(zone: str, consumed: int, processed: int, failed: int) -> None:
+        """Log consumer stopped."""
+        logger.info(
+            f"[{zone}] EVENT=CONSUMER_STOPPED | "
+            f"total_consumed={consumed} | total_processed={processed} | "
+            f"total_failed={failed} | "
+            f"timestamp={datetime.utcnow().isoformat()}Z"
+        )
+
+
+# =============================================================================
 # CONFIGURATION
 # =============================================================================
 
@@ -73,7 +177,7 @@ class MessageTypeConfig:
 
     # All supported message types with their priorities (higher = more workers)
     MESSAGE_TYPES: Dict[str, int] = field(default_factory=lambda: {
-        # ISO 20022 (high volume)
+        # ISO 20022 Base Types (high volume)
         'pain.001': 3, 'pain.002': 2, 'pain.008': 2,
         'pacs.002': 2, 'pacs.003': 2, 'pacs.004': 2, 'pacs.008': 3, 'pacs.009': 2,
         'camt.052': 1, 'camt.053': 2, 'camt.054': 1,
@@ -96,6 +200,52 @@ class MessageTypeConfig:
 
         # Middle East
         'SARIE': 1, 'UAEFTS': 1,
+
+        # =========================================================================
+        # COMPOSITE FORMATS (Payment System + ISO 20022 Message Type)
+        # =========================================================================
+
+        # TARGET2 Composite Formats (EU RTGS)
+        'TARGET2_pacs008': 2, 'TARGET2_pacs009': 2, 'TARGET2_pacs002': 1, 'TARGET2_pacs004': 1,
+
+        # CHAPS Composite Formats (UK RTGS)
+        'CHAPS_pacs008': 2, 'CHAPS_pacs009': 1, 'CHAPS_pacs002': 1, 'CHAPS_pacs004': 1,
+
+        # FPS Composite Formats (UK Faster Payments)
+        'FPS_pacs008': 2, 'FPS_pacs002': 1,
+
+        # SEPA Composite Formats (EU Payments)
+        'SEPA_pacs008': 2, 'SEPA_pain008': 2, 'SEPA_pacs002': 1, 'SEPA_pacs004': 1,
+
+        # SEPA_INST Composite Formats (SEPA Instant)
+        'SEPA_INST_pacs008': 2, 'SEPA_INST_pacs002': 1,
+
+        # FEDNOW Composite Formats (US Instant)
+        'FEDNOW_pacs008': 2, 'FEDNOW_pacs009': 1, 'FEDNOW_pacs002': 1, 'FEDNOW_pacs004': 1,
+
+        # NPP Composite Formats (Australia)
+        'NPP_pacs008': 2, 'NPP_pacs002': 1, 'NPP_pacs004': 1,
+
+        # MEPS_PLUS Composite Formats (Singapore)
+        'MEPS_PLUS_pacs008': 1, 'MEPS_PLUS_pacs009': 1, 'MEPS_PLUS_pacs002': 1,
+
+        # RTGS_HK Composite Formats (Hong Kong CHATS)
+        'RTGS_HK_pacs008': 1, 'RTGS_HK_pacs009': 1, 'RTGS_HK_pacs002': 1,
+
+        # UAEFTS Composite Formats (UAE)
+        'UAEFTS_pacs008': 1, 'UAEFTS_pacs009': 1, 'UAEFTS_pacs002': 1,
+
+        # INSTAPAY Composite Formats (Philippines)
+        'INSTAPAY_pacs008': 1, 'INSTAPAY_pacs009': 1, 'INSTAPAY_pacs002': 1,
+
+        # CHIPS Composite Formats (US Large Value)
+        'CHIPS_pacs008': 2, 'CHIPS_pacs009': 1, 'CHIPS_pacs002': 1,
+
+        # FEDWIRE Composite Formats (US Fed)
+        'FEDWIRE_pacs008': 2, 'FEDWIRE_pacs009': 1, 'FEDWIRE_pacs002': 1, 'FEDWIRE_pacs004': 1,
+
+        # RTP Composite Formats (US Real-Time Payments - TCH)
+        'RTP_pacs008': 2, 'RTP_pacs002': 1, 'RTP_pacs004': 1,
     })
 
 
@@ -392,9 +542,19 @@ class ZoneConsumer:
         # Process each message type batch
         for message_type, type_messages in by_type.items():
             batch_id = type_messages[0].get('batch_id', str(uuid.uuid4()))
+            batch_start_time = time.time()
+
+            # Log batch start
+            PipelineLogger.batch_start(
+                zone=self.ZONE,
+                message_type=message_type,
+                batch_id=batch_id,
+                record_count=len(type_messages),
+            )
 
             try:
                 result = self._process_batch(type_messages)
+                duration_ms = (time.time() - batch_start_time) * 1000
 
                 if result.get('status') in ('SUCCESS', 'PARTIAL'):
                     # Get output IDs based on zone
@@ -405,29 +565,80 @@ class ZoneConsumer:
                     else:  # gold
                         output_ids = result.get('instruction_ids', [])
 
+                    # Track failures
+                    failed = result.get('failed', [])
+
+                    # Log batch completion
+                    PipelineLogger.batch_complete(
+                        zone=self.ZONE,
+                        message_type=message_type,
+                        batch_id=batch_id,
+                        success_count=len(output_ids),
+                        failed_count=len(failed),
+                        output_ids=output_ids,
+                        duration_ms=duration_ms,
+                    )
+
                     # Publish to next zone
                     if output_ids and self.OUTPUT_ZONE:
                         self._publish_to_next_zone(output_ids, message_type, batch_id)
+                        PipelineLogger.published(
+                            zone=self.ZONE,
+                            output_zone=self.OUTPUT_ZONE,
+                            message_type=message_type,
+                            batch_id=batch_id,
+                            id_count=len(output_ids),
+                        )
 
                     self._messages_processed += len(output_ids)
 
-                    # Track failures
-                    failed = result.get('failed', [])
                     self._messages_failed += len(failed)
                     for fail in failed:
                         self._publish_to_dlq(fail, fail.get('error', 'Unknown error'))
+                        PipelineLogger.dlq(
+                            zone=self.ZONE,
+                            message_type=message_type,
+                            batch_id=batch_id,
+                            error=fail.get('error', 'Unknown error'),
+                        )
 
                 else:
                     # Entire batch failed
+                    error_msg = result.get('error', 'Batch processing failed')
+                    PipelineLogger.error(
+                        zone=self.ZONE,
+                        message_type=message_type,
+                        batch_id=batch_id,
+                        error=error_msg,
+                        error_code='BATCH_FAILED',
+                    )
                     self._messages_failed += len(type_messages)
                     for msg in type_messages:
-                        self._publish_to_dlq(msg, result.get('error', 'Batch processing failed'))
+                        self._publish_to_dlq(msg, error_msg)
+                        PipelineLogger.dlq(
+                            zone=self.ZONE,
+                            message_type=message_type,
+                            batch_id=batch_id,
+                            error=error_msg,
+                        )
 
             except Exception as e:
-                logger.error(f"[{self.ZONE}] Batch processing error: {e}")
+                PipelineLogger.error(
+                    zone=self.ZONE,
+                    message_type=message_type,
+                    batch_id=batch_id,
+                    error=str(e),
+                    error_code='EXCEPTION',
+                )
                 self._messages_failed += len(type_messages)
                 for msg in type_messages:
                     self._publish_to_dlq(msg, str(e))
+                    PipelineLogger.dlq(
+                        zone=self.ZONE,
+                        message_type=message_type,
+                        batch_id=batch_id,
+                        error=str(e),
+                    )
 
     def run(self) -> None:
         """Main consumer loop."""
@@ -436,7 +647,11 @@ class ZoneConsumer:
 
         consumer = self._get_consumer()
 
-        logger.info(f"[{self.ZONE}] Consumer started for message types: {self.message_types}")
+        PipelineLogger.consumer_started(
+            zone=self.ZONE,
+            topics=self.topics,
+            message_types=self.message_types,
+        )
 
         try:
             while self._running and not self._shutdown_event.is_set():
@@ -470,6 +685,16 @@ class ZoneConsumer:
                             'headers': headers,
                         }
 
+                        # Log message received
+                        PipelineLogger.received(
+                            zone=self.ZONE,
+                            message_type=message_type,
+                            batch_id=batch_id,
+                            kafka_offset=msg.offset,
+                            kafka_partition=msg.partition,
+                            kafka_topic=msg.topic,
+                        )
+
                         # Add to batch
                         with self._batch_lock:
                             if not self._current_batch:
@@ -502,11 +727,11 @@ class ZoneConsumer:
             if self._executor:
                 self._executor.shutdown(wait=True)
 
-            logger.info(
-                f"[{self.ZONE}] Consumer stopped. "
-                f"Consumed: {self._messages_consumed}, "
-                f"Processed: {self._messages_processed}, "
-                f"Failed: {self._messages_failed}"
+            PipelineLogger.consumer_stopped(
+                zone=self.ZONE,
+                consumed=self._messages_consumed,
+                processed=self._messages_processed,
+                failed=self._messages_failed,
             )
 
     def stop(self) -> None:

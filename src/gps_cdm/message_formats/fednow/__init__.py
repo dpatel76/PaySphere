@@ -1,4 +1,31 @@
-"""FedNow (Federal Reserve Instant Payments) Extractor - ISO 20022 based."""
+"""FedNow (Federal Reserve Instant Payments) Extractor - ISO 20022 based.
+
+ISO 20022 INHERITANCE HIERARCHY:
+    FedNow uses Federal Reserve ISO 20022 usage guidelines based on pacs.008.
+    The FedNowISO20022Parser inherits from Pacs008Parser.
+
+    BaseISO20022Parser
+        └── Pacs008Parser (FI to FI Customer Credit Transfer - pacs.008.001.08)
+            └── FedNowISO20022Parser (Federal Reserve instant payments guidelines)
+
+FEDNOW-SPECIFIC ELEMENTS:
+    - ABA Routing Numbers (USABA clearing system)
+    - USD currency (US Dollars)
+    - Real-time instant payments (24/7/365)
+    - Maximum $500,000 per transaction
+
+CLEARING SYSTEM:
+    - USABA (US ABA Routing Numbers)
+    - Operated by Federal Reserve Banks
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_fednow
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_fednow
+
+MAPPING INHERITANCE:
+    FEDNOW -> pacs.008.base (COMPLETE)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -17,6 +44,86 @@ from ..base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - FedNow will use standalone implementation")
+
+
+# =============================================================================
+# FEDNOW ISO 20022 PARSER (inherits from Pacs008Parser)
+# =============================================================================
+
+# Use conditional inheritance pattern for backward compatibility
+_FedNowParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class FedNowISO20022Parser(_FedNowParserBase):
+    """FedNow ISO 20022 pacs.008 parser with Federal Reserve usage guidelines.
+
+    Inherits from Pacs008Parser and adds FedNow-specific processing:
+    - ABA Routing Number extraction (USABA scheme)
+    - FedNow-specific clearing system identification
+    - US address format handling
+
+    ISO 20022 Version: pacs.008.001.08
+    Usage Guidelines: Federal Reserve FedNow Service
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pacs008Parser -> FedNowISO20022Parser
+    """
+
+    # FedNow-specific constants
+    CLEARING_SYSTEM = "USABA"  # US ABA Routing Numbers
+    DEFAULT_CURRENCY = "USD"
+    MESSAGE_TYPE = "FEDNOW"
+
+    def __init__(self):
+        """Initialize FedNow parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse FedNow ISO 20022 pacs.008 message.
+
+        Uses inherited pacs.008 parsing from Pacs008Parser and adds
+        FedNow-specific fields.
+        """
+        # Handle JSON/dict input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pacs.008 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add FedNow-specific fields
+        result['isFedNow'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available."""
+        legacy_parser = FedNowXmlParser()
+        return legacy_parser.parse(raw_content)
+
+
+# =============================================================================
+# LEGACY XML PARSER (kept for backward compatibility)
+# =============================================================================
 
 
 class FedNowXmlParser:
@@ -180,13 +287,42 @@ class FedNowXmlParser:
 
 
 class FedNowExtractor(BaseExtractor):
-    """Extractor for FedNow instant payment messages."""
+    """Extractor for FedNow (Federal Reserve Instant Payments) messages.
+
+    ISO 20022 INHERITANCE:
+        FedNow inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The FedNowISO20022Parser inherits from Pacs008Parser.
+        Uses Federal Reserve FedNow Service usage guidelines.
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008.001.08) - Current standard
+
+    FedNow-Specific Elements:
+        - ABA Routing Numbers (USABA clearing system)
+        - USD currency (US Dollars)
+        - Real-time 24/7/365 instant payments
+        - Maximum $500,000 per transaction
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_fednow
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_fednow
+
+    Inheritance Hierarchy:
+        BaseExtractor -> FedNowExtractor
+        (Parser: Pacs008Parser -> FedNowISO20022Parser)
+    """
 
     MESSAGE_TYPE = "FEDNOW"
-    SILVER_TABLE = "stg_fednow"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "USD"
+    CLEARING_SYSTEM = "USABA"
 
     def __init__(self):
-        self.parser = FedNowXmlParser()
+        """Initialize FedNow extractor with ISO 20022 parser."""
+        self.iso20022_parser = FedNowISO20022Parser()
+        self.legacy_parser = FedNowXmlParser()
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION

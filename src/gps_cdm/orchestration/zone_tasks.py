@@ -247,6 +247,8 @@ from gps_cdm.message_formats import cnaps    # noqa: F401
 from gps_cdm.message_formats import bojnet   # noqa: F401
 from gps_cdm.message_formats import kftc     # noqa: F401
 from gps_cdm.message_formats import camt053  # noqa: F401
+# Import ISO 20022 composite format registry (registers pacs.002, pacs.004, pain.008 and composite formats)
+from gps_cdm.message_formats import iso20022_registry  # noqa: F401
 
 
 def get_db_connection():
@@ -699,6 +701,13 @@ def process_silver_records(
                     # Use database-driven field mappings
                     from gps_cdm.orchestration.dynamic_mapper import DynamicMapper
                     mapper = DynamicMapper(conn)
+
+                    # ENHANCED LOGGING: Log source data before extraction
+                    logger.info(f"[SILVER][{batch_id}] raw_id={raw_id}, message_type={message_type}")
+                    if isinstance(msg_content, dict):
+                        sample_keys = list(msg_content.keys())[:10]
+                        logger.info(f"[SILVER][{batch_id}] Source data keys: {sample_keys}")
+
                     silver_record = mapper.extract_silver_record(message_type, msg_content, raw_id, batch_id)
                     silver_record['stg_id'] = stg_id  # Override generated stg_id
                     silver_record['raw_id'] = raw_id  # Ensure raw_id is set for lineage
@@ -709,7 +718,16 @@ def process_silver_records(
                     columns = mapper.get_silver_columns(message_type)
                     values = mapper.get_silver_values(message_type, silver_record)
 
-                    logger.debug(f"[{batch_id}] Using DynamicMapper for {message_type}: {len(columns)} columns")
+                    # ENHANCED LOGGING: Log format resolution and record details
+                    logger.info(f"[SILVER][{batch_id}] Format resolved: format_id={format_info.get('format_id')}, "
+                               f"base_format={format_info.get('base_format_id')}, table={silver_table}")
+                    logger.info(f"[SILVER][{batch_id}] Columns: {len(columns)}, Values: {len(values)}")
+
+                    # Log first few non-null values for debugging
+                    non_null_cols = [(c, v) for c, v in zip(columns, values) if v is not None and str(v).strip()]
+                    if non_null_cols:
+                        sample = non_null_cols[:5]
+                        logger.info(f"[SILVER][{batch_id}] Sample values: {sample}")
                 else:
                     # Use hardcoded extractor (legacy)
                     silver_record = extractor.extract_silver(msg_content, raw_id, stg_id, batch_id)
@@ -731,6 +749,7 @@ def process_silver_records(
                 result = cursor.fetchone()
                 if result:
                     stg_ids.append(stg_id)
+                    logger.info(f"[SILVER][{batch_id}] SUCCESS: stg_id={stg_id}, raw_id={raw_id}, table={silver_table}")
 
                     # Update Bronze status
                     cursor.execute("""
@@ -740,6 +759,7 @@ def process_silver_records(
                         WHERE raw_id = %s
                     """, (raw_id,))
                 else:
+                    logger.warning(f"[SILVER][{batch_id}] DUPLICATE: stg_id={stg_id} already exists")
                     failed.append({
                         'raw_id': raw_id,
                         'error': 'Duplicate stg_id (conflict)',
@@ -749,6 +769,11 @@ def process_silver_records(
             except Exception as e:
                 import traceback
                 error_trace = traceback.format_exc()
+
+                # ENHANCED LOGGING: Log full error details for troubleshooting
+                logger.error(f"[SILVER][{batch_id}] FAILED: raw_id={raw_id}, message_type={message_type}")
+                logger.error(f"[SILVER][{batch_id}] Error: {str(e)[:500]}")
+                logger.error(f"[SILVER][{batch_id}] Stack trace:\n{error_trace}")
 
                 # Publish to error queue
                 try:
@@ -866,15 +891,16 @@ def process_gold_records(
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        silver_table = extractor.SILVER_TABLE
-
         # Read Silver records - get ALL columns for complete data
-        # Use DynamicMapper columns when enabled, otherwise use extractor columns
+        # Use DynamicMapper for table/columns when enabled, otherwise use extractor
         if USE_DYNAMIC_MAPPINGS:
             from gps_cdm.orchestration.dynamic_mapper import DynamicMapper
             mapper = DynamicMapper(conn)
+            format_info = mapper._get_format_info(message_type)
+            silver_table = format_info['silver_table']
             silver_columns = mapper.get_silver_columns(message_type)
         else:
+            silver_table = extractor.SILVER_TABLE
             silver_columns = extractor.get_silver_columns()
         col_list = ', '.join(silver_columns)
 
@@ -887,11 +913,19 @@ def process_gold_records(
 
         silver_records = cursor.fetchall()
 
+        logger.info(f"[GOLD][{batch_id}] message_type={message_type}, stg_ids={stg_ids}, found {len(silver_records)} silver records")
+
         for silver_row in silver_records:
             # Convert to dict using column names
             silver_data = dict(zip(silver_columns, silver_row))
             stg_id = silver_data.get('stg_id')
             raw_id = silver_data.get('raw_id')
+
+            # ENHANCED LOGGING: Log Silver data being processed for Gold
+            logger.info(f"[GOLD][{batch_id}] Processing stg_id={stg_id}, raw_id={raw_id}")
+            non_null_silver = {k: v for k, v in silver_data.items() if v is not None}
+            sample_keys = list(non_null_silver.keys())[:10]
+            logger.info(f"[GOLD][{batch_id}] Silver data keys (non-null): {sample_keys}")
 
             try:
                 # Use DynamicGoldMapper for database-driven Gold processing
@@ -903,12 +937,22 @@ def process_gold_records(
                 gold_mapper = DynamicGoldMapper(conn)
 
                 # Build Gold records from Silver data using database mappings
+                logger.info(f"[GOLD][{batch_id}] Building Gold records for {message_type}")
                 gold_records = gold_mapper.build_gold_records(
                     message_type, silver_data, stg_id, batch_id
                 )
 
+                # ENHANCED LOGGING: Log what Gold records are being built
+                for table_key, records in gold_records.items():
+                    if records:
+                        logger.info(f"[GOLD][{batch_id}] Table {table_key}: {len(records)} records")
+                        if records and isinstance(records[0], dict):
+                            sample_cols = list(records[0].keys())[:8]
+                            logger.info(f"[GOLD][{batch_id}] {table_key} columns: {sample_cols}")
+
                 # Persist all Gold records (entities first, then instruction, then extensions)
                 entity_ids = gold_mapper.persist_gold_records(cursor, gold_records, message_type)
+                logger.info(f"[GOLD][{batch_id}] Entity IDs created: {entity_ids}")
 
                 # Count created entities for response
                 if entity_ids.get('debtor_id'):
@@ -939,6 +983,7 @@ def process_gold_records(
 
                 if gold_id:
                     instruction_ids.append(gold_id)
+                    logger.info(f"[GOLD][{batch_id}] SUCCESS: instruction_id={gold_id}, stg_id={stg_id}")
 
                     # Update Silver status
                     cursor.execute(f"""
@@ -948,6 +993,7 @@ def process_gold_records(
                         WHERE stg_id = %s
                     """, (stg_id,))
                 else:
+                    logger.warning(f"[GOLD][{batch_id}] NO_INSTRUCTION: stg_id={stg_id}, entity_ids={entity_ids}")
                     failed.append({
                         'stg_id': stg_id,
                         'error': 'No instruction or statement created (possible duplicate or missing data)',
@@ -957,6 +1003,11 @@ def process_gold_records(
             except Exception as e:
                 import traceback
                 error_trace = traceback.format_exc()
+
+                # ENHANCED LOGGING: Log full error details for Gold failures
+                logger.error(f"[GOLD][{batch_id}] FAILED: stg_id={stg_id}, message_type={message_type}")
+                logger.error(f"[GOLD][{batch_id}] Error: {str(e)[:500]}")
+                logger.error(f"[GOLD][{batch_id}] Stack trace:\n{error_trace}")
 
                 # Publish to error queue
                 try:

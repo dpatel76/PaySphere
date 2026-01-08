@@ -13,6 +13,22 @@ This extractor supports BOTH formats for backward compatibility:
 1. ISO 20022 XML (pacs.008/pacs.009) - Current standard as of November 2023
 2. Legacy CHIPS proprietary XML format - For historical data processing
 
+ISO 20022 INHERITANCE:
+    CHIPS inherits from pacs.008 (FI to FI Customer Credit Transfer) base message.
+    The ChipsISO20022Parser class inherits from Pacs008Parser for ISO 20022 parsing.
+    This ensures compliance with The Clearing House's ISO 20022 usage guidelines
+    aligned with CBPR+ (Cross-Border Payments and Reporting Plus).
+
+Usage Guidelines Reference:
+    - https://www.theclearinghouse.org/payment-systems/chips
+    - ISO 20022 version: pacs.008.001.08
+
+CHIPS-Specific Elements (beyond standard pacs.008):
+    - CHIPS UID (Unique Identifier)
+    - CHIPS Participant IDs (4-digit)
+    - Currency primarily USD
+    - Same-day settlement within CHIPS network
+
 Reference: https://www.theclearinghouse.org/payment-systems/chips
 """
 
@@ -32,26 +48,57 @@ from ..base import (
     FinancialInstitutionData,
 )
 
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
-class ChipsISO20022Parser:
+# Base class for CHIPS ISO 20022 parser
+_ChipsParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class ChipsISO20022Parser(_ChipsParserBase):
     """Parser for CHIPS ISO 20022 pacs.008/pacs.009 messages (current standard as of November 2023).
 
     CHIPS uses standard ISO 20022 messages aligned with CBPR+ (Cross-Border Payments and Reporting Plus).
+    Inherits from Pacs008Parser to reuse common pacs.008 parsing logic.
+
     Key message types:
     - pacs.008: FI to FI Customer Credit Transfer
     - pacs.009: FI Credit Transfer (interbank)
+
+    CHIPS-Specific Additions (beyond base pacs.008):
+    - CHIPS UID (Unique Identifier)
+    - CHIPS Participant IDs (4-digit) for sending/receiving banks
+    - Default currency is USD
+    - Same-day settlement handling
+
+    Inheritance: Pacs008Parser -> ChipsISO20022Parser
     """
 
+    # Clearing system identifier for CHIPS
+    CLEARING_SYSTEM = "CHIPS"
+    DEFAULT_CURRENCY = "USD"
+
+    # CHIPS-specific namespace pattern (for standalone use if base not available)
     NS_PATTERN = re.compile(r'\{[^}]+\}')
 
     def _strip_ns(self, tag: str) -> str:
         """Remove namespace from XML tag."""
+        if ISO20022_BASE_AVAILABLE:
+            return super()._strip_ns(tag)
         return self.NS_PATTERN.sub('', tag)
 
     def _find(self, element: ET.Element, path: str) -> Optional[ET.Element]:
         """Find element using local names (ignoring namespaces)."""
+        if ISO20022_BASE_AVAILABLE:
+            return super()._find(element, path)
+        # Fallback implementation for standalone use
         if element is None:
             return None
         parts = path.split('/')
@@ -69,16 +116,24 @@ class ChipsISO20022Parser:
 
     def _find_text(self, element: ET.Element, path: str) -> Optional[str]:
         """Find element text using local names."""
+        if ISO20022_BASE_AVAILABLE:
+            return super()._find_text(element, path)
         elem = self._find(element, path)
         return elem.text if elem is not None else None
 
     def _find_attr(self, element: ET.Element, path: str, attr: str) -> Optional[str]:
         """Find element attribute."""
+        if ISO20022_BASE_AVAILABLE:
+            return super()._find_attr(element, path, attr)
         elem = self._find(element, path)
         return elem.get(attr) if elem is not None else None
 
     def parse(self, xml_content: str) -> Dict[str, Any]:
-        """Parse CHIPS ISO 20022 pacs.008 or pacs.009 message."""
+        """Parse CHIPS ISO 20022 pacs.008 or pacs.009 message.
+
+        Uses base Pacs008Parser.parse() for standard pacs.008 extraction,
+        then adds CHIPS-specific post-processing.
+        """
         try:
             if xml_content.startswith('\ufeff'):
                 xml_content = xml_content[1:]
@@ -104,17 +159,25 @@ class ChipsISO20022Parser:
         return self._parse_transfer(fi_transfer)
 
     def _parse_transfer(self, fi_transfer: ET.Element) -> Dict[str, Any]:
-        """Parse credit transfer element."""
+        """Parse credit transfer element with CHIPS-specific mappings.
+
+        Extends standard pacs.008 parsing with CHIPS-specific fields:
+        - CHIPS UID from MsgId
+        - Sending/Receiving Participant IDs
+        - CHIPS clearing system specific handling
+        """
         result = {
             'messageType': 'CHIPS',
             'currency': 'USD',  # CHIPS is primarily USD
             'isISO20022': True,
+            'clearingSystem': 'CHIPS',
         }
 
-        # Group Header
+        # Group Header with CHIPS-specific field mapping
         grp_hdr = self._find(fi_transfer, 'GrpHdr')
         if grp_hdr is not None:
             result['messageId'] = self._find_text(grp_hdr, 'MsgId')
+            result['chipsUid'] = result['messageId']  # CHIPS UID maps from MsgId
             result['creationDateTime'] = self._find_text(grp_hdr, 'CreDtTm')
             result['numberOfTransactions'] = self._find_text(grp_hdr, 'NbOfTxs')
             result['settlementMethod'] = self._find_text(grp_hdr, 'SttlmInf/SttlmMtd')
@@ -123,7 +186,7 @@ class ChipsISO20022Parser:
             value_date = self._find_text(grp_hdr, 'IntrBkSttlmDt')
             result['valueDate'] = value_date
 
-            # Instructing Agent (Sending Bank)
+            # Instructing Agent (Sending Bank) - CHIPS uses participant IDs
             instg_agt = self._find(grp_hdr, 'InstgAgt/FinInstnId')
             if instg_agt is not None:
                 result['sendingParticipant'] = self._find_text(instg_agt, 'ClrSysMmbId/MmbId')
@@ -175,48 +238,106 @@ class ChipsISO20022Parser:
         # Debtor Agent (Originator's Bank)
         dbtr_agt = self._find(cdt_trf, 'DbtrAgt/FinInstnId')
         if dbtr_agt is not None:
-            result['originatorBank'] = self._find_text(dbtr_agt, 'ClrSysMmbId/MmbId')
-            result['originatorBankBic'] = self._find_text(dbtr_agt, 'BICFI')
-            result['originatorBankName'] = self._find_text(dbtr_agt, 'Nm')
+            dbtr_agt_member = self._find_text(dbtr_agt, 'ClrSysMmbId/MmbId')
+            dbtr_agt_bic = self._find_text(dbtr_agt, 'BICFI')
+            dbtr_agt_name = self._find_text(dbtr_agt, 'Nm')
+            dbtr_agt_clr_sys = self._find_text(dbtr_agt, 'ClrSysMmbId/ClrSysId/Cd')
+            # CHIPS-specific naming
+            result['originatorBank'] = dbtr_agt_member
+            result['originatorBankBic'] = dbtr_agt_bic
+            result['originatorBankName'] = dbtr_agt_name
+            # Standard ISO 20022 flat keys for DynamicMapper inheritance
+            result['debtorAgentBic'] = dbtr_agt_bic
+            result['debtorAgentName'] = dbtr_agt_name
+            result['debtorAgentMemberId'] = dbtr_agt_member
+            result['debtorAgentClearingSystemId'] = dbtr_agt_clr_sys
 
         # Debtor (Originator)
         dbtr = self._find(cdt_trf, 'Dbtr')
         if dbtr is not None:
-            result['originatorName'] = self._find_text(dbtr, 'Nm')
-            result['originatorAddress'] = self._build_address(dbtr)
-            result['originatorLei'] = self._find_text(dbtr, 'Id/OrgId/LEI')
-            result['originatorTaxId'] = self._find_text(dbtr, 'Id/OrgId/Othr/Id')
+            dbtr_name = self._find_text(dbtr, 'Nm')
+            dbtr_addr = self._build_address(dbtr)
+            dbtr_lei = self._find_text(dbtr, 'Id/OrgId/LEI')
+            dbtr_tax_id = self._find_text(dbtr, 'Id/OrgId/Othr/Id')
+            # CHIPS-specific naming
+            result['originatorName'] = dbtr_name
+            result['originatorAddress'] = dbtr_addr
+            result['originatorLei'] = dbtr_lei
+            result['originatorTaxId'] = dbtr_tax_id
+            # Standard ISO 20022 flat keys for DynamicMapper inheritance
+            result['debtorName'] = dbtr_name
+            result['debtorLei'] = dbtr_lei
+            result['debtorOtherId'] = dbtr_tax_id
+            # Parse address components if available
+            if isinstance(dbtr_addr, dict):
+                result['debtorStreetName'] = dbtr_addr.get('line1')
+                result['debtorTownName'] = dbtr_addr.get('city')
+                result['debtorCountrySubDivision'] = dbtr_addr.get('state')
+                result['debtorPostCode'] = dbtr_addr.get('zipCode')
+                result['debtorCountry'] = dbtr_addr.get('country')
 
         # Debtor Account
         dbtr_acct = self._find(cdt_trf, 'DbtrAcct/Id')
         if dbtr_acct is not None:
-            result['originatorAccount'] = (
-                self._find_text(dbtr_acct, 'Othr/Id') or
-                self._find_text(dbtr_acct, 'IBAN')
-            )
+            acct = self._find_text(dbtr_acct, 'Othr/Id') or self._find_text(dbtr_acct, 'IBAN')
+            iban = self._find_text(dbtr_acct, 'IBAN')
+            # CHIPS-specific naming
+            result['originatorAccount'] = acct
+            # Standard ISO 20022 flat keys
+            result['debtorAccountOther'] = acct
+            result['debtorAccountIban'] = iban
 
         # Creditor Agent (Beneficiary's Bank)
         cdtr_agt = self._find(cdt_trf, 'CdtrAgt/FinInstnId')
         if cdtr_agt is not None:
-            result['beneficiaryBank'] = self._find_text(cdtr_agt, 'ClrSysMmbId/MmbId')
-            result['beneficiaryBankBic'] = self._find_text(cdtr_agt, 'BICFI')
-            result['beneficiaryBankName'] = self._find_text(cdtr_agt, 'Nm')
+            cdtr_agt_member = self._find_text(cdtr_agt, 'ClrSysMmbId/MmbId')
+            cdtr_agt_bic = self._find_text(cdtr_agt, 'BICFI')
+            cdtr_agt_name = self._find_text(cdtr_agt, 'Nm')
+            cdtr_agt_clr_sys = self._find_text(cdtr_agt, 'ClrSysMmbId/ClrSysId/Cd')
+            # CHIPS-specific naming
+            result['beneficiaryBank'] = cdtr_agt_member
+            result['beneficiaryBankBic'] = cdtr_agt_bic
+            result['beneficiaryBankName'] = cdtr_agt_name
+            # Standard ISO 20022 flat keys for DynamicMapper inheritance
+            result['creditorAgentBic'] = cdtr_agt_bic
+            result['creditorAgentName'] = cdtr_agt_name
+            result['creditorAgentMemberId'] = cdtr_agt_member
+            result['creditorAgentClearingSystemId'] = cdtr_agt_clr_sys
 
         # Creditor (Beneficiary)
         cdtr = self._find(cdt_trf, 'Cdtr')
         if cdtr is not None:
-            result['beneficiaryName'] = self._find_text(cdtr, 'Nm')
-            result['beneficiaryAddress'] = self._build_address(cdtr)
-            result['beneficiaryLei'] = self._find_text(cdtr, 'Id/OrgId/LEI')
-            result['beneficiaryTaxId'] = self._find_text(cdtr, 'Id/OrgId/Othr/Id')
+            cdtr_name = self._find_text(cdtr, 'Nm')
+            cdtr_addr = self._build_address(cdtr)
+            cdtr_lei = self._find_text(cdtr, 'Id/OrgId/LEI')
+            cdtr_tax_id = self._find_text(cdtr, 'Id/OrgId/Othr/Id')
+            # CHIPS-specific naming
+            result['beneficiaryName'] = cdtr_name
+            result['beneficiaryAddress'] = cdtr_addr
+            result['beneficiaryLei'] = cdtr_lei
+            result['beneficiaryTaxId'] = cdtr_tax_id
+            # Standard ISO 20022 flat keys for DynamicMapper inheritance
+            result['creditorName'] = cdtr_name
+            result['creditorLei'] = cdtr_lei
+            result['creditorOtherId'] = cdtr_tax_id
+            # Parse address components if available
+            if isinstance(cdtr_addr, dict):
+                result['creditorStreetName'] = cdtr_addr.get('line1')
+                result['creditorTownName'] = cdtr_addr.get('city')
+                result['creditorCountrySubDivision'] = cdtr_addr.get('state')
+                result['creditorPostCode'] = cdtr_addr.get('zipCode')
+                result['creditorCountry'] = cdtr_addr.get('country')
 
         # Creditor Account
         cdtr_acct = self._find(cdt_trf, 'CdtrAcct/Id')
         if cdtr_acct is not None:
-            result['beneficiaryAccount'] = (
-                self._find_text(cdtr_acct, 'Othr/Id') or
-                self._find_text(cdtr_acct, 'IBAN')
-            )
+            acct = self._find_text(cdtr_acct, 'Othr/Id') or self._find_text(cdtr_acct, 'IBAN')
+            iban = self._find_text(cdtr_acct, 'IBAN')
+            # CHIPS-specific naming
+            result['beneficiaryAccount'] = acct
+            # Standard ISO 20022 flat keys
+            result['creditorAccountOther'] = acct
+            result['creditorAccountIban'] = iban
 
         # Intermediary Bank
         intrmy = self._find(cdt_trf, 'IntrmyAgt1/FinInstnId')
@@ -484,14 +605,38 @@ class ChipsXmlParser:
 
 
 class ChipsExtractor(BaseExtractor):
-    """Extractor for CHIPS payment messages.
+    """Extractor for CHIPS (Clearing House Interbank Payments System) messages.
 
-    Supports both current ISO 20022 format (pacs.008/pacs.009) and legacy proprietary format.
-    Auto-detects format based on content structure.
+    ISO 20022 INHERITANCE:
+        CHIPS inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The ChipsISO20022Parser inherits from Pacs008Parser.
+        Uses CHIPS-specific ISO 20022 usage guidelines (November 2023 migration).
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008/pacs.009) - Current standard (November 2023+)
+        2. Legacy proprietary XML format - For historical data processing
+
+    CHIPS-Specific Elements:
+        - CHIPS UID - Unique identifier for each message
+        - Sequence Number - Sequential message identifier
+        - Participant IDs - 4-digit CHIPS participant codes
+        - SSN (Sender Supplied Number)
+        - Currency always USD (US dollar clearing system)
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_chips
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_chips
+
+    Inheritance Hierarchy:
+        BaseExtractor -> ChipsExtractor
+        (Parser: Pacs008Parser -> ChipsISO20022Parser)
     """
 
     MESSAGE_TYPE = "CHIPS"
-    SILVER_TABLE = "stg_chips"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "USD"
+    CLEARING_SYSTEM = "CHIPS"
 
     def __init__(self):
         self.iso20022_parser = ChipsISO20022Parser()

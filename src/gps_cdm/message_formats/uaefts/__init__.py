@@ -1,4 +1,31 @@
-"""UAE UAEFTS (UAE Funds Transfer System) Extractor - ISO 20022 XML based."""
+"""UAE UAEFTS (UAE Funds Transfer System) Extractor - ISO 20022 XML based.
+
+ISO 20022 INHERITANCE HIERARCHY:
+    UAEFTS uses UAE Central Bank ISO 20022 usage guidelines based on pacs.008.
+    The UaeftsISO20022Parser inherits from Pacs008Parser.
+
+    BaseISO20022Parser
+        └── Pacs008Parser (FI to FI Customer Credit Transfer - pacs.008.001.08)
+            └── UaeftsISO20022Parser (UAE Central Bank payment guidelines)
+
+UAEFTS-SPECIFIC ELEMENTS:
+    - UAE IBAN format (AE + 2 check digits + 3 bank code + 16 account number)
+    - AED currency (UAE Dirhams)
+    - BIC/SWIFT codes for UAE financial institutions
+    - Real-time gross settlement
+
+CLEARING SYSTEM:
+    - AEUAE (UAE IBAN/BIC System)
+    - Operated by UAE Central Bank
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_uaefts
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_uaefts
+
+MAPPING INHERITANCE:
+    UAEFTS -> pacs.008.base (COMPLETE)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -18,9 +45,93 @@ from ..base import (
 
 logger = logging.getLogger(__name__)
 
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - UAEFTS will use standalone implementation")
+
+
+# =============================================================================
+# UAEFTS ISO 20022 PARSER (inherits from Pacs008Parser)
+# =============================================================================
+
+# Use conditional inheritance pattern for backward compatibility
+_UaeftsParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class UaeftsISO20022Parser(_UaeftsParserBase):
+    """UAEFTS ISO 20022 pacs.008 parser with UAE Central Bank usage guidelines.
+
+    Inherits from Pacs008Parser and adds UAEFTS-specific processing:
+    - UAE IBAN format handling
+    - BIC extraction for UAE financial institutions
+    - UAEFTS-specific clearing system identification
+
+    ISO 20022 Version: pacs.008.001.08
+    Usage Guidelines: UAE Central Bank UAEFTS Service
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pacs008Parser -> UaeftsISO20022Parser
+    """
+
+    # UAEFTS-specific constants
+    CLEARING_SYSTEM = "AEUAE"  # UAE IBAN/BIC System
+    DEFAULT_CURRENCY = "AED"
+    MESSAGE_TYPE = "UAEFTS"
+
+    def __init__(self):
+        """Initialize UAEFTS parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse UAEFTS ISO 20022 pacs.008 message.
+
+        Uses inherited pacs.008 parsing from Pacs008Parser and adds
+        UAEFTS-specific fields.
+        """
+        # Handle JSON/dict input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if isinstance(raw_content, str) and raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pacs.008 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add UAEFTS-specific fields
+        result['isUaefts'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available."""
+        legacy_parser = UaeftsXmlParser()
+        return legacy_parser.parse(raw_content)
+
+
+# =============================================================================
+# LEGACY XML PARSER (kept for backward compatibility)
+# =============================================================================
+
 
 class UaeftsXmlParser:
-    """Parser for UAEFTS ISO 20022 XML messages (pacs.008 based)."""
+    """Parser for UAEFTS ISO 20022 XML messages (pacs.008 based).
+
+    Legacy parser kept for backward compatibility when ISO 20022 base classes
+    are not available.
+    """
 
     NS_PATTERN = re.compile(r'\{[^}]+\}')
 
@@ -254,14 +365,42 @@ class UaeftsXmlParser:
 
 
 class UaeftsExtractor(BaseExtractor):
-    """Extractor for UAE Funds Transfer System payment messages."""
+    """Extractor for UAE Funds Transfer System (UAEFTS) payment messages.
+
+    ISO 20022 INHERITANCE:
+        UAEFTS inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The UaeftsISO20022Parser inherits from Pacs008Parser.
+        Uses UAE Central Bank UAEFTS Service usage guidelines.
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008.001.08) - Current standard
+
+    UAEFTS-Specific Elements:
+        - UAE IBAN format (AE + 2 check digits + 3 bank code + 16 account number)
+        - AED currency (UAE Dirhams)
+        - BIC/SWIFT codes for UAE financial institutions
+        - Real-time gross settlement
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_uaefts
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_uaefts
+
+    Inheritance Hierarchy:
+        BaseExtractor -> UaeftsExtractor
+        (Parser: Pacs008Parser -> UaeftsISO20022Parser)
+    """
 
     MESSAGE_TYPE = "UAEFTS"
-    SILVER_TABLE = "stg_uaefts"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "AED"
+    CLEARING_SYSTEM = "AEUAE"
 
     def __init__(self):
-        """Initialize extractor with XML parser."""
-        self.parser = UaeftsXmlParser()
+        """Initialize UAEFTS extractor with ISO 20022 parser."""
+        self.iso20022_parser = UaeftsISO20022Parser()
+        self.legacy_parser = UaeftsXmlParser()
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION

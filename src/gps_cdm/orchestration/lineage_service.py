@@ -135,18 +135,28 @@ class LineageService:
         try:
             cursor = conn.cursor()
 
+            # First, get the actual Silver table name from message_formats table (handles shared ISO 20022 tables)
+            cursor.execute("""
+                SELECT silver_table, base_iso20022_type
+                FROM mapping.message_formats
+                WHERE format_id = %s AND is_active = true
+            """, (message_type.upper(),))
+            row = cursor.fetchone()
+            silver_table = row[0] if row and row[0] else f"stg_{message_type.replace('.', '').lower()}"
+            base_iso20022_type = row[1] if row else None
+
             # Get bronze→silver mappings
             # Schema: source_path (XPath/JSONPath), target_column, data_type, transform_function, transform_expression
+            # For ISO 20022 shared tables, use the base format's mappings if this format doesn't have its own
             cursor.execute("""
                 SELECT source_path, target_column, data_type,
                        transform_function, transform_expression
                 FROM mapping.silver_field_mappings
                 WHERE format_id = %s AND is_active = true
                 ORDER BY ordinal_position
-            """, (message_type,))
+            """, (message_type.upper(),))
 
             b2s_fields = []
-            silver_table = f"stg_{message_type.replace('.', '').lower()}"
             for row in cursor.fetchall():
                 source_path = row[0]
                 # Extract field name from path (e.g., "GrpHdr/MsgId" -> "MsgId")
@@ -277,23 +287,35 @@ class LineageService:
             # Default path
             self.mappings_dir = Path(__file__).parent.parent.parent.parent / "mappings" / "message_types"
 
-        # Map message type to file - includes all available YAML mapping files
+        # Map message type to file - includes all 29 available YAML mapping files
         file_map = {
-            # ISO 20022
+            # ISO 20022 Core
             "pain.001": "pain001.yaml",
             "pain001": "pain001.yaml",
+            "pain.002": "pain002.yaml",
+            "pain002": "pain002.yaml",
             "pacs.008": "pacs008.yaml",
             "pacs008": "pacs008.yaml",
+            "pacs.009": "pacs009.yaml",
+            "pacs009": "pacs009.yaml",
+            "pacs.002": "pacs002.yaml",
+            "pacs002": "pacs002.yaml",
+            "camt.053": "camt053.yaml",
+            "camt053": "camt053.yaml",
             # SWIFT MT
             "MT103": "mt103.yaml",
             "mt103": "mt103.yaml",
             "MT202": "mt202.yaml",
             "mt202": "mt202.yaml",
+            "MT940": "mt940.yaml",
+            "mt940": "mt940.yaml",
             # US Regional
             "FEDWIRE": "fedwire.yaml",
             "fedwire": "fedwire.yaml",
             "ACH": "ach.yaml",
             "ach": "ach.yaml",
+            "CHIPS": "chips.yaml",
+            "chips": "chips.yaml",
             "RTP": "rtp.yaml",
             "rtp": "rtp.yaml",
             "FEDNOW": "fednow.yaml",
@@ -301,11 +323,44 @@ class LineageService:
             # EU Regional
             "SEPA": "sepa.yaml",
             "sepa": "sepa.yaml",
+            "TARGET2": "target2.yaml",
+            "target2": "target2.yaml",
             # UK Regional
             "CHAPS": "chaps.yaml",
             "chaps": "chaps.yaml",
+            "FPS": "fps.yaml",
+            "fps": "fps.yaml",
             "BACS": "bacs.yaml",
             "bacs": "bacs.yaml",
+            # Asia-Pacific
+            "NPP": "npp.yaml",
+            "npp": "npp.yaml",
+            "MEPS_PLUS": "meps_plus.yaml",
+            "meps_plus": "meps_plus.yaml",
+            "RTGS_HK": "rtgs_hk.yaml",
+            "rtgs_hk": "rtgs_hk.yaml",
+            "CNAPS": "cnaps.yaml",
+            "cnaps": "cnaps.yaml",
+            "BOJNET": "bojnet.yaml",
+            "bojnet": "bojnet.yaml",
+            "KFTC": "kftc.yaml",
+            "kftc": "kftc.yaml",
+            "INSTAPAY": "instapay.yaml",
+            "instapay": "instapay.yaml",
+            # Middle East
+            "UAEFTS": "uaefts.yaml",
+            "uaefts": "uaefts.yaml",
+            "SARIE": "sarie.yaml",
+            "sarie": "sarie.yaml",
+            # Latin America & Other
+            "PIX": "pix.yaml",
+            "pix": "pix.yaml",
+            "UPI": "upi.yaml",
+            "upi": "upi.yaml",
+            "PROMPTPAY": "promptpay.yaml",
+            "promptpay": "promptpay.yaml",
+            "PAYNOW": "paynow.yaml",
+            "paynow": "paynow.yaml",
         }
 
         filename = file_map.get(message_type)
@@ -494,8 +549,18 @@ class LineageService:
         source_mappings = []
         message_types = set()
 
-        # Search all message types
-        for msg_type in ['pain.001', 'MT103']:
+        # Search all 29 message types
+        all_msg_types = [
+            'pain.001', 'pain.002', 'pacs.008', 'pacs.009', 'pacs.002', 'camt.053',
+            'MT103', 'MT202', 'MT940',
+            'FEDWIRE', 'ACH', 'CHIPS', 'RTP', 'FEDNOW',
+            'SEPA', 'TARGET2',
+            'CHAPS', 'FPS', 'BACS',
+            'NPP', 'MEPS_PLUS', 'RTGS_HK', 'CNAPS', 'BOJNET', 'KFTC', 'INSTAPAY',
+            'UAEFTS', 'SARIE',
+            'PIX', 'UPI', 'PROMPTPAY', 'PAYNOW',
+        ]
+        for msg_type in all_msg_types:
             lineage = self.get_message_type_lineage(msg_type)
             if not lineage:
                 continue

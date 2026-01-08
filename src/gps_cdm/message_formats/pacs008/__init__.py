@@ -328,7 +328,7 @@ class Pacs008Extractor(BaseExtractor):
     """Extractor for ISO 20022 pacs.008 messages."""
 
     MESSAGE_TYPE = "pacs.008"
-    SILVER_TABLE = "stg_pacs008"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
 
     def __init__(self):
         self.parser = Pacs008XmlParser()

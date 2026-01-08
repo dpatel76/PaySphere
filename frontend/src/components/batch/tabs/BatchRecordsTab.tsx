@@ -94,6 +94,18 @@ const entityStyles = {
   'CDM_FINANCIAL_INSTITUTION (DEBTOR_AGENT)': { icon: BankIcon, color: '#7b1fa2', bg: '#f3e5f5' },
   'CDM_FINANCIAL_INSTITUTION (CREDITOR_AGENT)': { icon: BankIcon, color: '#388e3c', bg: '#e8f5e9' },
   'CDM_FINANCIAL_INSTITUTION (INTERMEDIARIES)': { icon: BankIcon, color: '#ff8f00', bg: '#fff3e0' },
+  'CDM_PAYMENT_STATUS': { icon: PaymentIcon, color: '#f57c00', bg: '#fff3e0' },
+  'CDM_FX_RATE': { icon: PaymentIcon, color: '#0288d1', bg: '#e1f5fe' },
+  'CDM_ACCOUNT_STATEMENT': { icon: AccountIcon, color: '#5d4037', bg: '#efebe9' },
+  'CDM_TRANSACTION': { icon: PaymentIcon, color: '#5d4037', bg: '#efebe9' },
+  // Normalized identifier tables (ISO 20022 CDM enhancements)
+  'CDM_PARTY_IDENTIFIER': { icon: PersonIcon, color: '#9c27b0', bg: '#f3e5f5' },
+  'CDM_ACCOUNT_IDENTIFIER': { icon: AccountIcon, color: '#00838f', bg: '#e0f7fa' },
+  'CDM_FI_IDENTIFIER': { icon: BankIcon, color: '#ef6c00', bg: '#fff3e0' },
+  'CDM_FI_IDENTIFIERS': { icon: BankIcon, color: '#ef6c00', bg: '#fff3e0' },
+  'CDM_INSTITUTION_IDENTIFIER': { icon: BankIcon, color: '#ef6c00', bg: '#fff3e0' },
+  'CDM_PAYMENT_IDENTIFIER': { icon: PaymentIcon, color: '#1565c0', bg: '#e3f2fd' },
+  'CDM_TRANSACTION_IDENTIFIER': { icon: PaymentIcon, color: '#1565c0', bg: '#e3f2fd' },
   'EXTENSION DATA': { icon: ExtensionIcon, color: '#0097a7', bg: '#e0f7fa' },
   'LINEAGE & METADATA': { icon: HistoryIcon, color: '#455a64', bg: '#eceff1' },
 };
@@ -242,12 +254,93 @@ const RecordComparisonDialog: React.FC<{
           'DEBTOR_AGENT': 'debtor_agent',
           'CREDITOR_AGENT': 'creditor_agent',
           'INTERMEDIARY_AGENT1': 'intermediary_agent1',
-          'INTERMEDIARY_AGENT2': 'intermediary_agent2'
+          'INTERMEDIARY_AGENT2': 'intermediary_agent2',
+          'INSTRUCTING_AGENT': 'instructing_agent',
+          'INSTRUCTED_AGENT': 'instructed_agent'
         }[entityRole || ''] || '';
         const fi = goldEntities[fiKey] || {};
         goldValue = fmt(fi[goldColumn]);
       } else if (goldTable.startsWith('cdm_payment_extension')) {
         goldValue = fmt(goldExtension[goldColumn]);
+      } else if (goldTable === 'cdm_payment_status') {
+        // Payment status entity
+        const status = goldEntities['payment_status'] || {};
+        goldValue = fmt(status[goldColumn]);
+      } else if (goldTable === 'cdm_fx_rate') {
+        // FX rate entity
+        const fxRate = goldEntities['fx_rate'] || {};
+        goldValue = fmt(fxRate[goldColumn]);
+      } else if (goldTable === 'cdm_account_statement') {
+        // Account statement entity (for camt.053, MT940)
+        const statement = goldEntities['account_statement'] || gold;
+        goldValue = fmt(statement[goldColumn]);
+      } else if (goldTable === 'cdm_transaction') {
+        // Transaction entity (for statements)
+        const transactions = goldEntities['transactions'] || [];
+        if (Array.isArray(transactions) && transactions.length > 0) {
+          goldValue = fmt(transactions[0][goldColumn]);
+        }
+      }
+      // Normalized identifier tables (ISO 20022 CDM enhancements)
+      else if (goldTable === 'cdm_party_identifier') {
+        const partyIdKey = {
+          'DEBTOR': 'debtor_party_identifiers',
+          'CREDITOR': 'creditor_party_identifiers',
+          'ULTIMATE_DEBTOR': 'ultimate_debtor_identifiers',
+          'ULTIMATE_CREDITOR': 'ultimate_creditor_identifiers',
+          'INITIATING_PARTY': 'initiating_party_identifiers'
+        }[entityRole || ''] || 'party_identifiers';
+        const identifiers = goldEntities[partyIdKey] || [];
+        if (Array.isArray(identifiers) && identifiers.length > 0) {
+          // Find matching identifier by type or return first
+          const idType = goldColumn.replace('identifier_', '').toUpperCase();
+          const match = identifiers.find((id: any) => id.identifier_type === idType) || identifiers[0];
+          goldValue = fmt(match?.[goldColumn] || match?.identifier_value);
+        }
+      } else if (goldTable === 'cdm_account_identifier') {
+        // Account identifiers are linked via account_id FK - get all identifiers
+        // entity_role in mapping (e.g., DEBTOR_IBAN) indicates which identifier record to create
+        const toArray = (v: any) => Array.isArray(v) ? v : [];
+        const allIdentifiers = [
+          ...toArray(goldEntities['debtor_account_identifiers']),
+          ...toArray(goldEntities['creditor_account_identifiers']),
+          ...toArray(goldEntities['account_identifiers'])
+        ];
+        if (allIdentifiers.length > 0) {
+          // If entity_role contains identifier type suffix, try to match it
+          const idTypeSuffix = entityRole?.includes('_') ? entityRole.split('_').slice(1).join('_') : '';
+          const match = idTypeSuffix
+            ? allIdentifiers.find((id: any) => id.identifier_type === idTypeSuffix)
+            : allIdentifiers[0];
+          goldValue = fmt(match?.[goldColumn] || match?.identifier_value);
+        }
+      } else if (goldTable === 'cdm_fi_identifier' || goldTable === 'cdm_fi_identifiers' || goldTable === 'cdm_institution_identifier') {
+        // Institution identifiers are linked via financial_institution_id FK - get all identifiers
+        // entity_role in mapping (e.g., DEBTOR_AGENT_BIC) indicates which identifier record to create
+        const toArray = (v: any) => Array.isArray(v) ? v : [];
+        const allIdentifiers = [
+          ...toArray(goldEntities['debtor_agent_identifiers']),
+          ...toArray(goldEntities['creditor_agent_identifiers']),
+          ...toArray(goldEntities['intermediary1_identifiers']),
+          ...toArray(goldEntities['intermediary2_identifiers']),
+          ...toArray(goldEntities['fi_identifiers'])
+        ];
+        if (allIdentifiers.length > 0) {
+          // If entity_role contains identifier type suffix (BIC, CLR, LEI), try to match it
+          const parts = entityRole?.split('_') || [];
+          const idTypeSuffix = parts.length > 2 ? parts.slice(2).join('_') : '';
+          const match = idTypeSuffix
+            ? allIdentifiers.find((id: any) => id.identifier_type === idTypeSuffix)
+            : allIdentifiers[0];
+          goldValue = fmt(match?.[goldColumn] || match?.identifier_value);
+        }
+      } else if (goldTable === 'cdm_payment_identifier' || goldTable === 'cdm_transaction_identifier') {
+        const paymentIdentifiers = goldEntities['payment_identifiers'] || [];
+        if (Array.isArray(paymentIdentifiers) && paymentIdentifiers.length > 0) {
+          const idType = goldColumn.replace('identifier_', '').toUpperCase();
+          const match = paymentIdentifiers.find((id: any) => id.identifier_type === idType) || paymentIdentifiers[0];
+          goldValue = fmt(match?.[goldColumn] || match?.identifier_value);
+        }
       }
 
       groups[categoryKey].rows.push({
@@ -279,19 +372,22 @@ const RecordComparisonDialog: React.FC<{
     };
 
     // Sort groups by a logical order
+    // Note: Identifier tables may have composite entity_roles (e.g., DEBTOR_AGENT_BIC)
+    // which represent identifier types - these sort alphabetically after their parent entity
     const order = [
       'cdm_payment_instruction',
       'cdm_party (DEBTOR)',
       'cdm_party (CREDITOR)',
       'cdm_party (INITIATING_PARTY)',
-      'cdm_party (ULTIMATE_DEBTOR)',
-      'cdm_party (ULTIMATE_CREDITOR)',
+      'cdm_party_identifier', // Identifier tables without role (linked via party_id FK)
       'cdm_account (DEBTOR)',
       'cdm_account (CREDITOR)',
+      'cdm_account_identifier', // Identifier tables without role (linked via account_id FK)
       'cdm_financial_institution (DEBTOR_AGENT)',
       'cdm_financial_institution (CREDITOR_AGENT)',
       'cdm_financial_institution (INTERMEDIARY_AGENT1)',
       'cdm_financial_institution (INTERMEDIARY_AGENT2)',
+      'cdm_institution_identifier', // Identifier tables without role (linked via fi_id FK)
     ];
 
     const sortedGroups = Object.values(groups).sort((a, b) => {
@@ -331,23 +427,34 @@ const RecordComparisonDialog: React.FC<{
 
   // Get icon and color for category
   const getCategoryStyle = (category: string) => {
-    if (category.includes('payment_instruction')) return { icon: PaymentIcon, color: '#1976d2', bg: '#e3f2fd' };
-    if (category.includes('party')) {
-      if (category.includes('DEBTOR')) return { icon: PersonIcon, color: '#7b1fa2', bg: '#f3e5f5' };
-      if (category.includes('CREDITOR')) return { icon: PersonIcon, color: '#388e3c', bg: '#e8f5e9' };
+    const cat = category.toLowerCase();
+    // Normalized identifier tables (ISO 20022 CDM enhancements)
+    if (cat.includes('party_identifier')) return { icon: PersonIcon, color: '#9c27b0', bg: '#f3e5f5' };
+    if (cat.includes('account_identifier')) return { icon: AccountIcon, color: '#00838f', bg: '#e0f7fa' };
+    if (cat.includes('fi_identifier') || cat.includes('institution_identifier')) return { icon: BankIcon, color: '#ef6c00', bg: '#fff3e0' };
+    if (cat.includes('payment_identifier') || cat.includes('transaction_identifier')) return { icon: PaymentIcon, color: '#1565c0', bg: '#e3f2fd' };
+    // Core CDM entities
+    if (cat.includes('payment_instruction')) return { icon: PaymentIcon, color: '#1976d2', bg: '#e3f2fd' };
+    if (cat.includes('payment_status')) return { icon: PaymentIcon, color: '#f57c00', bg: '#fff3e0' };
+    if (cat.includes('fx_rate')) return { icon: PaymentIcon, color: '#0288d1', bg: '#e1f5fe' };
+    if (cat.includes('account_statement')) return { icon: AccountIcon, color: '#5d4037', bg: '#efebe9' };
+    if (cat.includes('transaction')) return { icon: PaymentIcon, color: '#5d4037', bg: '#efebe9' };
+    if (cat.includes('party')) {
+      if (cat.includes('debtor')) return { icon: PersonIcon, color: '#7b1fa2', bg: '#f3e5f5' };
+      if (cat.includes('creditor')) return { icon: PersonIcon, color: '#388e3c', bg: '#e8f5e9' };
       return { icon: PersonIcon, color: '#5d4037', bg: '#efebe9' };
     }
-    if (category.includes('account')) {
-      if (category.includes('DEBTOR')) return { icon: AccountIcon, color: '#7b1fa2', bg: '#f3e5f5' };
+    if (cat.includes('account')) {
+      if (cat.includes('debtor')) return { icon: AccountIcon, color: '#7b1fa2', bg: '#f3e5f5' };
       return { icon: AccountIcon, color: '#388e3c', bg: '#e8f5e9' };
     }
-    if (category.includes('financial_institution')) {
-      if (category.includes('DEBTOR')) return { icon: BankIcon, color: '#7b1fa2', bg: '#f3e5f5' };
-      if (category.includes('CREDITOR')) return { icon: BankIcon, color: '#388e3c', bg: '#e8f5e9' };
+    if (cat.includes('financial_institution')) {
+      if (cat.includes('debtor')) return { icon: BankIcon, color: '#7b1fa2', bg: '#f3e5f5' };
+      if (cat.includes('creditor')) return { icon: BankIcon, color: '#388e3c', bg: '#e8f5e9' };
       return { icon: BankIcon, color: '#ff8f00', bg: '#fff3e0' };
     }
-    if (category.includes('extension')) return { icon: ExtensionIcon, color: '#0097a7', bg: '#e0f7fa' };
-    if (category.includes('LINEAGE')) return { icon: HistoryIcon, color: '#455a64', bg: '#eceff1' };
+    if (cat.includes('extension')) return { icon: ExtensionIcon, color: '#0097a7', bg: '#e0f7fa' };
+    if (cat.includes('lineage')) return { icon: HistoryIcon, color: '#455a64', bg: '#eceff1' };
     return { icon: PaymentIcon, color: '#666', bg: '#f5f5f5' };
   };
 

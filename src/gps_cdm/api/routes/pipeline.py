@@ -241,7 +241,10 @@ async def list_batches(
             placeholders = ','.join(['%s'] * len(batch_ids))
             # Query all silver tables for actual counts
             # Query ALL Silver tables for accurate counts
+            # Shared ISO 20022 base tables - check FIRST since many formats now use these
             silver_tables = [
+                'stg_iso20022_pacs008', 'stg_iso20022_pacs009', 'stg_iso20022_pain001', 'stg_iso20022_camt053',
+                # ISO 20022 direct tables
                 'stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_mt202', 'stg_mt940',
                 'stg_fedwire', 'stg_sepa', 'stg_ach', 'stg_chaps', 'stg_camt053',
                 'stg_bacs', 'stg_fednow', 'stg_rtp', 'stg_faster_payments',
@@ -251,11 +254,25 @@ async def list_batches(
             ]
             for table in silver_tables:
                 try:
+                    # First try direct _batch_id match
                     cursor.execute(f"""
                         SELECT _batch_id, COUNT(*) as cnt
                         FROM silver.{table}
                         WHERE _batch_id IN ({placeholders})
                         GROUP BY _batch_id
+                    """, batch_ids)
+                    for row in cursor.fetchall():
+                        bid, cnt = row
+                        silver_counts[bid] = silver_counts.get(bid, 0) + cnt
+
+                    # Also count via raw_id join (for records where _batch_id is null/empty)
+                    cursor.execute(f"""
+                        SELECT b._batch_id, COUNT(*) as cnt
+                        FROM silver.{table} s
+                        JOIN bronze.raw_payment_messages b ON s.raw_id = b.raw_id
+                        WHERE b._batch_id IN ({placeholders})
+                          AND (s._batch_id IS NULL OR s._batch_id = '')
+                        GROUP BY b._batch_id
                     """, batch_ids)
                     for row in cursor.fetchall():
                         bid, cnt = row
@@ -267,6 +284,7 @@ async def list_batches(
         gold_counts = {}
         if batch_ids:
             try:
+                # First try direct lineage_batch_id match
                 cursor.execute(f"""
                     SELECT lineage_batch_id, COUNT(*) as cnt
                     FROM gold.cdm_payment_instruction
@@ -276,6 +294,19 @@ async def list_batches(
                 for row in cursor.fetchall():
                     bid, cnt = row
                     gold_counts[bid] = cnt
+
+                # Also count via stg_id -> silver -> bronze join (for records where lineage_batch_id is null)
+                cursor.execute(f"""
+                    SELECT b._batch_id, COUNT(*) as cnt
+                    FROM gold.cdm_payment_instruction g
+                    JOIN bronze.raw_payment_messages b ON g.source_raw_id = b.raw_id
+                    WHERE b._batch_id IN ({placeholders})
+                      AND (g.lineage_batch_id IS NULL OR g.lineage_batch_id = '')
+                    GROUP BY b._batch_id
+                """, batch_ids)
+                for row in cursor.fetchall():
+                    bid, cnt = row
+                    gold_counts[bid] = gold_counts.get(bid, 0) + cnt
             except Exception:
                 pass
 
@@ -694,10 +725,30 @@ async def get_record_lineage(layer: str, record_id: str):
             "field_mappings": [],
         }
 
-        # List of silver tables to search
-        silver_tables = ['stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_mt202',
-                         'stg_fedwire', 'stg_sepa', 'stg_ach', 'stg_chaps',
-                         'stg_bacs', 'stg_fednow', 'stg_rtp', 'stg_faster_payments']
+        # List of silver tables to search - includes all 29+ message formats
+        # IMPORTANT: Shared ISO 20022 tables FIRST (formats like FEDWIRE, CHAPS use these now)
+        silver_tables = [
+            # Shared ISO 20022 base tables - check FIRST since many formats now use these
+            'stg_iso20022_pacs008', 'stg_iso20022_pacs009', 'stg_iso20022_pain001', 'stg_iso20022_camt053',
+            # ISO 20022 direct tables
+            'stg_pain001', 'stg_pacs008', 'stg_pacs008_v', 'stg_camt053',
+            # SWIFT MT
+            'stg_mt103', 'stg_mt202', 'stg_mt940',
+            # US Regional (legacy tables - may still have historical data)
+            'stg_fedwire', 'stg_fedwire_v', 'stg_ach', 'stg_chips', 'stg_chips_v',
+            'stg_rtp', 'stg_rtp_v', 'stg_fednow', 'stg_fednow_v',
+            # EU Regional
+            'stg_sepa', 'stg_sepa_v', 'stg_target2', 'stg_target2_v',
+            # UK Regional
+            'stg_chaps', 'stg_chaps_v', 'stg_fps', 'stg_fps_v', 'stg_bacs', 'stg_faster_payments',
+            # Asia-Pacific
+            'stg_npp', 'stg_npp_v', 'stg_meps_plus', 'stg_meps_plus_v',
+            'stg_rtgs_hk', 'stg_rtgs_hk_v', 'stg_cnaps', 'stg_bojnet', 'stg_kftc',
+            # Middle East
+            'stg_sarie', 'stg_uaefts', 'stg_uaefts_v',
+            # Latin America & Southeast Asia
+            'stg_pix', 'stg_upi', 'stg_promptpay', 'stg_paynow', 'stg_instapay', 'stg_instapay_v',
+        ]
 
         if layer == "bronze":
             # Start from bronze, find linked silver and gold using foreign keys

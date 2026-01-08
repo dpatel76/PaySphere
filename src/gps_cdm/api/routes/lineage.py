@@ -332,20 +332,48 @@ async def list_supported_message_types():
                 "count": len(message_types),
             }
 
-    # Final fallback - return default list of known message types
+    # Final fallback - return default list of all 29 known message types
     default_types = [
+        # ISO 20022 Core
         {"id": "pain.001", "display_name": "pain.001 - Customer Credit Transfer Initiation", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
         {"id": "pain.002", "display_name": "pain.002 - Customer Payment Status Report", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
         {"id": "pacs.008", "display_name": "pacs.008 - FI Credit Transfer", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
+        {"id": "pacs.009", "display_name": "pacs.009 - FI Credit Transfer (Cover)", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
         {"id": "pacs.002", "display_name": "pacs.002 - FI Payment Status Report", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
         {"id": "camt.053", "display_name": "camt.053 - Bank Statement", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
+        # SWIFT MT
         {"id": "MT103", "display_name": "MT103 - Single Customer Credit Transfer", "format": "FIN", "version": "SRG 2023", "format_family": "SWIFT MT"},
         {"id": "MT202", "display_name": "MT202 - General Financial Institution Transfer", "format": "FIN", "version": "SRG 2023", "format_family": "SWIFT MT"},
-        {"id": "FEDWIRE", "display_name": "FEDWIRE - Federal Reserve Wire Transfer", "format": "FEDWIRE", "version": "2023", "format_family": "US Regional"},
+        {"id": "MT940", "display_name": "MT940 - Customer Statement Message", "format": "FIN", "version": "SRG 2023", "format_family": "SWIFT MT"},
+        # US Regional
+        {"id": "FEDWIRE", "display_name": "FEDWIRE - Federal Reserve Wire Transfer", "format": "ISO20022", "version": "2023", "format_family": "US Regional"},
         {"id": "ACH", "display_name": "ACH - Automated Clearing House", "format": "NACHA", "version": "2023", "format_family": "US Regional"},
-        {"id": "SEPA", "display_name": "SEPA - Single Euro Payments Area", "format": "XML", "version": "2019", "format_family": "EU Regional"},
+        {"id": "CHIPS", "display_name": "CHIPS - Clearing House Interbank Payment System", "format": "ISO20022", "version": "2023", "format_family": "US Regional"},
+        {"id": "RTP", "display_name": "RTP - Real-Time Payments", "format": "ISO20022", "version": "2023", "format_family": "US Regional"},
+        {"id": "FEDNOW", "display_name": "FEDNOW - Federal Reserve Instant Payments", "format": "ISO20022", "version": "2023", "format_family": "US Regional"},
+        # EU Regional
+        {"id": "SEPA", "display_name": "SEPA - Single Euro Payments Area", "format": "ISO20022", "version": "2019", "format_family": "EU Regional"},
+        {"id": "TARGET2", "display_name": "TARGET2 - Trans-European RTGS", "format": "ISO20022", "version": "2023", "format_family": "EU Regional"},
+        # UK Regional
         {"id": "CHAPS", "display_name": "CHAPS - Clearing House Automated Payment System", "format": "ISO20022", "version": "2023", "format_family": "UK Regional"},
-        {"id": "BACS", "display_name": "BACS - Bankers Automated Clearing System", "format": "XML", "version": "2023", "format_family": "UK Regional"},
+        {"id": "FPS", "display_name": "FPS - Faster Payments Service", "format": "ISO20022", "version": "2023", "format_family": "UK Regional"},
+        {"id": "BACS", "display_name": "BACS - Bankers Automated Clearing System", "format": "Fixed", "version": "2023", "format_family": "UK Regional"},
+        # Asia-Pacific
+        {"id": "NPP", "display_name": "NPP - New Payments Platform (Australia)", "format": "ISO20022", "version": "2023", "format_family": "APAC Regional"},
+        {"id": "MEPS_PLUS", "display_name": "MEPS+ - MAS Electronic Payment System (Singapore)", "format": "ISO20022", "version": "2023", "format_family": "APAC Regional"},
+        {"id": "RTGS_HK", "display_name": "RTGS HK - Real-Time Gross Settlement (Hong Kong)", "format": "ISO20022", "version": "2023", "format_family": "APAC Regional"},
+        {"id": "CNAPS", "display_name": "CNAPS - China National Advanced Payment System", "format": "Proprietary", "version": "2023", "format_family": "APAC Regional"},
+        {"id": "BOJNET", "display_name": "BOJ-NET - Bank of Japan Network", "format": "Proprietary", "version": "2023", "format_family": "APAC Regional"},
+        {"id": "KFTC", "display_name": "KFTC - Korea Financial Telecommunications", "format": "Fixed", "version": "2023", "format_family": "APAC Regional"},
+        {"id": "INSTAPAY", "display_name": "InstaPay - Philippines Instant Payment", "format": "ISO20022", "version": "2023", "format_family": "APAC Regional"},
+        # Middle East
+        {"id": "UAEFTS", "display_name": "UAEFTS - UAE Funds Transfer System", "format": "ISO20022", "version": "2023", "format_family": "ME Regional"},
+        {"id": "SARIE", "display_name": "SARIE - Saudi Arabian Riyal Interbank Express", "format": "SWIFT", "version": "2023", "format_family": "ME Regional"},
+        # Latin America & Other
+        {"id": "PIX", "display_name": "PIX - Brazil Instant Payment", "format": "JSON", "version": "2023", "format_family": "LATAM Regional"},
+        {"id": "UPI", "display_name": "UPI - Unified Payments Interface (India)", "format": "JSON", "version": "2023", "format_family": "APAC Regional"},
+        {"id": "PROMPTPAY", "display_name": "PromptPay - Thailand Instant Payment", "format": "ISO20022", "version": "2023", "format_family": "APAC Regional"},
+        {"id": "PAYNOW", "display_name": "PayNow - Singapore Instant Payment", "format": "ISO20022", "version": "2023", "format_family": "APAC Regional"},
     ]
     return {
         "supported_types": default_types,
@@ -397,29 +425,91 @@ async def list_cdm_entities():
     """List all CDM entities available for backward lineage."""
     return {
         "entities": [
+            # Core CDM entities
             {
                 "table": "cdm_payment_instruction",
                 "display_name": "Payment Instruction",
                 "description": "Core payment transaction record",
                 "key_fields": ["instruction_id", "end_to_end_id", "uetr"],
+                "category": "Core",
             },
             {
                 "table": "cdm_party",
                 "display_name": "Party",
                 "description": "Customer, counterparty, or related party",
                 "key_fields": ["party_id", "name", "tax_id"],
+                "category": "Core",
             },
             {
                 "table": "cdm_account",
                 "display_name": "Account",
                 "description": "Bank account or financial account",
                 "key_fields": ["account_id", "iban", "account_number"],
+                "category": "Core",
             },
             {
                 "table": "cdm_financial_institution",
                 "display_name": "Financial Institution",
                 "description": "Bank or financial service provider",
                 "key_fields": ["fi_id", "bic", "lei"],
+                "category": "Core",
+            },
+            {
+                "table": "cdm_payment_status",
+                "display_name": "Payment Status",
+                "description": "Status and reason for payment state changes",
+                "key_fields": ["status_id", "instruction_id", "status_code"],
+                "category": "Core",
+            },
+            {
+                "table": "cdm_fx_rate",
+                "display_name": "FX Rate",
+                "description": "Currency exchange rate for cross-currency payments",
+                "key_fields": ["fx_rate_id", "source_currency", "target_currency"],
+                "category": "Core",
+            },
+            {
+                "table": "cdm_account_statement",
+                "display_name": "Account Statement",
+                "description": "Statement of account activity",
+                "key_fields": ["statement_id", "account_id", "statement_date"],
+                "category": "Core",
+            },
+            {
+                "table": "cdm_transaction",
+                "display_name": "Transaction",
+                "description": "Individual transaction within a statement",
+                "key_fields": ["transaction_id", "statement_id", "amount"],
+                "category": "Core",
+            },
+            # Normalized identifier tables (ISO 20022 CDM enhancements)
+            {
+                "table": "cdm_party_identifier",
+                "display_name": "Party Identifier",
+                "description": "Normalized party identifiers (LEI, BIC, Tax ID, etc.)",
+                "key_fields": ["identifier_id", "party_id", "identifier_type", "identifier_value"],
+                "category": "Identifier",
+            },
+            {
+                "table": "cdm_account_identifier",
+                "display_name": "Account Identifier",
+                "description": "Normalized account identifiers (IBAN, BBAN, Proxy, etc.)",
+                "key_fields": ["identifier_id", "account_id", "identifier_type", "identifier_value"],
+                "category": "Identifier",
+            },
+            {
+                "table": "cdm_fi_identifier",
+                "display_name": "FI Identifier",
+                "description": "Normalized financial institution identifiers (BIC, ABA, Sort Code, etc.)",
+                "key_fields": ["identifier_id", "fi_id", "identifier_type", "identifier_value"],
+                "category": "Identifier",
+            },
+            {
+                "table": "cdm_payment_identifier",
+                "display_name": "Payment Identifier",
+                "description": "Normalized payment identifiers (E2E ID, UETR, TX ID, etc.)",
+                "key_fields": ["identifier_id", "instruction_id", "identifier_type", "identifier_value"],
+                "category": "Identifier",
             },
         ]
     }

@@ -1,14 +1,29 @@
 """UK Faster Payments Service (FPS) Extractor - ISO 20022 pacs.008 based.
 
-FPS uses the ISO 20022 pacs.008 FIToFICstmrCdtTrf message format with UK-specific
-Sort Code + Account Number identification. This is the standard for UK domestic
-real-time payments.
+ISO 20022 INHERITANCE HIERARCHY:
+    FPS uses UK Faster Payments ISO 20022 usage guidelines based on pacs.008.
+    The FpsISO20022Parser inherits from Pacs008Parser.
 
-Key characteristics:
-- Sort Code: 6 digits identifying the bank branch (e.g., 20-00-00)
-- Account Number: 8 digits (e.g., 12345678)
-- Currency: GBP (UK Pounds Sterling)
-- Clearing System: GBDSC (Great Britain Domestic Sort Code)
+    BaseISO20022Parser
+        └── Pacs008Parser (FI to FI Customer Credit Transfer - pacs.008.001.08)
+            └── FpsISO20022Parser (UK Faster Payments usage guidelines)
+
+FPS-SPECIFIC ELEMENTS:
+    - UK Sort Codes - 6-digit clearing codes (GBDSC scheme, e.g., 20-00-00)
+    - Account Number - 8 digits (e.g., 12345678)
+    - GBP currency (British Pounds Sterling)
+    - Real-time retail payments up to £250,000
+
+CLEARING SYSTEM:
+    - GBDSC (Great Britain Domestic Sort Code)
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_fps
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_fps
+
+MAPPING INHERITANCE:
+    FPS -> pacs.008.base (PARTIAL - UK-specific fields override base)
 """
 
 from typing import Dict, Any, List, Optional
@@ -29,12 +44,135 @@ from ..base import (
 
 logger = logging.getLogger(__name__)
 
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - FPS will use standalone implementation")
+
+
+# =============================================================================
+# FPS ISO 20022 PARSER (inherits from Pacs008Parser)
+# =============================================================================
+
+# Use conditional inheritance pattern for backward compatibility
+_FpsParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class FpsISO20022Parser(_FpsParserBase):
+    """FPS ISO 20022 pacs.008 parser with UK Faster Payments usage guidelines.
+
+    Inherits from Pacs008Parser and adds FPS-specific processing:
+    - UK Sort Code extraction (GBDSC scheme)
+    - FPS-specific clearing system identification
+    - UK address format handling
+
+    ISO 20022 Version: pacs.008.001.08
+    Usage Guidelines: UK Faster Payments
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pacs008Parser -> FpsISO20022Parser
+    """
+
+    # FPS-specific constants
+    CLEARING_SYSTEM = "GBDSC"  # UK Domestic Sort Code
+    DEFAULT_CURRENCY = "GBP"
+    MESSAGE_TYPE = "FPS"
+
+    def __init__(self):
+        """Initialize FPS parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse FPS ISO 20022 pacs.008 message.
+
+        Uses inherited pacs.008 parsing from Pacs008Parser and adds
+        FPS-specific fields.
+        """
+        # Handle JSON/dict input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pacs.008 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add FPS-specific fields
+        result['isFps'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        # Map standard fields to FPS terminology
+        self._add_fps_field_aliases(result)
+
+        # Extract UK Sort Codes
+        self._extract_uk_sort_codes(result)
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available.
+
+        Delegates to the legacy FpsXmlParser for backward compatibility.
+        """
+        # Will use the FpsXmlParser._parse_iso20022 method
+        legacy_parser = FpsXmlParser()
+        return legacy_parser.parse(raw_content)
+
+    def _add_fps_field_aliases(self, result: Dict[str, Any]) -> None:
+        """Add FPS-specific field aliases (payer/payee terminology)."""
+        # Map ISO 20022 debtor -> FPS payer
+        if result.get('debtorName') and not result.get('payerName'):
+            result['payerName'] = result['debtorName']
+        if result.get('debtorAccount') and not result.get('payerAccount'):
+            result['payerAccount'] = result['debtorAccount']
+
+        # Map ISO 20022 creditor -> FPS payee
+        if result.get('creditorName') and not result.get('payeeName'):
+            result['payeeName'] = result['creditorName']
+        if result.get('creditorAccount') and not result.get('payeeAccount'):
+            result['payeeAccount'] = result['creditorAccount']
+
+    def _extract_uk_sort_codes(self, result: Dict[str, Any]) -> None:
+        """Extract UK Sort Codes from various fields.
+
+        FPS uses GBDSC (UK Domestic Sort Code) scheme.
+        Sort codes are 6 digits, often formatted as NN-NN-NN.
+        """
+        # Try to extract from clearing system member ID
+        for prefix in ['debtor', 'creditor']:
+            agent_key = f'{prefix}AgentClrSysMmbId'
+            sort_key = f'{prefix}SortCode'
+            fps_sort_key = f'payer_sort_code' if prefix == 'debtor' else f'payee_sort_code'
+
+            if result.get(agent_key) and not result.get(sort_key):
+                mbr_id = result.get(agent_key)
+                if mbr_id and len(mbr_id) == 6 and mbr_id.isdigit():
+                    result[sort_key] = mbr_id
+                    result[fps_sort_key] = mbr_id
+
+
+# =============================================================================
+# LEGACY XML PARSER (kept for backward compatibility)
+# =============================================================================
 
 class FpsXmlParser:
     """Parser for FPS ISO 20022 pacs.008 XML messages.
 
     Handles namespace stripping and extracts fields from the FIToFICstmrCdtTrf
     structure used by UK Faster Payments.
+
+    NOTE: New code should use FpsISO20022Parser which inherits from Pacs008Parser.
     """
 
     NS_PATTERN = re.compile(r'\{[^}]+\}')
@@ -423,21 +561,45 @@ class FpsParser:
 
 
 class FpsExtractor(BaseExtractor):
-    """Extractor for UK Faster Payments Service messages.
+    """Extractor for UK Faster Payments Service (FPS) messages.
 
-    FPS is the UK's real-time payment system using ISO 20022 pacs.008 format.
-    Key features:
-    - UK Sort Code (6 digits) identifies the bank/branch
-    - Account Number (8 digits)
-    - Clearing system: GBDSC (Great Britain Domestic Sort Code)
+    ISO 20022 INHERITANCE:
+        FPS inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The FpsISO20022Parser inherits from Pacs008Parser.
+        Uses UK Faster Payments usage guidelines.
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008.001.08) - Current standard
+
+    FPS-Specific Elements:
+        - UK Sort Codes - 6-digit clearing codes (GBDSC scheme)
+        - Account Number - 8 digits
+        - GBP currency (British Pounds Sterling)
+        - Real-time retail payments up to £250,000
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_fps
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_fps
+
+    Inheritance Hierarchy:
+        BaseExtractor -> FpsExtractor
+        (Parser: Pacs008Parser -> FpsISO20022Parser)
     """
 
     MESSAGE_TYPE = "FPS"
-    SILVER_TABLE = "stg_fps"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "GBP"
+    CLEARING_SYSTEM = "GBDSC"
 
     def __init__(self):
-        """Initialize FPS extractor with XML parser."""
-        self.parser = FpsXmlParser()
+        """Initialize FPS extractor with ISO 20022 parser."""
+        # Primary: ISO 20022 parser (current standard)
+        self.iso20022_parser = FpsISO20022Parser()
+        # Legacy: XML parser (kept for backward compatibility)
+        self.legacy_parser = FpsXmlParser()
+        # Default to ISO 20022 parser
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION

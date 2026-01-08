@@ -1,4 +1,31 @@
-"""TCH RTP (Real-Time Payments) Extractor - based on pacs.008."""
+"""TCH RTP (Real-Time Payments) Extractor - ISO 20022 based.
+
+ISO 20022 INHERITANCE HIERARCHY:
+    RTP uses The Clearing House ISO 20022 usage guidelines based on pacs.008.
+    The RtpISO20022Parser inherits from Pacs008Parser.
+
+    BaseISO20022Parser
+        └── Pacs008Parser (FI to FI Customer Credit Transfer - pacs.008.001.08)
+            └── RtpISO20022Parser (The Clearing House RTP guidelines)
+
+RTP-SPECIFIC ELEMENTS:
+    - RTN Routing Numbers (USRTP clearing system)
+    - USD currency (US Dollars)
+    - Real-time instant payments (24/7/365)
+    - Maximum $1,000,000 per transaction
+
+CLEARING SYSTEM:
+    - USRTP (US Real-Time Payments)
+    - Operated by The Clearing House
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_rtp
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_rtp
+
+MAPPING INHERITANCE:
+    RTP -> pacs.008.base (COMPLETE)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -17,6 +44,86 @@ from ..base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - RTP will use standalone implementation")
+
+
+# =============================================================================
+# RTP ISO 20022 PARSER (inherits from Pacs008Parser)
+# =============================================================================
+
+# Use conditional inheritance pattern for backward compatibility
+_RtpParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class RtpISO20022Parser(_RtpParserBase):
+    """RTP ISO 20022 pacs.008 parser with The Clearing House usage guidelines.
+
+    Inherits from Pacs008Parser and adds RTP-specific processing:
+    - RTN Routing Number extraction (USRTP scheme)
+    - RTP-specific clearing system identification
+    - US address format handling
+
+    ISO 20022 Version: pacs.008.001.08
+    Usage Guidelines: The Clearing House RTP Service
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pacs008Parser -> RtpISO20022Parser
+    """
+
+    # RTP-specific constants
+    CLEARING_SYSTEM = "USRTP"  # The Clearing House RTP
+    DEFAULT_CURRENCY = "USD"
+    MESSAGE_TYPE = "RTP"
+
+    def __init__(self):
+        """Initialize RTP parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse RTP ISO 20022 pacs.008 message.
+
+        Uses inherited pacs.008 parsing from Pacs008Parser and adds
+        RTP-specific fields.
+        """
+        # Handle JSON/dict input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pacs.008 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add RTP-specific fields
+        result['isRtp'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available."""
+        legacy_parser = RtpXmlParser()
+        return legacy_parser.parse(raw_content)
+
+
+# =============================================================================
+# LEGACY XML PARSER (kept for backward compatibility)
+# =============================================================================
 
 
 class RtpXmlParser:
@@ -304,13 +411,42 @@ class RtpXmlParser:
 
 
 class RtpExtractor(BaseExtractor):
-    """Extractor for TCH RTP messages."""
+    """Extractor for TCH RTP (The Clearing House Real-Time Payments) messages.
+
+    ISO 20022 INHERITANCE:
+        RTP inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The RtpISO20022Parser inherits from Pacs008Parser.
+        Uses The Clearing House RTP Service usage guidelines.
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008.001.08) - Current standard
+
+    RTP-Specific Elements:
+        - RTN Routing Numbers (USRTP clearing system)
+        - USD currency (US Dollars)
+        - Real-time 24/7/365 instant payments
+        - Maximum $1,000,000 per transaction
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_rtp
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_rtp
+
+    Inheritance Hierarchy:
+        BaseExtractor -> RtpExtractor
+        (Parser: Pacs008Parser -> RtpISO20022Parser)
+    """
 
     MESSAGE_TYPE = "RTP"
-    SILVER_TABLE = "stg_rtp"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "USD"
+    CLEARING_SYSTEM = "USRTP"
 
     def __init__(self):
-        self.parser = RtpXmlParser()
+        """Initialize RTP extractor with ISO 20022 parser."""
+        self.iso20022_parser = RtpISO20022Parser()
+        self.legacy_parser = RtpXmlParser()
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION

@@ -1,4 +1,31 @@
-"""CHAPS (Clearing House Automated Payment System) Extractor - UK Real-Time Gross Settlement."""
+"""CHAPS (Clearing House Automated Payment System) Extractor - UK Real-Time Gross Settlement.
+
+ISO 20022 INHERITANCE HIERARCHY:
+    CHAPS uses Bank of England's ISO 20022 usage guidelines based on pacs.008.
+    The ChapsISO20022Parser inherits from Pacs008Parser.
+
+    BaseISO20022Parser
+        └── Pacs008Parser (FI to FI Customer Credit Transfer - pacs.008.001.08)
+            └── ChapsISO20022Parser (BoE/RTGS usage guidelines)
+
+CHAPS-SPECIFIC ELEMENTS:
+    - UK Sort Codes - 6-digit clearing codes (GBDSC scheme)
+    - IBAN format: GBnnBBBBSSSSSSNNNNNNNN (22 chars)
+    - GBP currency (British Pounds Sterling)
+    - RTGS (Real-Time Gross Settlement) via Bank of England
+
+LEGACY FORMAT SUPPORT:
+    - ChapsSwiftParser: For historical SWIFT MT block format messages (MT103-like)
+    - This is maintained for backward compatibility with older messages
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_chaps
+    - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_chaps
+
+MAPPING INHERITANCE:
+    CHAPS -> pacs.008.base (PARTIAL - UK-specific fields override base)
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -17,6 +44,14 @@ from ..base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import Pacs008Parser, Pacs008Extractor
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - CHAPS will use standalone implementation")
 
 
 class ChapsSwiftParser:
@@ -228,21 +263,196 @@ class ChapsSwiftParser:
         return None
 
 
-class ChapsXmlParser:
-    """Parser for CHAPS ISO 20022 XML messages."""
+# =============================================================================
+# CHAPS ISO 20022 PARSER (inherits from Pacs008Parser)
+# =============================================================================
 
+# Use conditional inheritance pattern for backward compatibility
+_ChapsParserBase = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class ChapsISO20022Parser(_ChapsParserBase):
+    """CHAPS ISO 20022 pacs.008 parser with Bank of England usage guidelines.
+
+    Inherits from Pacs008Parser and adds CHAPS-specific processing:
+    - UK Sort Code extraction (GBDSC scheme)
+    - CHAPS-specific clearing system identification
+    - UK address format handling
+
+    ISO 20022 Version: pacs.008.001.08
+    Usage Guidelines: Bank of England RTGS/CHAPS
+
+    Inheritance Hierarchy:
+        BaseISO20022Parser -> Pacs008Parser -> ChapsISO20022Parser
+    """
+
+    # CHAPS-specific constants
+    CLEARING_SYSTEM = "GBDSC"  # UK Domestic Sort Code
+    DEFAULT_CURRENCY = "GBP"
+    MESSAGE_TYPE = "CHAPS"
+
+    def __init__(self):
+        """Initialize CHAPS parser."""
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse CHAPS ISO 20022 pacs.008 message.
+
+        Uses inherited pacs.008 parsing from Pacs008Parser and adds
+        CHAPS-specific fields.
+        """
+        # Handle JSON input
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if raw_content.strip().startswith('{') and not raw_content.strip().startswith('{1:'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Use parent pacs.008 parsing if available
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = self._parse_standalone(raw_content)
+
+        # Add CHAPS-specific fields
+        result['isChaps'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+
+        # Extract UK Sort Codes from various locations
+        self._extract_uk_sort_codes(result)
+
+        return result
+
+    def _parse_standalone(self, raw_content: str) -> Dict[str, Any]:
+        """Standalone parsing when base class not available."""
+        result = {'isChaps': True}
+
+        try:
+            if raw_content.startswith('\ufeff'):
+                raw_content = raw_content[1:]
+            root = ET.fromstring(raw_content)
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse CHAPS XML: {e}")
+            raise ValueError(f"Invalid XML: {e}")
+
+        return self._parse_iso20022_standalone(root)
+
+    def _parse_iso20022_standalone(self, root: ET.Element) -> Dict[str, Any]:
+        """Parse CHAPS ISO 20022 structure (standalone mode)."""
+        result = {}
+
+        fi_transfer = self._find_element_by_local_name(root, 'FIToFICstmrCdtTrf')
+        if fi_transfer is None:
+            return result
+
+        # Group Header
+        grp_hdr = self._find_element_by_local_name(fi_transfer, 'GrpHdr')
+        if grp_hdr is not None:
+            result['messageId'] = self._get_text(grp_hdr, 'MsgId')
+            result['creationDateTime'] = self._get_text(grp_hdr, 'CreDtTm')
+            result['settlementMethod'] = self._get_text(grp_hdr, 'SttlmInf/SttlmMtd')
+            result['settlementDate'] = self._get_text(grp_hdr, 'IntrBkSttlmDt')
+
+        # Credit Transfer Transaction
+        cdt_trf = self._find_element_by_local_name(fi_transfer, 'CdtTrfTxInf')
+        if cdt_trf is not None:
+            result.update(self._parse_transaction_standalone(cdt_trf))
+
+        return result
+
+    def _parse_transaction_standalone(self, tx: ET.Element) -> Dict[str, Any]:
+        """Parse credit transfer transaction (standalone mode)."""
+        result = {}
+
+        # Payment ID
+        pmt_id = self._find_element_by_local_name(tx, 'PmtId')
+        if pmt_id is not None:
+            result['instructionId'] = self._get_text(pmt_id, 'InstrId')
+            result['endToEndId'] = self._get_text(pmt_id, 'EndToEndId')
+            result['uetr'] = self._get_text(pmt_id, 'UETR')
+
+        # Amount
+        amt_elem = self._find_element_by_local_name(tx, 'IntrBkSttlmAmt')
+        if amt_elem is not None:
+            result['amount'] = self._safe_decimal(amt_elem.text)
+            result['currency'] = amt_elem.get('Ccy') or self.DEFAULT_CURRENCY
+
+        # Debtor
+        dbtr = self._find_element_by_local_name(tx, 'Dbtr')
+        if dbtr is not None:
+            result['debtorName'] = self._get_text(dbtr, 'Nm')
+            result['debtorAddress'] = self._get_text(dbtr, 'PstlAdr/AdrLine')
+
+        dbtr_acct = self._find_element_by_local_name(tx, 'DbtrAcct')
+        if dbtr_acct is not None:
+            result['debtorAccount'] = self._get_text(dbtr_acct, 'Id/Othr/Id')
+            result['debtorSortCode'] = self._get_text(dbtr_acct, 'Id/Othr/SchmeNm/Cd')
+
+        dbtr_agt = self._find_element_by_local_name(tx, 'DbtrAgt')
+        if dbtr_agt is not None:
+            result['debtorAgentBic'] = self._get_text(dbtr_agt, 'FinInstnId/BICFI')
+            result['debtorSortCode'] = result.get('debtorSortCode') or self._get_text(
+                dbtr_agt, 'FinInstnId/ClrSysMmbId/MmbId'
+            )
+
+        # Creditor
+        cdtr = self._find_element_by_local_name(tx, 'Cdtr')
+        if cdtr is not None:
+            result['creditorName'] = self._get_text(cdtr, 'Nm')
+            result['creditorAddress'] = self._get_text(cdtr, 'PstlAdr/AdrLine')
+
+        cdtr_acct = self._find_element_by_local_name(tx, 'CdtrAcct')
+        if cdtr_acct is not None:
+            result['creditorAccount'] = self._get_text(cdtr_acct, 'Id/Othr/Id')
+            result['creditorSortCode'] = self._get_text(cdtr_acct, 'Id/Othr/SchmeNm/Cd')
+
+        cdtr_agt = self._find_element_by_local_name(tx, 'CdtrAgt')
+        if cdtr_agt is not None:
+            result['creditorAgentBic'] = self._get_text(cdtr_agt, 'FinInstnId/BICFI')
+            result['creditorSortCode'] = result.get('creditorSortCode') or self._get_text(
+                cdtr_agt, 'FinInstnId/ClrSysMmbId/MmbId'
+            )
+
+        # Remittance Info
+        result['remittanceInfo'] = self._get_text(tx, 'RmtInf/Ustrd')
+
+        return result
+
+    def _extract_uk_sort_codes(self, result: Dict[str, Any]) -> None:
+        """Extract UK Sort Codes from various fields.
+
+        CHAPS uses GBDSC (UK Domestic Sort Code) scheme.
+        Sort codes are 6 digits, often formatted as NN-NN-NN.
+        """
+        # Try to extract from clearing system member ID
+        for prefix in ['debtor', 'creditor']:
+            agent_key = f'{prefix}AgentClrSysMmbId'
+            sort_key = f'{prefix}SortCode'
+
+            if result.get(agent_key) and not result.get(sort_key):
+                # ClrSysMmbId may contain the sort code
+                mbr_id = result.get(agent_key)
+                if mbr_id and len(mbr_id) == 6 and mbr_id.isdigit():
+                    result[sort_key] = mbr_id
+
+    # Standalone helper methods (used when base class not available)
     NS_PATTERN = re.compile(r'\{[^}]+\}')
 
     def _strip_ns(self, tag: str) -> str:
         """Remove namespace from XML tag."""
         return self.NS_PATTERN.sub('', tag)
 
-    def _find(self, element: ET.Element, path: str) -> Optional[ET.Element]:
+    def _find_element_by_local_name(self, element: ET.Element, path: str) -> Optional[ET.Element]:
         """Find element using local names (ignoring namespaces)."""
         if element is None:
             return None
         parts = path.split('/')
         current = element
+
         for part in parts:
             found = None
             for child in current:
@@ -254,117 +464,10 @@ class ChapsXmlParser:
             current = found
         return current
 
-    def _find_text(self, element: ET.Element, path: str) -> Optional[str]:
+    def _get_text(self, element: ET.Element, path: str) -> Optional[str]:
         """Find element text using local names."""
-        elem = self._find(element, path)
+        elem = self._find_element_by_local_name(element, path)
         return elem.text if elem is not None else None
-
-    def parse(self, raw_content: str) -> Dict[str, Any]:
-        """Parse CHAPS message content."""
-        # Handle JSON input
-        if isinstance(raw_content, dict):
-            return raw_content
-
-        if raw_content.strip().startswith('{'):
-            try:
-                return json.loads(raw_content)
-            except json.JSONDecodeError:
-                pass
-
-        # Parse XML
-        try:
-            if raw_content.startswith('\ufeff'):
-                raw_content = raw_content[1:]
-            root = ET.fromstring(raw_content)
-        except ET.ParseError as e:
-            logger.error(f"Failed to parse CHAPS XML: {e}")
-            raise ValueError(f"Invalid XML: {e}")
-
-        return self._parse_iso20022(root)
-
-    def _parse_iso20022(self, root: ET.Element) -> Dict[str, Any]:
-        """Parse CHAPS ISO 20022 structure."""
-        result = {'isChaps': True}
-
-        fi_transfer = self._find(root, 'FIToFICstmrCdtTrf')
-        if fi_transfer is None:
-            if self._strip_ns(root.tag) == 'FIToFICstmrCdtTrf':
-                fi_transfer = root
-
-        if fi_transfer is None:
-            return result
-
-        # Group Header
-        grp_hdr = self._find(fi_transfer, 'GrpHdr')
-        if grp_hdr is not None:
-            result['messageId'] = self._find_text(grp_hdr, 'MsgId')
-            result['creationDateTime'] = self._find_text(grp_hdr, 'CreDtTm')
-            result['settlementMethod'] = self._find_text(grp_hdr, 'SttlmInf/SttlmMtd')
-            result['settlementDate'] = self._find_text(grp_hdr, 'IntrBkSttlmDt')
-
-        # Credit Transfer Transaction
-        cdt_trf = self._find(fi_transfer, 'CdtTrfTxInf')
-        if cdt_trf is not None:
-            result.update(self._parse_transaction(cdt_trf))
-
-        return result
-
-    def _parse_transaction(self, tx: ET.Element) -> Dict[str, Any]:
-        """Parse credit transfer transaction."""
-        result = {}
-
-        # Payment ID
-        pmt_id = self._find(tx, 'PmtId')
-        if pmt_id is not None:
-            result['instructionId'] = self._find_text(pmt_id, 'InstrId')
-            result['endToEndId'] = self._find_text(pmt_id, 'EndToEndId')
-            result['uetr'] = self._find_text(pmt_id, 'UETR')
-
-        # Amount
-        result['amount'] = self._safe_decimal(self._find_text(tx, 'IntrBkSttlmAmt'))
-        result['currency'] = self._find_attr(tx, 'IntrBkSttlmAmt', 'Ccy') or 'GBP'
-
-        # Debtor
-        dbtr = self._find(tx, 'Dbtr')
-        if dbtr is not None:
-            result['debtorName'] = self._find_text(dbtr, 'Nm')
-            result['debtorAddress'] = self._find_text(dbtr, 'PstlAdr/AdrLine')
-
-        dbtr_acct = self._find(tx, 'DbtrAcct')
-        if dbtr_acct is not None:
-            result['debtorAccount'] = self._find_text(dbtr_acct, 'Id/Othr/Id')
-            result['debtorSortCode'] = self._find_text(dbtr_acct, 'Id/Othr/SchmeNm/Cd')
-
-        dbtr_agt = self._find(tx, 'DbtrAgt')
-        if dbtr_agt is not None:
-            result['debtorAgentBic'] = self._find_text(dbtr_agt, 'FinInstnId/BICFI')
-            result['debtorSortCode'] = result.get('debtorSortCode') or self._find_text(dbtr_agt, 'FinInstnId/ClrSysMmbId/MmbId')
-
-        # Creditor
-        cdtr = self._find(tx, 'Cdtr')
-        if cdtr is not None:
-            result['creditorName'] = self._find_text(cdtr, 'Nm')
-            result['creditorAddress'] = self._find_text(cdtr, 'PstlAdr/AdrLine')
-
-        cdtr_acct = self._find(tx, 'CdtrAcct')
-        if cdtr_acct is not None:
-            result['creditorAccount'] = self._find_text(cdtr_acct, 'Id/Othr/Id')
-            result['creditorSortCode'] = self._find_text(cdtr_acct, 'Id/Othr/SchmeNm/Cd')
-
-        cdtr_agt = self._find(tx, 'CdtrAgt')
-        if cdtr_agt is not None:
-            result['creditorAgentBic'] = self._find_text(cdtr_agt, 'FinInstnId/BICFI')
-            result['creditorSortCode'] = result.get('creditorSortCode') or self._find_text(cdtr_agt, 'FinInstnId/ClrSysMmbId/MmbId')
-
-        # Remittance Info
-        result['remittanceInfo'] = self._find_text(tx, 'RmtInf/Ustrd')
-
-        return result
-
-    def _find_attr(self, element: ET.Element, path: str, attr: str) -> Optional[str]:
-        """Find element attribute."""
-        elem = self._find(element, path)
-        return elem.get(attr) if elem is not None else None
 
     def _safe_decimal(self, value: Optional[str]) -> Optional[float]:
         """Safely convert string to decimal."""
@@ -376,21 +479,115 @@ class ChapsXmlParser:
             return None
 
 
-class ChapsExtractor(BaseExtractor):
-    """Extractor for CHAPS payment messages."""
+# =============================================================================
+# LEGACY XML PARSER (kept for backward compatibility, delegates to ISO 20022)
+# =============================================================================
 
-    MESSAGE_TYPE = "CHAPS"
-    SILVER_TABLE = "stg_chaps"
+class ChapsXmlParser:
+    """Legacy CHAPS XML parser - delegates to ChapsISO20022Parser.
+
+    This class is maintained for backward compatibility.
+    New code should use ChapsISO20022Parser directly.
+    """
 
     def __init__(self):
+        """Initialize with ISO 20022 parser."""
+        self._iso_parser = ChapsISO20022Parser()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse CHAPS XML - delegates to ISO 20022 parser."""
+        return self._iso_parser.parse(raw_content)
+
+    # Legacy method signatures for compatibility
+    NS_PATTERN = re.compile(r'\{[^}]+\}')
+
+    def _strip_ns(self, tag: str) -> str:
+        """Remove namespace from XML tag."""
+        return self.NS_PATTERN.sub('', tag)
+
+    def _find(self, element: ET.Element, path: str) -> Optional[ET.Element]:
+        """Find element using local names (ignoring namespaces)."""
+        return self._iso_parser._find_element_by_local_name(element, path)
+
+    def _find_text(self, element: ET.Element, path: str) -> Optional[str]:
+        """Find element text using local names."""
+        return self._iso_parser._get_text(element, path)
+
+    def _parse_iso20022(self, root: ET.Element) -> Dict[str, Any]:
+        """Parse CHAPS ISO 20022 structure."""
+        return self._iso_parser._parse_iso20022_standalone(root)
+
+    def _parse_transaction(self, tx: ET.Element) -> Dict[str, Any]:
+        """Parse credit transfer transaction."""
+        return self._iso_parser._parse_transaction_standalone(tx)
+
+    def _find_attr(self, element: ET.Element, path: str, attr: str) -> Optional[str]:
+        """Find element attribute."""
+        elem = self._find(element, path)
+        return elem.get(attr) if elem is not None else None
+
+    def _safe_decimal(self, value: Optional[str]) -> Optional[float]:
+        """Safely convert string to decimal."""
+        return self._iso_parser._safe_decimal(value)
+
+
+# =============================================================================
+# CHAPS EXTRACTOR
+# =============================================================================
+
+class ChapsExtractor(BaseExtractor):
+    """Extractor for CHAPS (Clearing House Automated Payment System) messages.
+
+    ISO 20022 INHERITANCE:
+        CHAPS inherits from pacs.008 (FI to FI Customer Credit Transfer).
+        The ChapsISO20022Parser inherits from Pacs008Parser.
+        Uses Bank of England RTGS/CHAPS usage guidelines.
+
+    Format Support:
+        1. ISO 20022 XML (pacs.008.001.08) - Current standard (BoE RTGS)
+        2. Legacy SWIFT MT block format (MT103-like) - For historical data processing
+
+    CHAPS-Specific Elements:
+        - UK Sort Codes - 6-digit clearing codes (GBDSC scheme)
+        - IBAN format: GBnnBBBBSSSSSSNNNNNNNN (22 chars)
+        - GBP currency (British Pounds Sterling)
+        - RTGS settlement via Bank of England
+
+    Database Tables:
+        - Bronze: bronze.raw_payment_messages
+        - Silver: silver.stg_chaps
+        - Gold: gold.cdm_payment_instruction + gold.cdm_payment_extension_chaps
+
+    Inheritance Hierarchy:
+        BaseExtractor -> ChapsExtractor
+        (Parser: Pacs008Parser -> ChapsISO20022Parser)
+    """
+
+    MESSAGE_TYPE = "CHAPS"
+    SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
+    DEFAULT_CURRENCY = "GBP"
+    CLEARING_SYSTEM = "GBDSC"
+
+    def __init__(self):
+        # Primary: ISO 20022 parser (current standard)
+        self.iso20022_parser = ChapsISO20022Parser()
+        # Legacy: SWIFT MT block format parser (for historical data)
         self.swift_parser = ChapsSwiftParser()
+        # Legacy: XML parser (now delegates to ISO 20022)
         self.xml_parser = ChapsXmlParser()
-        # Set parser attribute for zone_tasks.py compatibility - use self as the parser
-        # since ChapsExtractor.parse() auto-detects format (XML vs SWIFT MT)
+        # Set parser attribute for zone_tasks.py compatibility
         self.parser = self
 
     def parse(self, raw_content: str) -> Dict[str, Any]:
-        """Parse raw CHAPS content - auto-detect SWIFT MT vs XML format."""
+        """Parse raw CHAPS content - auto-detect format.
+
+        Format Detection:
+            1. ISO 20022 XML (pacs.008) - Primary for current messages
+            2. SWIFT MT block format ({1:...{4:...) - Legacy format
+            3. JSON - Pre-parsed content
+
+        Uses ChapsISO20022Parser (inherits from Pacs008Parser) for XML.
+        """
         if isinstance(raw_content, dict):
             return raw_content
 
@@ -398,11 +595,13 @@ class ChapsExtractor(BaseExtractor):
 
         # Auto-detect format
         if content.startswith('{1:') or content.startswith('{2:'):
-            # SWIFT MT block format
+            # SWIFT MT block format (legacy)
+            logger.debug("Detected CHAPS SWIFT MT block format")
             return self.swift_parser.parse(content)
         elif content.startswith('<') or content.startswith('<?xml'):
-            # XML format
-            return self.xml_parser.parse(content)
+            # ISO 20022 XML format (current standard)
+            logger.debug("Detected CHAPS ISO 20022 XML format")
+            return self.iso20022_parser.parse(content)
         elif content.startswith('{'):
             # JSON format - try to parse
             try:
@@ -412,8 +611,8 @@ class ChapsExtractor(BaseExtractor):
             except json.JSONDecodeError:
                 pass
 
-        # Default to SWIFT parser
-        return self.swift_parser.parse(content)
+        # Default to ISO 20022 parser
+        return self.iso20022_parser.parse(content)
 
     # =========================================================================
     # BRONZE EXTRACTION

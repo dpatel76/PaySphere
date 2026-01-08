@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.02">
+  <CstmrDrctDbtInitn>
+    <GrpHdr>
+      <MsgId>SEPA-PAIN008-E2E-20260108-001</MsgId>
+      <CreDtTm>2026-01-08T08:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>750.00</CtrlSum>
+      <InitgPty>
+        <Nm>SEPA Utility Provider GmbH</Nm>
+        <Id>
+          <OrgId>
+            <Othr>
+              <Id>DE98ZZZ09999999999</Id>
+              <SchmeNm><Prtry>SEPA</Prtry></SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+      </InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>SEPA-DD-PMT-20260108-001</PmtInfId>
+      <PmtMtd>DD</PmtMtd>
+      <BtchBookg>false</BtchBookg>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>750.00</CtrlSum>
+      <PmtTpInf>
+        <SvcLvl><Cd>SEPA</Cd></SvcLvl>
+        <LclInstrm><Cd>CORE</Cd></LclInstrm>
+        <SeqTp>RCUR</SeqTp>
+      </PmtTpInf>
+      <ReqdColltnDt>2026-01-20</ReqdColltnDt>
+      <Cdtr>
+        <Nm>SEPA Utility Provider GmbH</Nm>
+        <PstlAdr>
+          <Ctry>DE</Ctry>
+          <AdrLine>Utility Street 100</AdrLine>
+          <AdrLine>Munich 80333</AdrLine>
+        </PstlAdr>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><IBAN>DE89370400440532013000</IBAN></Id>
+        <Ccy>EUR</Ccy>
+      </CdtrAcct>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <CdtrSchmeId>
+        <Id>
+          <PrvtId>
+            <Othr>
+              <Id>DE98ZZZ09999999999</Id>
+              <SchmeNm><Prtry>SEPA</Prtry></SchmeNm>
+            </Othr>
+          </PrvtId>
+        </Id>
+      </CdtrSchmeId>
+      <DrctDbtTxInf>
+        <PmtId>
+          <InstrId>SEPA-DD-INSTR-001</InstrId>
+          <EndToEndId>SEPA-DD-E2E-20260108-001</EndToEndId>
+        </PmtId>
+        <InstdAmt Ccy="EUR">750.00</InstdAmt>
+        <ChrgBr>SLEV</ChrgBr>
+        <DrctDbtTx>
+          <MndtRltdInf>
+            <MndtId>SEPA-MNDT-2024-12345</MndtId>
+            <DtOfSgntr>2024-06-15</DtOfSgntr>
+            <AmdmntInd>false</AmdmntInd>
+          </MndtRltdInf>
+        </DrctDbtTx>
+        <DbtrAgt>
+          <FinInstnId>
+            <BICFI>DEUTDEFFXXX</BICFI>
+          </FinInstnId>
+        </DbtrAgt>
+        <Dbtr>
+          <Nm>SEPA Customer Hans Mueller</Nm>
+          <PstlAdr>
+            <Ctry>DE</Ctry>
+            <AdrLine>Customer Lane 50</AdrLine>
+            <AdrLine>Berlin 10115</AdrLine>
+          </PstlAdr>
+        </Dbtr>
+        <DbtrAcct>
+          <Id><IBAN>DE02120300000000202051</IBAN></Id>
+        </DbtrAcct>
+        <RmtInf>
+          <Ustrd>Electricity Bill January 2026 - Customer 12345</Ustrd>
+        </RmtInf>
+      </DrctDbtTxInf>
+    </PmtInf>
+  </CstmrDrctDbtInitn>
+</Document>

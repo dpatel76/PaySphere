@@ -56,83 +56,222 @@ const zoneColors: Record<string, { bg: string; border: string; text: string }> =
   report: { bg: '#e8f5e9', border: '#4caf50', text: '#1b5e20' },
 };
 
+// Standard Gold CDM entities used by most payment formats
+const standardGoldEntities = [
+  'cdm_payment_instruction',
+  'cdm_party',
+  'cdm_account',
+  'cdm_financial_institution',
+];
+
+// Normalized identifier tables added in ISO 20022 CDM enhancements
+const identifierTables = [
+  'cdm_party_identifier',
+  'cdm_account_identifier',
+  'cdm_fi_identifier',
+  'cdm_payment_identifier',
+];
+
 // Table routing - maps message types to their actual Bronze/Silver/Gold tables
-// Gold layer always includes ALL applicable CDM entities for complete lineage
+// Gold layer includes ALL applicable CDM entities + identifier tables for complete lineage
+// ISO 20022 formats now use shared Silver tables (stg_iso20022_pacs008, stg_iso20022_pain001, etc.)
 const tableRouting: Record<string, { bronze: string[]; silver: string[]; gold: string[] }> = {
+  // ==========================================
+  // ISO 20022 Core Formats
+  // ==========================================
   'pain.001': {
     bronze: ['raw_payment_messages'],
-    silver: ['stg_pain001'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution'],
+    silver: ['stg_iso20022_pain001'],  // Shared ISO 20022 table
+    gold: [...standardGoldEntities, ...identifierTables],
   },
   'pain.002': {
     bronze: ['raw_payment_messages'],
     silver: ['stg_pain002'],
-    gold: ['cdm_payment_status', 'cdm_payment_instruction', 'cdm_party'],
+    gold: ['cdm_payment_status', 'cdm_payment_instruction', 'cdm_party', ...identifierTables],
   },
   'pacs.008': {
     bronze: ['raw_payment_messages'],
-    silver: ['stg_pacs008'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution', 'cdm_fx_rate'],
+    silver: ['stg_iso20022_pacs008'],  // Shared ISO 20022 table
+    gold: [...standardGoldEntities, 'cdm_fx_rate', ...identifierTables],
+  },
+  'pacs.009': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_pacs009'],  // Shared ISO 20022 table
+    gold: [...standardGoldEntities, ...identifierTables],
   },
   'pacs.002': {
     bronze: ['raw_payment_messages'],
     silver: ['stg_pacs002'],
-    gold: ['cdm_payment_status', 'cdm_payment_instruction'],
+    gold: ['cdm_payment_status', 'cdm_payment_instruction', ...identifierTables],
   },
+  'camt.053': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_camt053'],  // Shared ISO 20022 table
+    gold: ['cdm_account_statement', 'cdm_transaction', 'cdm_account', ...identifierTables],
+  },
+
+  // ==========================================
+  // SWIFT MT Formats
+  // ==========================================
   'MT103': {
     bronze: ['raw_payment_messages'],
     silver: ['stg_mt103'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution'],
+    gold: [...standardGoldEntities, ...identifierTables],
   },
   'MT202': {
     bronze: ['raw_payment_messages'],
     silver: ['stg_mt202'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_financial_institution'],
+    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_financial_institution', ...identifierTables],
   },
+  'MT940': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_mt940'],
+    gold: ['cdm_account_statement', 'cdm_transaction', 'cdm_account', ...identifierTables],
+  },
+
+  // ==========================================
+  // US Regional Formats
+  // ==========================================
   'FEDWIRE': {
     bronze: ['raw_payment_messages'],
-    silver: ['stg_fedwire'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='FEDWIRE'
+    gold: [...standardGoldEntities, ...identifierTables],
   },
   'ACH': {
     bronze: ['raw_payment_messages'],
     silver: ['stg_ach'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution'],
+    gold: [...standardGoldEntities, ...identifierTables],
   },
+  'CHIPS': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='CHIPS'
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'RTP': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='RTP'
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'FEDNOW': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='FEDNOW'
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+
+  // ==========================================
+  // EU Regional Formats
+  // ==========================================
   'SEPA': {
     bronze: ['raw_payment_messages'],
-    silver: ['stg_sepa'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution'],
+    silver: ['stg_iso20022_pain001'],  // Uses shared pain.001 table with source_format='SEPA'
+    gold: [...standardGoldEntities, ...identifierTables],
   },
+  'TARGET2': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_pacs009'],  // Uses shared pacs.009 table with source_format='TARGET2'
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+
+  // ==========================================
+  // UK Regional Formats
+  // ==========================================
   'CHAPS': {
     bronze: ['raw_payment_messages'],
-    silver: ['stg_chaps'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='CHAPS'
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'FPS': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='FPS'
+    gold: [...standardGoldEntities, ...identifierTables],
   },
   'BACS': {
     bronze: ['raw_payment_messages'],
     silver: ['stg_bacs'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account'],
+    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', ...identifierTables],
   },
-  'RTP': {
+
+  // ==========================================
+  // Asia-Pacific Regional Formats
+  // ==========================================
+  'NPP': {
     bronze: ['raw_payment_messages'],
-    silver: ['stg_rtp'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='NPP'
+    gold: [...standardGoldEntities, ...identifierTables],
   },
-  'FEDNOW': {
+  'MEPS_PLUS': {
     bronze: ['raw_payment_messages'],
-    silver: ['stg_fednow'],
-    gold: ['cdm_payment_instruction', 'cdm_party', 'cdm_account', 'cdm_financial_institution'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='MEPS_PLUS'
+    gold: [...standardGoldEntities, ...identifierTables],
   },
-  'camt.053': {
+  'RTGS_HK': {
     bronze: ['raw_payment_messages'],
-    silver: ['stg_camt053'],
-    gold: ['cdm_account_statement', 'cdm_transaction', 'cdm_account'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='RTGS_HK'
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'CNAPS': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_cnaps'],
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'BOJNET': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_bojnet'],
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'KFTC': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_kftc'],
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'INSTAPAY': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='INSTAPAY'
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+
+  // ==========================================
+  // Middle East Regional Formats
+  // ==========================================
+  'UAEFTS': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_iso20022_pacs008'],  // Uses shared pacs.008 table with source_format='UAEFTS'
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'SARIE': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_sarie'],
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+
+  // ==========================================
+  // Latin America & Other Regional Formats
+  // ==========================================
+  'PIX': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_pix'],
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'UPI': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_upi'],
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'PROMPTPAY': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_promptpay'],
+    gold: [...standardGoldEntities, ...identifierTables],
+  },
+  'PAYNOW': {
+    bronze: ['raw_payment_messages'],
+    silver: ['stg_paynow'],
+    gold: [...standardGoldEntities, ...identifierTables],
   },
 };
 
 // Friendly display names for CDM entity tables
 const cdmEntityLabels: Record<string, string> = {
+  // Core CDM entities
   'cdm_payment_instruction': 'Payment Instruction',
   'cdm_party': 'Party',
   'cdm_account': 'Account',
@@ -141,23 +280,55 @@ const cdmEntityLabels: Record<string, string> = {
   'cdm_fx_rate': 'FX Rate',
   'cdm_account_statement': 'Account Statement',
   'cdm_transaction': 'Transaction',
+  // Normalized identifier tables (ISO 20022 CDM enhancements)
+  'cdm_party_identifier': 'Party Identifier',
+  'cdm_account_identifier': 'Account Identifier',
+  'cdm_fi_identifier': 'FI Identifier',
+  'cdm_payment_identifier': 'Payment Identifier',
+};
+
+// All 29 supported message formats
+const allMessageFormats = [
+  'pain.001', 'pain.002', 'pacs.008', 'pacs.009', 'pacs.002', 'camt.053',
+  'MT103', 'MT202', 'MT940',
+  'FEDWIRE', 'ACH', 'CHIPS', 'RTP', 'FEDNOW',
+  'SEPA', 'TARGET2',
+  'CHAPS', 'FPS', 'BACS',
+  'NPP', 'MEPS_PLUS', 'RTGS_HK', 'CNAPS', 'BOJNET', 'KFTC', 'INSTAPAY',
+  'UAEFTS', 'SARIE',
+  'PIX', 'UPI', 'PROMPTPAY', 'PAYNOW',
+];
+
+// Get all unique Silver tables from tableRouting
+const getAllSilverTables = (): string[] => {
+  const tables = new Set<string>();
+  Object.values(tableRouting).forEach(routing => {
+    routing.silver.forEach(t => tables.add(t));
+  });
+  return Array.from(tables);
 };
 
 // CDM Entity backward routing - maps CDM entities to their source message types and tables
+// Updated to include all 29 formats and the shared ISO 20022 Silver tables
 const entityRouting: Record<string, { messageTypes: string[]; silverTables: string[]; bronzeTables: string[] }> = {
   'cdm_payment_instruction': {
-    messageTypes: ['pain.001', 'pacs.008', 'MT103', 'MT202', 'FEDWIRE', 'ACH', 'SEPA', 'CHAPS', 'BACS', 'RTP', 'FEDNOW'],
-    silverTables: ['stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_mt202', 'stg_fedwire', 'stg_ach', 'stg_sepa', 'stg_chaps', 'stg_bacs', 'stg_rtp', 'stg_fednow'],
+    messageTypes: allMessageFormats.filter(f => !['pain.002', 'pacs.002', 'camt.053', 'MT940'].includes(f)),
+    silverTables: getAllSilverTables().filter(t => !['stg_pain002', 'stg_pacs002', 'stg_iso20022_camt053', 'stg_mt940'].includes(t)),
     bronzeTables: ['raw_payment_messages'],
   },
   'cdm_party': {
-    messageTypes: ['pain.001', 'pacs.008', 'MT103', 'MT202', 'FEDWIRE', 'ACH', 'SEPA'],
-    silverTables: ['stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_mt202', 'stg_fedwire', 'stg_ach', 'stg_sepa'],
+    messageTypes: allMessageFormats.filter(f => !['pain.002', 'pacs.002', 'camt.053', 'MT940'].includes(f)),
+    silverTables: getAllSilverTables().filter(t => !['stg_pain002', 'stg_pacs002', 'stg_iso20022_camt053', 'stg_mt940'].includes(t)),
     bronzeTables: ['raw_payment_messages'],
   },
   'cdm_account': {
-    messageTypes: ['pain.001', 'pacs.008', 'MT103', 'FEDWIRE', 'ACH', 'SEPA', 'RTP', 'FEDNOW'],
-    silverTables: ['stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_fedwire', 'stg_ach', 'stg_sepa', 'stg_rtp', 'stg_fednow'],
+    messageTypes: allMessageFormats.filter(f => !['pain.002', 'pacs.002', 'MT202'].includes(f)),
+    silverTables: getAllSilverTables().filter(t => !['stg_pain002', 'stg_pacs002', 'stg_mt202'].includes(t)),
+    bronzeTables: ['raw_payment_messages'],
+  },
+  'cdm_financial_institution': {
+    messageTypes: allMessageFormats.filter(f => !['pain.002', 'pacs.002', 'camt.053', 'MT940', 'BACS'].includes(f)),
+    silverTables: getAllSilverTables().filter(t => !['stg_pain002', 'stg_pacs002', 'stg_iso20022_camt053', 'stg_mt940', 'stg_bacs'].includes(t)),
     bronzeTables: ['raw_payment_messages'],
   },
   'cdm_payment_status': {
@@ -166,13 +337,39 @@ const entityRouting: Record<string, { messageTypes: string[]; silverTables: stri
     bronzeTables: ['raw_payment_messages'],
   },
   'cdm_fx_rate': {
-    messageTypes: ['pacs.008', 'MT103'],
-    silverTables: ['stg_pacs008', 'stg_mt103'],
+    messageTypes: ['pacs.008', 'MT103', 'FEDWIRE', 'CHIPS', 'CHAPS', 'FPS', 'NPP', 'MEPS_PLUS', 'RTGS_HK', 'UAEFTS', 'INSTAPAY'],
+    silverTables: ['stg_iso20022_pacs008', 'stg_mt103'],
     bronzeTables: ['raw_payment_messages'],
   },
-  'cdm_financial_institution': {
-    messageTypes: ['MT103', 'MT202', 'pacs.008'],
-    silverTables: ['stg_mt103', 'stg_mt202', 'stg_pacs008'],
+  'cdm_account_statement': {
+    messageTypes: ['camt.053', 'MT940'],
+    silverTables: ['stg_iso20022_camt053', 'stg_mt940'],
+    bronzeTables: ['raw_payment_messages'],
+  },
+  'cdm_transaction': {
+    messageTypes: ['camt.053', 'MT940'],
+    silverTables: ['stg_iso20022_camt053', 'stg_mt940'],
+    bronzeTables: ['raw_payment_messages'],
+  },
+  // Normalized identifier tables
+  'cdm_party_identifier': {
+    messageTypes: allMessageFormats,
+    silverTables: getAllSilverTables(),
+    bronzeTables: ['raw_payment_messages'],
+  },
+  'cdm_account_identifier': {
+    messageTypes: allMessageFormats,
+    silverTables: getAllSilverTables(),
+    bronzeTables: ['raw_payment_messages'],
+  },
+  'cdm_fi_identifier': {
+    messageTypes: allMessageFormats,
+    silverTables: getAllSilverTables(),
+    bronzeTables: ['raw_payment_messages'],
+  },
+  'cdm_payment_identifier': {
+    messageTypes: allMessageFormats,
+    silverTables: getAllSilverTables(),
     bronzeTables: ['raw_payment_messages'],
   },
 };
@@ -991,6 +1188,175 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
         // === FINANCIAL INSTITUTION ===
         { bronze: 'DbtrAgt/FinInstnId/ClrSysMmbId/MmbId', silver: 'debtor_routing', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
         { bronze: 'CdtrAgt/FinInstnId/ClrSysMmbId/MmbId', silver: 'creditor_routing', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+      ],
+    },
+    // ==========================================
+    // Additional Message Formats (ISO 20022 shared Silver tables)
+    // ==========================================
+    'TARGET2': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'GrpHdr/CreDtTm', silver: 'grp_hdr_cre_dt_tm', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'creation_datetime' },
+        { bronze: 'CdtTrfTxInf/PmtId/EndToEndId', silver: 'pmt_id_end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'CdtTrfTxInf/IntrBkSttlmAmt', silver: 'intr_bk_sttlm_amt', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'interbank_settlement_amount' },
+        { bronze: 'CdtTrfTxInf/DbtrAgt/FinInstnId/BICFI', silver: 'dbtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+        { bronze: 'CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI', silver: 'cdtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+      ],
+    },
+    'FPS': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'CdtTrfTxInf/PmtId/EndToEndId', silver: 'pmt_id_end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'CdtTrfTxInf/IntrBkSttlmAmt', silver: 'intr_bk_sttlm_amt', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'interbank_settlement_amount' },
+        { bronze: 'CdtTrfTxInf/Dbtr/Nm', silver: 'dbtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/Cdtr/Nm', silver: 'cdtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/DbtrAcct/Id/Othr/Id', silver: 'dbtr_acct_id_othr_id', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'account_number' },
+        { bronze: 'CdtTrfTxInf/CdtrAcct/Id/Othr/Id', silver: 'cdtr_acct_id_othr_id', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'account_number' },
+        { bronze: 'CdtTrfTxInf/DbtrAgt/FinInstnId/ClrSysMmbId/MmbId', silver: 'dbtr_agt_clr_sys_mmb_id', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+        { bronze: 'CdtTrfTxInf/CdtrAgt/FinInstnId/ClrSysMmbId/MmbId', silver: 'cdtr_agt_clr_sys_mmb_id', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+      ],
+    },
+    'CHIPS': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'CdtTrfTxInf/PmtId/EndToEndId', silver: 'pmt_id_end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'CdtTrfTxInf/PmtId/ClrSysRef', silver: 'pmt_id_clr_sys_ref', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'clearing_system_reference' },
+        { bronze: 'CdtTrfTxInf/IntrBkSttlmAmt', silver: 'intr_bk_sttlm_amt', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'interbank_settlement_amount' },
+        { bronze: 'CdtTrfTxInf/Dbtr/Nm', silver: 'dbtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/Cdtr/Nm', silver: 'cdtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/DbtrAgt/FinInstnId/ClrSysMmbId/MmbId', silver: 'dbtr_agt_clr_sys_mmb_id', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+        { bronze: 'CdtTrfTxInf/CdtrAgt/FinInstnId/ClrSysMmbId/MmbId', silver: 'cdtr_agt_clr_sys_mmb_id', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+      ],
+    },
+    'NPP': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'CdtTrfTxInf/PmtId/EndToEndId', silver: 'pmt_id_end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'CdtTrfTxInf/IntrBkSttlmAmt', silver: 'intr_bk_sttlm_amt', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'interbank_settlement_amount' },
+        { bronze: 'CdtTrfTxInf/Dbtr/Nm', silver: 'dbtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/Cdtr/Nm', silver: 'cdtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/DbtrAcct/Prxy/Id', silver: 'dbtr_acct_prxy_id', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'proxy_id' },
+        { bronze: 'CdtTrfTxInf/CdtrAcct/Prxy/Id', silver: 'cdtr_acct_prxy_id', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'proxy_id' },
+        { bronze: 'CdtTrfTxInf/DbtrAgt/FinInstnId/BICFI', silver: 'dbtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+        { bronze: 'CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI', silver: 'cdtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+      ],
+    },
+    'MEPS_PLUS': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'CdtTrfTxInf/PmtId/EndToEndId', silver: 'pmt_id_end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'CdtTrfTxInf/IntrBkSttlmAmt', silver: 'intr_bk_sttlm_amt', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'interbank_settlement_amount' },
+        { bronze: 'CdtTrfTxInf/Dbtr/Nm', silver: 'dbtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/Cdtr/Nm', silver: 'cdtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/DbtrAgt/FinInstnId/BICFI', silver: 'dbtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+        { bronze: 'CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI', silver: 'cdtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+      ],
+    },
+    'RTGS_HK': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'CdtTrfTxInf/PmtId/EndToEndId', silver: 'pmt_id_end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'CdtTrfTxInf/IntrBkSttlmAmt', silver: 'intr_bk_sttlm_amt', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'interbank_settlement_amount' },
+        { bronze: 'CdtTrfTxInf/Dbtr/Nm', silver: 'dbtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/Cdtr/Nm', silver: 'cdtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/DbtrAgt/FinInstnId/BICFI', silver: 'dbtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+        { bronze: 'CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI', silver: 'cdtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+      ],
+    },
+    'UAEFTS': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'CdtTrfTxInf/PmtId/EndToEndId', silver: 'pmt_id_end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'CdtTrfTxInf/IntrBkSttlmAmt', silver: 'intr_bk_sttlm_amt', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'interbank_settlement_amount' },
+        { bronze: 'CdtTrfTxInf/Dbtr/Nm', silver: 'dbtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/Cdtr/Nm', silver: 'cdtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/DbtrAgt/FinInstnId/BICFI', silver: 'dbtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+        { bronze: 'CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI', silver: 'cdtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+      ],
+    },
+    'INSTAPAY': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'CdtTrfTxInf/PmtId/EndToEndId', silver: 'pmt_id_end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'CdtTrfTxInf/IntrBkSttlmAmt', silver: 'intr_bk_sttlm_amt', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'interbank_settlement_amount' },
+        { bronze: 'CdtTrfTxInf/Dbtr/Nm', silver: 'dbtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/Cdtr/Nm', silver: 'cdtr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'CdtTrfTxInf/DbtrAgt/FinInstnId/BICFI', silver: 'dbtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+        { bronze: 'CdtTrfTxInf/CdtrAgt/FinInstnId/BICFI', silver: 'cdtr_agt_bic', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'bic' },
+      ],
+    },
+    // JSON-based formats
+    'PIX': {
+      mappings: [
+        { bronze: 'transactionId', silver: 'transaction_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'creationDate', silver: 'creation_date', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'creation_datetime' },
+        { bronze: 'endToEndId', silver: 'end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'amount', silver: 'amount', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'instructed_amount' },
+        { bronze: 'debtor.name', silver: 'debtor_name', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'creditor.name', silver: 'creditor_name', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'debtor.account.number', silver: 'debtor_account', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'account_number' },
+        { bronze: 'creditor.pixKey', silver: 'creditor_pix_key', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'proxy_id' },
+        { bronze: 'debtor.ispbCode', silver: 'debtor_ispb', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+        { bronze: 'creditor.ispbCode', silver: 'creditor_ispb', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+      ],
+    },
+    'UPI': {
+      mappings: [
+        { bronze: 'txnId', silver: 'txn_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'txnDate', silver: 'txn_date', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'creation_datetime' },
+        { bronze: 'refId', silver: 'ref_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'amount', silver: 'amount', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'instructed_amount' },
+        { bronze: 'payer.name', silver: 'payer_name', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'payee.name', silver: 'payee_name', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'payer.vpa', silver: 'payer_vpa', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'proxy_id' },
+        { bronze: 'payee.vpa', silver: 'payee_vpa', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'proxy_id' },
+        { bronze: 'payer.ifsc', silver: 'payer_ifsc', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+        { bronze: 'payee.ifsc', silver: 'payee_ifsc', goldEntity: 'cdm_financial_institution', goldEntityLabel: 'Financial Institution', goldField: 'national_clearing_code' },
+      ],
+    },
+    'PROMPTPAY': {
+      mappings: [
+        { bronze: 'transactionId', silver: 'transaction_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'endToEndId', silver: 'end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'amount', silver: 'amount', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'instructed_amount' },
+        { bronze: 'senderName', silver: 'sender_name', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'receiverName', silver: 'receiver_name', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'senderAccount', silver: 'sender_account', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'account_number' },
+        { bronze: 'receiverProxyId', silver: 'receiver_proxy_id', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'proxy_id' },
+      ],
+    },
+    'PAYNOW': {
+      mappings: [
+        { bronze: 'transactionId', silver: 'transaction_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'message_id' },
+        { bronze: 'endToEndId', silver: 'end_to_end_id', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'end_to_end_id' },
+        { bronze: 'amount', silver: 'amount', goldEntity: 'cdm_payment_instruction', goldEntityLabel: 'Payment Instruction', goldField: 'instructed_amount' },
+        { bronze: 'senderName', silver: 'sender_name', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'receiverName', silver: 'receiver_name', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'senderAccount', silver: 'sender_account', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'account_number' },
+        { bronze: 'receiverProxyId', silver: 'receiver_proxy_id', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'proxy_id' },
+      ],
+    },
+    // Statement formats
+    'camt.053': {
+      mappings: [
+        { bronze: 'GrpHdr/MsgId', silver: 'grp_hdr_msg_id', goldEntity: 'cdm_account_statement', goldEntityLabel: 'Account Statement', goldField: 'statement_id' },
+        { bronze: 'Stmt/Id', silver: 'stmt_id', goldEntity: 'cdm_account_statement', goldEntityLabel: 'Account Statement', goldField: 'statement_number' },
+        { bronze: 'Stmt/CreDtTm', silver: 'stmt_cre_dt_tm', goldEntity: 'cdm_account_statement', goldEntityLabel: 'Account Statement', goldField: 'creation_datetime' },
+        { bronze: 'Stmt/Acct/Id/IBAN', silver: 'acct_id_iban', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'iban' },
+        { bronze: 'Stmt/Acct/Ownr/Nm', silver: 'acct_ownr_nm', goldEntity: 'cdm_party', goldEntityLabel: 'Party', goldField: 'name' },
+        { bronze: 'Stmt/Bal/Amt', silver: 'bal_amt', goldEntity: 'cdm_account_statement', goldEntityLabel: 'Account Statement', goldField: 'balance_amount' },
+        { bronze: 'Stmt/Ntry/Amt', silver: 'ntry_amt', goldEntity: 'cdm_transaction', goldEntityLabel: 'Transaction', goldField: 'amount' },
+      ],
+    },
+    'MT940': {
+      mappings: [
+        { bronze: ':20:', silver: 'transaction_ref', goldEntity: 'cdm_account_statement', goldEntityLabel: 'Account Statement', goldField: 'statement_id' },
+        { bronze: ':25:', silver: 'account_id', goldEntity: 'cdm_account', goldEntityLabel: 'Account', goldField: 'account_number' },
+        { bronze: ':28C:', silver: 'statement_number', goldEntity: 'cdm_account_statement', goldEntityLabel: 'Account Statement', goldField: 'statement_number' },
+        { bronze: ':60F:', silver: 'opening_balance', goldEntity: 'cdm_account_statement', goldEntityLabel: 'Account Statement', goldField: 'opening_balance' },
+        { bronze: ':62F:', silver: 'closing_balance', goldEntity: 'cdm_account_statement', goldEntityLabel: 'Account Statement', goldField: 'closing_balance' },
+        { bronze: ':61:', silver: 'entry_amount', goldEntity: 'cdm_transaction', goldEntityLabel: 'Transaction', goldField: 'amount' },
+        { bronze: ':86:', silver: 'entry_info', goldEntity: 'cdm_transaction', goldEntityLabel: 'Transaction', goldField: 'additional_info' },
       ],
     },
   };

@@ -53,26 +53,72 @@ class DynamicMapper:
             }
         return self._format_cache[format_id_upper]
 
-    def _get_silver_mappings(self, format_id: str) -> List[Dict[str, Any]]:
-        """Get Silver field mappings from database (case-insensitive lookup).
+    def _get_silver_mappings(self, format_id: str, use_inheritance: bool = True) -> List[Dict[str, Any]]:
+        """Get Silver field mappings from database with ISO 20022 inheritance support.
 
         Returns mappings with both source_path (XPath for documentation) and
         parser_path (dot-notation for extraction). If parser_path is not set,
         falls back to source_path.
+
+        ISO 20022 Inheritance:
+            When use_inheritance=True, mappings are resolved using the
+            mapping.get_effective_silver_mappings() function which automatically
+            includes inherited mappings from parent formats (e.g., pacs.008.base).
+
+            Example: FEDWIRE inherits from pacs.008.base
+            - Direct FEDWIRE mappings take precedence
+            - Unmapped fields fall back to pacs.008.base mappings
+
+        Args:
+            format_id: Message format identifier (e.g., 'FEDWIRE', 'pain.001')
+            use_inheritance: If True, include inherited mappings from parent formats
+
+        Returns:
+            List of mapping dictionaries with target_column, source_path, etc.
         """
         format_id_upper = format_id.upper()
-        if format_id_upper not in self._mapping_cache:
+        cache_key = f"{format_id_upper}:{'inherit' if use_inheritance else 'direct'}"
+
+        if cache_key not in self._mapping_cache:
             cursor = self.conn.cursor()
-            cursor.execute("""
-                SELECT target_column, source_path, data_type, max_length,
-                       is_required, default_value, transform_function, ordinal_position,
-                       parser_path
-                FROM mapping.silver_field_mappings
-                WHERE UPPER(format_id) = %s AND is_active = TRUE
-                ORDER BY ordinal_position
-            """, (format_id_upper,))
+
+            if use_inheritance:
+                # Use the effective mappings view/function which resolves inheritance
+                # NOTE: format_id comparison is case-insensitive (UPPER) for ISO 20022 formats
+                cursor.execute("""
+                    SELECT
+                        em.target_column,
+                        em.source_path,
+                        sfm.data_type,
+                        sfm.max_length,
+                        COALESCE(em.is_required, sfm.is_required, FALSE) as is_required,
+                        COALESCE(em.default_value, sfm.default_value) as default_value,
+                        sfm.transform_function,
+                        sfm.ordinal_position,
+                        COALESCE(em.parser_path, sfm.parser_path) as parser_path,
+                        em.is_inherited,
+                        em.effective_from_format
+                    FROM mapping.v_effective_silver_mappings em
+                    LEFT JOIN mapping.silver_field_mappings sfm
+                        ON UPPER(sfm.format_id) = UPPER(em.effective_from_format)
+                        AND sfm.target_column = em.target_column
+                        AND sfm.is_active = TRUE
+                    WHERE UPPER(em.format_id) = %s
+                    ORDER BY sfm.ordinal_position NULLS LAST
+                """, (format_id_upper,))
+            else:
+                # Direct mappings only (no inheritance)
+                cursor.execute("""
+                    SELECT target_column, source_path, data_type, max_length,
+                           is_required, default_value, transform_function, ordinal_position,
+                           parser_path, FALSE as is_inherited, format_id as effective_from_format
+                    FROM mapping.silver_field_mappings
+                    WHERE UPPER(format_id) = %s AND is_active = TRUE
+                    ORDER BY ordinal_position
+                """, (format_id_upper,))
+
             rows = cursor.fetchall()
-            self._mapping_cache[format_id_upper] = [
+            self._mapping_cache[cache_key] = [
                 {
                     'target_column': row[0],
                     'source_path': row[1],  # XPath for documentation/lineage
@@ -82,11 +128,22 @@ class DynamicMapper:
                     'default_value': row[5],
                     'transform_function': row[6],
                     'ordinal_position': row[7],
-                    'parser_path': row[8]  # Dot-notation for extraction
+                    'parser_path': row[8],  # Dot-notation for extraction
+                    'is_inherited': row[9] if len(row) > 9 else False,
+                    'inherited_from': row[10] if len(row) > 10 else None
                 }
                 for row in rows
             ]
-        return self._mapping_cache[format_id_upper]
+
+            # Log inheritance info for debugging
+            inherited_count = sum(1 for m in self._mapping_cache[cache_key] if m.get('is_inherited'))
+            if inherited_count > 0:
+                logger.debug(
+                    f"Loaded {len(self._mapping_cache[cache_key])} Silver mappings for {format_id_upper} "
+                    f"({inherited_count} inherited from parent format)"
+                )
+
+        return self._mapping_cache[cache_key]
 
     def _resolve_path(self, data: Dict[str, Any], path: str) -> Any:
         """
@@ -224,8 +281,9 @@ class DynamicMapper:
                 except ValueError:
                     pass
             return value
-        elif data_type == 'ARRAY':
+        elif data_type == 'ARRAY' or (data_type and ('[]' in data_type or data_type.lower() == 'array')):
             # Convert Python list to PostgreSQL array literal {val1,val2}
+            # Handle multiple array type formats: ARRAY, TEXT[], VARCHAR[], array, etc.
             if isinstance(value, list):
                 # Escape any commas or braces in values
                 escaped = []
@@ -285,6 +343,8 @@ class DynamicMapper:
                 value = batch_id
             elif path == '_TIMESTAMP':
                 value = datetime.utcnow()
+            elif path == '_SOURCE_FORMAT' or path == '_sourceFormat':
+                value = format_id
             else:
                 # Resolve from raw content using parser_path (dot-notation)
                 value = self._resolve_path(raw_content, path)

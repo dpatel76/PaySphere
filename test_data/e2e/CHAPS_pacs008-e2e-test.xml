@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>CHAPS-PACS008-E2E-20260108-001</MsgId>
+      <CreDtTm>2026-01-08T09:30:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys><Cd>CHK</Cd></ClrSys>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>CHAPS-INSTR-001</InstrId>
+        <EndToEndId>CHAPS-E2E-20260108-001</EndToEndId>
+        <TxId>CHAPS-TXN-20260108-001</TxId>
+        <UETR>e5f6a7b8-c9d0-1234-ef56-789012345678</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <SvcLvl><Prtry>CHAPS</Prtry></SvcLvl>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="GBP">500000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-08</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>LOYDGB2LXXX</BICFI>
+          <Nm>Lloyds Bank plc</Nm>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>BABORB21XXX</BICFI>
+          <Nm>Barclays Bank UK PLC</Nm>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <Nm>CHAPS Debtor Ltd</Nm>
+        <PstlAdr>
+          <Ctry>GB</Ctry>
+          <AdrLine>25 Gresham Street</AdrLine>
+          <AdrLine>London EC2V 7HN</AdrLine>
+        </PstlAdr>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>12345678</Id>
+            <SchmeNm><Cd>BBAN</Cd></SchmeNm>
+          </Othr>
+        </Id>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>LOYDGB2LXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>GBDSC</Cd></ClrSysId>
+            <MmbId>300015</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>BABORB21XXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId><Cd>GBDSC</Cd></ClrSysId>
+            <MmbId>200415</MmbId>
+          </ClrSysMmbId>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <Nm>CHAPS Creditor Corporation</Nm>
+        <PstlAdr>
+          <Ctry>GB</Ctry>
+          <AdrLine>1 Churchill Place</AdrLine>
+          <AdrLine>London E14 5HP</AdrLine>
+        </PstlAdr>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>87654321</Id>
+            <SchmeNm><Cd>BBAN</Cd></SchmeNm>
+          </Othr>
+        </Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>CHAPS Payment - Property Purchase Completion</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>
