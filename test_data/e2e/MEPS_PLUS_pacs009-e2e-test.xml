@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08">
+  <FICdtTrf>
+    <GrpHdr>
+      <MsgId>PACS009-E2E-20260108-001</MsgId>
+      <CreDtTm>2026-01-08T10:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys><Cd>TGT</Cd></ClrSys>
+      </SttlmInf>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>PACS009-INSTR-001</InstrId>
+        <EndToEndId>PACS009-E2E-20260108-001</EndToEndId>
+        <TxId>PACS009-TXN-20260108-001</TxId>
+        <UETR>f6a7b8c9-d0e1-2345-fab6-789012345678</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <SvcLvl><Cd>URGP</Cd></SvcLvl>
+        <ClrChanl>RTGS</ClrChanl>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="EUR">10000000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-08</IntrBkSttlmDt>
+      <ChrgBr>SHAR</ChrgBr>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>BNPAFRPPXXX</BICFI>
+          <Nm>BNP Paribas SA</Nm>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+          <Nm>Deutsche Bank AG</Nm>
+        </FinInstnId>
+      </InstdAgt>
+      <Dbtr>
+        <FinInstnId>
+          <BICFI>BNPAFRPPXXX</BICFI>
+          <Nm>BNP Paribas SA</Nm>
+          <PstlAdr>
+            <Ctry>FR</Ctry>
+            <AdrLine>16 Boulevard des Italiens</AdrLine>
+            <AdrLine>Paris 75009</AdrLine>
+          </PstlAdr>
+        </FinInstnId>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><Othr><Id>BNPAFRPPXXX-RTGS</Id></Othr></Id>
+      </DbtrAcct>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <FinInstnId>
+          <BICFI>DEUTDEFFXXX</BICFI>
+          <Nm>Deutsche Bank AG</Nm>
+          <PstlAdr>
+            <Ctry>DE</Ctry>
+            <AdrLine>Taunusanlage 12</AdrLine>
+            <AdrLine>Frankfurt am Main 60325</AdrLine>
+          </PstlAdr>
+        </FinInstnId>
+      </Cdtr>
+      <CdtrAcct>
+        <Id><Othr><Id>DEUTDEFFXXX-RTGS</Id></Othr></Id>
+      </CdtrAcct>
+      <RmtInf>
+        <Ustrd>FI Credit Transfer - Liquidity Management</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FICdtTrf>
+</Document>

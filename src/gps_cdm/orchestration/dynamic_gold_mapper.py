@@ -4,14 +4,33 @@ Dynamic Gold Mapper - Uses database mappings to populate ALL Gold tables.
 This module reads from mapping.gold_field_mappings to determine which Silver
 columns should be written to which Gold tables (CDM core + extensions).
 
-Gold Tables:
-- cdm_payment_instruction: Main payment record (for payment messages)
-- cdm_account_statement: Statement record (for camt.053, MT940, etc.)
-- cdm_party: Debtor, Creditor, Ultimate parties
-- cdm_account: Debtor/Creditor accounts
-- cdm_financial_institution: Agent banks
-- cdm_payment_extension_*: Format-specific extensions
-- cdm_statement_extension: Statement-specific extensions
+Gold Tables (ISO 20022 Semantic):
+- Payment Initiation (PAIN):
+  - cdm_pain_customer_credit_transfer_initiation (pain.001)
+  - cdm_pain_customer_direct_debit_initiation (pain.008)
+  - cdm_pain_customer_payment_status_report (pain.002)
+
+- Payments Clearing & Settlement (PACS):
+  - cdm_pacs_fi_customer_credit_transfer (pacs.008) - 40+ formats
+  - cdm_pacs_fi_credit_transfer (pacs.009) - 14+ formats
+  - cdm_pacs_fi_payment_status_report (pacs.002) - 16+ formats
+  - cdm_pacs_payment_return (pacs.004) - 7+ formats
+  - cdm_pacs_fi_direct_debit (pacs.003)
+
+- Cash Management (CAMT):
+  - cdm_camt_bank_to_customer_statement (camt.053, MT940)
+  - cdm_camt_bank_to_customer_account_report (camt.052, MT942)
+  - cdm_camt_bank_to_customer_debit_credit_notification (camt.054)
+  - cdm_camt_fi_payment_cancellation_request (camt.056)
+
+- Legacy Tables (still supported for backwards compatibility):
+  - cdm_payment_instruction: Generic payment record
+  - cdm_account_statement: Generic statement record
+  - cdm_party: Debtor, Creditor, Ultimate parties
+  - cdm_account: Debtor/Creditor accounts
+  - cdm_financial_institution: Agent banks
+  - cdm_payment_extension_*: Format-specific extensions
+  - cdm_statement_extension: Statement-specific extensions
 """
 
 import logging
@@ -597,11 +616,27 @@ class DynamicGoldMapper:
         """Check if a record has meaningful data to insert."""
         # Key fields that indicate the record has data
         key_fields = {
+            # Legacy tables
             'cdm_party': ['name'],
             'cdm_account': ['account_number', 'iban'],
             'cdm_financial_institution': ['bic', 'lei', 'institution_name'],
             'cdm_payment_instruction': ['instruction_id'],
             'cdm_account_statement': ['statement_id'],
+            # PAIN tables - check for message_id or key identifiers
+            'cdm_pain_customer_credit_transfer_initiation': ['message_id', 'initiation_id'],
+            'cdm_pain_customer_direct_debit_initiation': ['message_id', 'initiation_id'],
+            'cdm_pain_customer_payment_status_report': ['message_id', 'status_report_id'],
+            # PACS tables - check for message_id or key identifiers
+            'cdm_pacs_fi_customer_credit_transfer': ['message_id', 'transfer_id'],
+            'cdm_pacs_fi_credit_transfer': ['message_id', 'transfer_id'],
+            'cdm_pacs_fi_payment_status_report': ['message_id', 'status_report_id'],
+            'cdm_pacs_payment_return': ['message_id', 'return_id'],
+            'cdm_pacs_fi_direct_debit': ['message_id', 'direct_debit_id'],
+            # CAMT tables
+            'cdm_camt_bank_to_customer_statement': ['message_id', 'statement_id'],
+            'cdm_camt_bank_to_customer_account_report': ['message_id', 'report_id'],
+            'cdm_camt_bank_to_customer_debit_credit_notification': ['message_id', 'notification_id'],
+            'cdm_camt_fi_payment_cancellation_request': ['message_id', 'cancellation_request_id'],
         }
 
         fields = key_fields.get(table)
@@ -645,13 +680,30 @@ class DynamicGoldMapper:
             'account_servicer_id': None,
         }
 
-        # Persist in order: entities first, then instruction/statement (which references them)
+        # Persist in order: entities first, then main tables
+        # New ISO 20022 semantic tables come last
         entity_order = [
             'cdm_party',
             'cdm_account',
             'cdm_financial_institution',
+            # Legacy tables
             'cdm_payment_instruction',
             'cdm_account_statement',
+            # PAIN tables
+            'cdm_pain_customer_credit_transfer_initiation',
+            'cdm_pain_customer_direct_debit_initiation',
+            'cdm_pain_customer_payment_status_report',
+            # PACS tables
+            'cdm_pacs_fi_customer_credit_transfer',
+            'cdm_pacs_fi_credit_transfer',
+            'cdm_pacs_fi_payment_status_report',
+            'cdm_pacs_payment_return',
+            'cdm_pacs_fi_direct_debit',
+            # CAMT tables
+            'cdm_camt_bank_to_customer_statement',
+            'cdm_camt_bank_to_customer_account_report',
+            'cdm_camt_bank_to_customer_debit_credit_notification',
+            'cdm_camt_fi_payment_cancellation_request',
         ]
 
         for table in entity_order:
@@ -773,11 +825,27 @@ class DynamicGoldMapper:
     def _get_id_column(self, table: str) -> str:
         """Get the primary key column name for a table."""
         id_columns = {
+            # Legacy tables
             'cdm_payment_instruction': 'instruction_id',
             'cdm_account_statement': 'statement_id',
             'cdm_party': 'party_id',
             'cdm_account': 'account_id',
             'cdm_financial_institution': 'fi_id',
+            # PAIN tables
+            'cdm_pain_customer_credit_transfer_initiation': 'initiation_id',
+            'cdm_pain_customer_direct_debit_initiation': 'initiation_id',
+            'cdm_pain_customer_payment_status_report': 'status_report_id',
+            # PACS tables
+            'cdm_pacs_fi_customer_credit_transfer': 'transfer_id',
+            'cdm_pacs_fi_credit_transfer': 'transfer_id',
+            'cdm_pacs_fi_payment_status_report': 'status_report_id',
+            'cdm_pacs_payment_return': 'return_id',
+            'cdm_pacs_fi_direct_debit': 'direct_debit_id',
+            # CAMT tables
+            'cdm_camt_bank_to_customer_statement': 'statement_id',
+            'cdm_camt_bank_to_customer_account_report': 'report_id',
+            'cdm_camt_bank_to_customer_debit_credit_notification': 'notification_id',
+            'cdm_camt_fi_payment_cancellation_request': 'cancellation_request_id',
         }
         # Extension tables use 'extension_id'
         if table.startswith('cdm_payment_extension_') or table == 'cdm_statement_extension':
@@ -787,12 +855,28 @@ class DynamicGoldMapper:
     def _generate_id(self, table: str) -> str:
         """Generate a prefixed ID for a table."""
         prefixes = {
+            # Legacy tables
             'cdm_payment_instruction': 'instr_',
             'cdm_account_statement': 'stmt_',
             'cdm_party': 'party_',
             'cdm_account': 'acct_',
             'cdm_financial_institution': 'fi_',
             'cdm_statement_extension': 'stext_',
+            # PAIN tables
+            'cdm_pain_customer_credit_transfer_initiation': 'pain001_',
+            'cdm_pain_customer_direct_debit_initiation': 'pain008_',
+            'cdm_pain_customer_payment_status_report': 'pain002_',
+            # PACS tables
+            'cdm_pacs_fi_customer_credit_transfer': 'pacs008_',
+            'cdm_pacs_fi_credit_transfer': 'pacs009_',
+            'cdm_pacs_fi_payment_status_report': 'pacs002_',
+            'cdm_pacs_payment_return': 'pacs004_',
+            'cdm_pacs_fi_direct_debit': 'pacs003_',
+            # CAMT tables
+            'cdm_camt_bank_to_customer_statement': 'camt053_',
+            'cdm_camt_bank_to_customer_account_report': 'camt052_',
+            'cdm_camt_bank_to_customer_debit_credit_notification': 'camt054_',
+            'cdm_camt_fi_payment_cancellation_request': 'camt056_',
         }
         prefix = prefixes.get(table, 'ext_')
         return f"{prefix}{uuid.uuid4().hex[:12]}"
@@ -800,10 +884,45 @@ class DynamicGoldMapper:
     def _track_entity_id(self, result: Dict, table: str, role: Optional[str],
                         entity_id: str) -> None:
         """Track entity ID in result dict based on table and role."""
+        # Legacy tables
         if table == 'cdm_payment_instruction':
             result['instruction_id'] = entity_id
+            result['payment_id'] = entity_id
         elif table == 'cdm_account_statement':
             result['statement_id'] = entity_id
+        # PAIN tables
+        elif table == 'cdm_pain_customer_credit_transfer_initiation':
+            result['instruction_id'] = entity_id
+            result['payment_id'] = entity_id
+        elif table == 'cdm_pain_customer_direct_debit_initiation':
+            result['instruction_id'] = entity_id
+            result['payment_id'] = entity_id
+        elif table == 'cdm_pain_customer_payment_status_report':
+            result['instruction_id'] = entity_id
+        # PACS tables
+        elif table == 'cdm_pacs_fi_customer_credit_transfer':
+            result['instruction_id'] = entity_id
+            result['payment_id'] = entity_id
+        elif table == 'cdm_pacs_fi_credit_transfer':
+            result['instruction_id'] = entity_id
+            result['payment_id'] = entity_id
+        elif table == 'cdm_pacs_fi_payment_status_report':
+            result['instruction_id'] = entity_id
+        elif table == 'cdm_pacs_payment_return':
+            result['instruction_id'] = entity_id
+            result['payment_id'] = entity_id
+        elif table == 'cdm_pacs_fi_direct_debit':
+            result['instruction_id'] = entity_id
+            result['payment_id'] = entity_id
+        # CAMT tables
+        elif table == 'cdm_camt_bank_to_customer_statement':
+            result['statement_id'] = entity_id
+        elif table == 'cdm_camt_bank_to_customer_account_report':
+            result['statement_id'] = entity_id
+        elif table == 'cdm_camt_bank_to_customer_debit_credit_notification':
+            result['statement_id'] = entity_id
+        elif table == 'cdm_camt_fi_payment_cancellation_request':
+            result['instruction_id'] = entity_id
         elif table == 'cdm_party':
             role_map = {
                 'DEBTOR': 'debtor_id',

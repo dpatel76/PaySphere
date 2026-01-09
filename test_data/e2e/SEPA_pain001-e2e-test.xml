@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.03">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>PAIN001-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T09:30:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>125000.00</CtrlSum>
+      <InitgPty>
+        <Nm>Global Payments Corporation</Nm>
+        <PstlAdr>
+          <StrtNm>100 Financial Center Drive</StrtNm>
+          <BldgNb>Tower A</BldgNb>
+          <PstCd>10005</PstCd>
+          <TwnNm>New York</TwnNm>
+          <CtrySubDvsn>NY</CtrySubDvsn>
+          <Ctry>US</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>529900T8BM49AURSDO55</LEI>
+          </OrgId>
+        </Id>
+      </InitgPty>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>PMTINF-20260106-001</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <BtchBookg>true</BtchBookg>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>125000.00</CtrlSum>
+      <PmtTpInf>
+        <InstrPrty>HIGH</InstrPrty>
+        <SvcLvl><Cd>SEPA</Cd></SvcLvl>
+        <LclInstrm><Cd>INST</Cd></LclInstrm>
+        <CtgyPurp><Cd>SUPP</Cd></CtgyPurp>
+      </PmtTpInf>
+      <ReqdExctnDt>2026-01-06</ReqdExctnDt>
+      <Dbtr>
+        <Nm>Acme Manufacturing GmbH</Nm>
+        <PstlAdr>
+          <StrtNm>Industriestrasse</StrtNm>
+          <BldgNb>42</BldgNb>
+          <PstCd>60313</PstCd>
+          <TwnNm>Frankfurt am Main</TwnNm>
+          <CtrySubDvsn>Hessen</CtrySubDvsn>
+          <Ctry>DE</Ctry>
+        </PstlAdr>
+        <Id>
+          <OrgId>
+            <LEI>529900LN3S50JPU47S06</LEI>
+            <Othr>
+              <Id>DE123456789</Id>
+              <SchmeNm><Cd>TXID</Cd></SchmeNm>
+            </Othr>
+          </OrgId>
+        </Id>
+        <CtctDtls>
+          <Nm>Hans Mueller</Nm>
+          <PhneNb>+49 69 1234 5678</PhneNb>
+          <EmailAdr>payments@acme-mfg.de</EmailAdr>
+        </CtctDtls>
+      </Dbtr>
+      <DbtrAcct>
+        <Id><IBAN>DE89370400440532013000</IBAN></Id>
+        <Tp><Cd>CACC</Cd></Tp>
+        <Ccy>EUR</Ccy>
+        <Nm>Acme Main Operating Account</Nm>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+          <Nm>Commerzbank AG</Nm>
+          <PstlAdr>
+            <StrtNm>Kaiserplatz</StrtNm>
+            <PstCd>60311</PstCd>
+            <TwnNm>Frankfurt am Main</TwnNm>
+            <Ctry>DE</Ctry>
+          </PstlAdr>
+          <LEI>851WYGNLUQLFZBSYGB56</LEI>
+        </FinInstnId>
+      </DbtrAgt>
+      <ChrgBr>SLEV</ChrgBr>
+      <CdtTrfTxInf>
+        <PmtId>
+          <InstrId>INSTR-20260106-001</InstrId>
+          <EndToEndId>E2E-PAIN001-20260106-001</EndToEndId>
+          <UETR>eb6305c9-1f7f-49de-aed0-16487c27b42d</UETR>
+        </PmtId>
+        <PmtTpInf>
+          <SvcLvl><Cd>SEPA</Cd></SvcLvl>
+        </PmtTpInf>
+        <Amt>
+          <InstdAmt Ccy="EUR">125000.00</InstdAmt>
+        </Amt>
+        <XchgRateInf>
+          <UnitCcy>EUR</UnitCcy>
+          <XchgRate>1.0000</XchgRate>
+        </XchgRateInf>
+        <ChrgBr>SLEV</ChrgBr>
+        <IntrmyAgt1>
+          <FinInstnId>
+            <BICFI>DEUTDEFFXXX</BICFI>
+            <Nm>Deutsche Bank AG</Nm>
+            <PstlAdr>
+              <TwnNm>Frankfurt</TwnNm>
+              <Ctry>DE</Ctry>
+            </PstlAdr>
+          </FinInstnId>
+        </IntrmyAgt1>
+        <CdtrAgt>
+          <FinInstnId>
+            <BICFI>BNPAFRPPXXX</BICFI>
+            <Nm>BNP Paribas SA</Nm>
+            <PstlAdr>
+              <StrtNm>16 Boulevard des Italiens</StrtNm>
+              <PstCd>75009</PstCd>
+              <TwnNm>Paris</TwnNm>
+              <Ctry>FR</Ctry>
+            </PstlAdr>
+            <LEI>R0MUWSFPU8MPRO8K5P83</LEI>
+          </FinInstnId>
+        </CdtrAgt>
+        <Cdtr>
+          <Nm>EuroTech Solutions SARL</Nm>
+          <PstlAdr>
+            <StrtNm>Avenue des Champs-Elysees</StrtNm>
+            <BldgNb>123</BldgNb>
+            <PstCd>75008</PstCd>
+            <TwnNm>Paris</TwnNm>
+            <CtrySubDvsn>Ile-de-France</CtrySubDvsn>
+            <Ctry>FR</Ctry>
+          </PstlAdr>
+          <Id>
+            <OrgId>
+              <LEI>969500XXRIE7B79FYK89</LEI>
+              <Othr>
+                <Id>FR12345678901</Id>
+                <SchmeNm><Cd>TXID</Cd></SchmeNm>
+              </Othr>
+            </OrgId>
+          </Id>
+          <CtctDtls>
+            <Nm>Marie Dubois</Nm>
+            <PhneNb>+33 1 4567 8900</PhneNb>
+            <EmailAdr>finance@eurotech.fr</EmailAdr>
+          </CtctDtls>
+        </Cdtr>
+        <CdtrAcct>
+          <Id><IBAN>FR7630004000031234567890143</IBAN></Id>
+          <Tp><Cd>CACC</Cd></Tp>
+          <Ccy>EUR</Ccy>
+          <Nm>EuroTech Receivables Account</Nm>
+        </CdtrAcct>
+        <InstrForCdtrAgt>
+          <Cd>PHOB</Cd>
+          <InstrInf>Please credit immediately upon receipt</InstrInf>
+        </InstrForCdtrAgt>
+        <Purp><Cd>SUPP</Cd></Purp>
+        <RgltryRptg>
+          <DbtCdtRptgInd>DEBT</DbtCdtRptgInd>
+          <Dtls>
+            <Cd>EXPGOODS</Cd>
+            <Amt Ccy="EUR">125000.00</Amt>
+          </Dtls>
+        </RgltryRptg>
+        <RmtInf>
+          <Strd>
+            <RfrdDocInf>
+              <Tp><CdOrPrtry><Cd>CINV</Cd></CdOrPrtry></Tp>
+              <Nb>INV-2026-001234</Nb>
+              <RltdDt>2026-01-05</RltdDt>
+            </RfrdDocInf>
+            <RfrdDocAmt>
+              <DuePyblAmt Ccy="EUR">125000.00</DuePyblAmt>
+            </RfrdDocAmt>
+          </Strd>
+          <Ustrd>Payment for Invoice INV-2026-001234 - Industrial Equipment Q1 2026</Ustrd>
+        </RmtInf>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>

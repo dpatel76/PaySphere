@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.004.001.09">
+  <PmtRtr>
+    <GrpHdr>
+      <MsgId>PACS004-E2E-20260108-001</MsgId>
+      <CreDtTm>2026-01-08T12:00:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys><Cd>TGT</Cd></ClrSys>
+      </SttlmInf>
+    </GrpHdr>
+    <OrgnlGrpInf>
+      <OrgnlMsgId>PACS008-ORIG-20260107-001</OrgnlMsgId>
+      <OrgnlMsgNmId>pacs.008.001.08</OrgnlMsgNmId>
+      <OrgnlCreDtTm>2026-01-07T10:00:00</OrgnlCreDtTm>
+    </OrgnlGrpInf>
+    <TxInf>
+      <RtrId>RTR-20260108-001</RtrId>
+      <OrgnlInstrId>INSTR-ORIG-001</OrgnlInstrId>
+      <OrgnlEndToEndId>E2E-ORIG-001</OrgnlEndToEndId>
+      <OrgnlTxId>TXN-ORIG-001</OrgnlTxId>
+      <OrgnlUETR>a1b2c3d4-e5f6-7890-abcd-ef1234567890</OrgnlUETR>
+      <OrgnlIntrBkSttlmAmt Ccy="EUR">25000.00</OrgnlIntrBkSttlmAmt>
+      <OrgnlIntrBkSttlmDt>2026-01-07</OrgnlIntrBkSttlmDt>
+      <RtrdIntrBkSttlmAmt Ccy="EUR">25000.00</RtrdIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-08</IntrBkSttlmDt>
+      <ChrgBr>SLEV</ChrgBr>
+      <RtrRsnInf>
+        <Orgtr>
+          <Nm>Creditor Bank</Nm>
+          <Id><OrgId><AnyBIC>DEUTDEFFXXX</AnyBIC></OrgId></Id>
+        </Orgtr>
+        <Rsn><Cd>AC04</Cd></Rsn>
+        <AddtlInf>Account closed - funds returned</AddtlInf>
+      </RtrRsnInf>
+      <OrgnlTxRef>
+        <IntrBkSttlmAmt Ccy="EUR">25000.00</IntrBkSttlmAmt>
+        <IntrBkSttlmDt>2026-01-07</IntrBkSttlmDt>
+        <PmtTpInf>
+          <SvcLvl><Cd>SEPA</Cd></SvcLvl>
+          <LclInstrm><Cd>INST</Cd></LclInstrm>
+        </PmtTpInf>
+        <Dbtr>
+          <Nm>Original Debtor Corporation</Nm>
+          <PstlAdr>
+            <Ctry>DE</Ctry>
+            <AdrLine>123 Debtor Street</AdrLine>
+            <AdrLine>Frankfurt 60311</AdrLine>
+          </PstlAdr>
+        </Dbtr>
+        <DbtrAcct>
+          <Id><IBAN>DE89370400440532013000</IBAN></Id>
+        </DbtrAcct>
+        <DbtrAgt>
+          <FinInstnId>
+            <BICFI>COBADEFFXXX</BICFI>
+            <Nm>Commerzbank AG</Nm>
+          </FinInstnId>
+        </DbtrAgt>
+        <CdtrAgt>
+          <FinInstnId>
+            <BICFI>DEUTDEFFXXX</BICFI>
+            <Nm>Deutsche Bank AG</Nm>
+          </FinInstnId>
+        </CdtrAgt>
+        <Cdtr>
+          <Nm>Original Creditor Ltd</Nm>
+          <PstlAdr>
+            <Ctry>DE</Ctry>
+            <AdrLine>456 Creditor Avenue</AdrLine>
+            <AdrLine>Munich 80331</AdrLine>
+          </PstlAdr>
+        </Cdtr>
+        <CdtrAcct>
+          <Id><IBAN>DE02120300000000202051</IBAN></Id>
+        </CdtrAcct>
+        <RmtInf>
+          <Ustrd>Original payment for Invoice INV-2026-001</Ustrd>
+        </RmtInf>
+      </OrgnlTxRef>
+    </TxInf>
+  </PmtRtr>
+</Document>

@@ -49,23 +49,65 @@ from gps_cdm.message_formats.iso20022 import (
     Pain008Parser, Pain008Extractor,
 )
 
-# Map format types to their parser classes
+# Map format types to their parser classes (ISO 20022 composite formats)
 ISO20022_PARSERS = {
+    # Base ISO 20022 formats
     'pacs.002': Pacs002Parser,
     'pacs.004': Pacs004Parser,
     'pacs.008': Pacs008Parser,
     'pacs.009': Pacs009Parser,
     'pain.001': Pain001Parser,
     'pain.008': Pain008Parser,
-    # Composite formats use base message type parser
+    # Composite formats - pacs.008 variants (12 regional schemes)
     'TARGET2_pacs008': Pacs008Parser,
-    'TARGET2_pacs009': Pacs009Parser,
     'CHAPS_pacs008': Pacs008Parser,
-    'SEPA_pain008': Pain008Parser,
     'FEDWIRE_pacs008': Pacs008Parser,
     'FEDNOW_pacs008': Pacs008Parser,
     'RTP_pacs008': Pacs008Parser,
     'NPP_pacs008': Pacs008Parser,
+    'UAEFTS_pacs008': Pacs008Parser,
+    'MEPS_PLUS_pacs008': Pacs008Parser,
+    'RTGS_HK_pacs008': Pacs008Parser,
+    'INSTAPAY_pacs008': Pacs008Parser,
+    'FPS_pacs008': Pacs008Parser,
+    'CHIPS_pacs008': Pacs008Parser,
+    'SEPA_pacs008': Pacs008Parser,
+    'SEPA_INST_pacs008': Pacs008Parser,
+    # Composite formats - pacs.009 variants
+    'TARGET2_pacs009': Pacs009Parser,
+    'CHAPS_pacs009': Pacs009Parser,
+    'UAEFTS_pacs009': Pacs009Parser,
+    'MEPS_PLUS_pacs009': Pacs009Parser,
+    'RTGS_HK_pacs009': Pacs009Parser,
+    'INSTAPAY_pacs009': Pacs009Parser,
+    'CHIPS_pacs009': Pacs009Parser,
+    'FEDNOW_pacs009': Pacs009Parser,
+    'FEDWIRE_pacs009': Pacs009Parser,
+    # Composite formats - pacs.002 variants
+    'TARGET2_pacs002': Pacs002Parser,
+    'UAEFTS_pacs002': Pacs002Parser,
+    'CHAPS_pacs002': Pacs002Parser,
+    'FEDNOW_pacs002': Pacs002Parser,
+    'FEDWIRE_pacs002': Pacs002Parser,
+    'FPS_pacs002': Pacs002Parser,
+    'CHIPS_pacs002': Pacs002Parser,
+    'INSTAPAY_pacs002': Pacs002Parser,
+    'RTP_pacs002': Pacs002Parser,
+    'NPP_pacs002': Pacs002Parser,
+    'MEPS_PLUS_pacs002': Pacs002Parser,
+    'RTGS_HK_pacs002': Pacs002Parser,
+    'SEPA_pacs002': Pacs002Parser,
+    'SEPA_INST_pacs002': Pacs002Parser,
+    # Composite formats - pacs.004 variants
+    'TARGET2_pacs004': Pacs004Parser,
+    'CHAPS_pacs004': Pacs004Parser,
+    'FEDNOW_pacs004': Pacs004Parser,
+    'FEDWIRE_pacs004': Pacs004Parser,
+    'NPP_pacs004': Pacs004Parser,
+    # Composite formats - pain.001 variants
+    'SEPA_pain001': Pain001Parser,
+    # Composite formats - pain.008 variants
+    'SEPA_pain008': Pain008Parser,
 }
 
 # Configure logging
@@ -80,11 +122,143 @@ logger = logging.getLogger(__name__)
 TEST_DATA_DIR = Path(__file__).parent.parent.parent / "test_data" / "e2e"
 NIFI_INPUT_DIR = "/opt/nifi/nifi-current/input"
 
-# All format types to test
+# All format types to test - 77 format combinations
 ALL_FORMAT_TYPES = [
-    "pacs.002", "pacs.004", "pacs.009", "pain.008",
-    "TARGET2_pacs008", "TARGET2_pacs009", "CHAPS_pacs008", "SEPA_pain008"
+    # Base ISO 20022 formats (6)
+    "pacs.002", "pacs.004", "pacs.008", "pacs.009", "pain.001", "pain.008",
+    # Legacy/regional base formats (29)
+    "ACH", "BACS", "BOJNET", "camt.053", "CHAPS", "CHIPS", "CNAPS", "FEDNOW",
+    "FEDWIRE", "FPS", "INSTAPAY", "KFTC", "MEPS_PLUS", "MT103", "MT202", "MT940",
+    "NPP", "PAYNOW", "PIX", "PROMPTPAY", "RTGS_HK", "RTP", "SARIE", "SEPA",
+    "TARGET2", "UAEFTS", "UPI",
+    # UAEFTS composite formats (3)
+    "UAEFTS_pacs002", "UAEFTS_pacs008", "UAEFTS_pacs009",
+    # TARGET2 composite formats (4)
+    "TARGET2_pacs002", "TARGET2_pacs004", "TARGET2_pacs008", "TARGET2_pacs009",
+    # CHAPS composite formats (4)
+    "CHAPS_pacs002", "CHAPS_pacs004", "CHAPS_pacs008", "CHAPS_pacs009",
+    # CHIPS composite formats (3)
+    "CHIPS_pacs002", "CHIPS_pacs008", "CHIPS_pacs009",
+    # FPS composite formats (2)
+    "FPS_pacs002", "FPS_pacs008",
+    # FEDNOW composite formats (4)
+    "FEDNOW_pacs002", "FEDNOW_pacs004", "FEDNOW_pacs008", "FEDNOW_pacs009",
+    # FEDWIRE composite formats (4)
+    "FEDWIRE_pacs002", "FEDWIRE_pacs004", "FEDWIRE_pacs008", "FEDWIRE_pacs009",
+    # NPP composite formats (3)
+    "NPP_pacs002", "NPP_pacs004", "NPP_pacs008",
+    # RTP composite formats (2)
+    "RTP_pacs002", "RTP_pacs008",
+    # INSTAPAY composite formats (3)
+    "INSTAPAY_pacs002", "INSTAPAY_pacs008", "INSTAPAY_pacs009",
+    # MEPS_PLUS composite formats (3)
+    "MEPS_PLUS_pacs002", "MEPS_PLUS_pacs008", "MEPS_PLUS_pacs009",
+    # RTGS_HK composite formats (3)
+    "RTGS_HK_pacs002", "RTGS_HK_pacs008", "RTGS_HK_pacs009",
+    # SEPA composite formats (5)
+    "SEPA_pacs002", "SEPA_pacs008", "SEPA_pain001", "SEPA_pain008",
+    "SEPA_INST_pacs002", "SEPA_INST_pacs008",
 ]
+
+# Map format types to their Gold table names (new semantic tables)
+# For legacy/regional formats, use cdm_payment_instruction as fallback
+GOLD_TABLE_MAP = {
+    # pacs.008 variants -> cdm_pacs_fi_customer_credit_transfer (14)
+    'pacs.008': 'cdm_pacs_fi_customer_credit_transfer',
+    'TARGET2_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'CHAPS_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'UAEFTS_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'FEDWIRE_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'FEDNOW_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'FPS_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'CHIPS_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'RTP_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'NPP_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'MEPS_PLUS_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'RTGS_HK_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'INSTAPAY_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'SEPA_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    'SEPA_INST_pacs008': 'cdm_pacs_fi_customer_credit_transfer',
+    # pacs.009 variants -> cdm_pacs_fi_credit_transfer (9)
+    'pacs.009': 'cdm_pacs_fi_credit_transfer',
+    'TARGET2_pacs009': 'cdm_pacs_fi_credit_transfer',
+    'CHAPS_pacs009': 'cdm_pacs_fi_credit_transfer',
+    'UAEFTS_pacs009': 'cdm_pacs_fi_credit_transfer',
+    'MEPS_PLUS_pacs009': 'cdm_pacs_fi_credit_transfer',
+    'RTGS_HK_pacs009': 'cdm_pacs_fi_credit_transfer',
+    'INSTAPAY_pacs009': 'cdm_pacs_fi_credit_transfer',
+    'CHIPS_pacs009': 'cdm_pacs_fi_credit_transfer',
+    'FEDNOW_pacs009': 'cdm_pacs_fi_credit_transfer',
+    'FEDWIRE_pacs009': 'cdm_pacs_fi_credit_transfer',
+    # pacs.002 variants -> cdm_pacs_fi_payment_status_report (14)
+    'pacs.002': 'cdm_pacs_fi_payment_status_report',
+    'TARGET2_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'UAEFTS_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'CHAPS_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'FEDNOW_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'FEDWIRE_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'FPS_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'CHIPS_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'INSTAPAY_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'RTP_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'NPP_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'MEPS_PLUS_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'RTGS_HK_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'SEPA_pacs002': 'cdm_pacs_fi_payment_status_report',
+    'SEPA_INST_pacs002': 'cdm_pacs_fi_payment_status_report',
+    # pacs.004 variants -> cdm_pacs_payment_return (5)
+    'pacs.004': 'cdm_pacs_payment_return',
+    'TARGET2_pacs004': 'cdm_pacs_payment_return',
+    'CHAPS_pacs004': 'cdm_pacs_payment_return',
+    'FEDNOW_pacs004': 'cdm_pacs_payment_return',
+    'FEDWIRE_pacs004': 'cdm_pacs_payment_return',
+    'NPP_pacs004': 'cdm_pacs_payment_return',
+    # pain.001 variants -> cdm_pain_customer_credit_transfer_initiation (2)
+    'pain.001': 'cdm_pain_customer_credit_transfer_initiation',
+    'SEPA_pain001': 'cdm_pain_customer_credit_transfer_initiation',
+    # pain.008 variants -> cdm_pain_customer_direct_debit_initiation (2)
+    'pain.008': 'cdm_pain_customer_direct_debit_initiation',
+    'SEPA_pain008': 'cdm_pain_customer_direct_debit_initiation',
+    # Legacy/regional formats -> cdm_payment_instruction (29)
+    'ACH': 'cdm_payment_instruction',
+    'BACS': 'cdm_payment_instruction',
+    'BOJNET': 'cdm_payment_instruction',
+    'camt.053': 'cdm_payment_instruction',
+    'CHAPS': 'cdm_payment_instruction',
+    'CHIPS': 'cdm_payment_instruction',
+    'CNAPS': 'cdm_payment_instruction',
+    'FEDNOW': 'cdm_payment_instruction',
+    'FEDWIRE': 'cdm_payment_instruction',
+    'FPS': 'cdm_payment_instruction',
+    'INSTAPAY': 'cdm_payment_instruction',
+    'KFTC': 'cdm_payment_instruction',
+    'MEPS_PLUS': 'cdm_payment_instruction',
+    'MT103': 'cdm_payment_instruction',
+    'MT202': 'cdm_payment_instruction',
+    'MT940': 'cdm_payment_instruction',
+    'NPP': 'cdm_payment_instruction',
+    'PAYNOW': 'cdm_payment_instruction',
+    'PIX': 'cdm_payment_instruction',
+    'PROMPTPAY': 'cdm_payment_instruction',
+    'RTGS_HK': 'cdm_payment_instruction',
+    'RTP': 'cdm_payment_instruction',
+    'SARIE': 'cdm_payment_instruction',
+    'SEPA': 'cdm_payment_instruction',
+    'TARGET2': 'cdm_payment_instruction',
+    'UAEFTS': 'cdm_payment_instruction',
+    'UPI': 'cdm_payment_instruction',
+}
+
+# Map Gold tables to their primary ID column
+GOLD_TABLE_ID_COLUMNS = {
+    'cdm_pacs_fi_customer_credit_transfer': 'transfer_id',
+    'cdm_pacs_fi_credit_transfer': 'transfer_id',
+    'cdm_pacs_fi_payment_status_report': 'status_report_id',
+    'cdm_pacs_payment_return': 'return_id',
+    'cdm_pain_customer_credit_transfer_initiation': 'initiation_id',
+    'cdm_pain_customer_direct_debit_initiation': 'initiation_id',
+    'cdm_payment_instruction': 'instruction_id',  # Legacy fallback
+}
 
 
 @dataclass
@@ -383,46 +557,112 @@ class DynamicE2ETester:
             row = cur.fetchone()
             return dict(row) if row else None
 
-    def find_gold_records(self, stg_id: str) -> Dict[str, Any]:
-        """Find all Gold records by stg_id."""
+    def get_gold_table_for_format(self, format_type: str) -> Tuple[str, str]:
+        """Get Gold table name and ID column for a format type."""
+        # Try explicit mapping first
+        gold_table = GOLD_TABLE_MAP.get(format_type)
+        if gold_table:
+            id_col = GOLD_TABLE_ID_COLUMNS.get(gold_table, 'instruction_id')
+            return gold_table, id_col
+
+        # Try database lookup
+        with self.conn.cursor() as cur:
+            cur.execute("""
+                SELECT gold_table FROM mapping.message_formats
+                WHERE UPPER(format_id) = UPPER(%s) AND is_active = TRUE
+            """, (format_type,))
+            row = cur.fetchone()
+            if row and row[0]:
+                gold_table = row[0]
+                id_col = GOLD_TABLE_ID_COLUMNS.get(gold_table, 'instruction_id')
+                return gold_table, id_col
+
+        # Fallback to legacy table
+        return 'cdm_payment_instruction', 'instruction_id'
+
+    def find_gold_records(self, stg_id: str, format_type: str = None) -> Dict[str, Any]:
+        """Find all Gold records by stg_id, using format-specific tables."""
         result = {
             'instruction': None,
+            'gold_table': None,
+            'id_column': None,
             'parties': [],
             'accounts': [],
             'financial_institutions': []
         }
 
         with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Payment instruction
-            cur.execute("""
-                SELECT * FROM gold.cdm_payment_instruction
-                WHERE source_stg_id = %s
-                LIMIT 1
-            """, (stg_id,))
-            row = cur.fetchone()
-            if row:
-                result['instruction'] = dict(row)
+            # Determine which Gold table to query
+            if format_type:
+                gold_table, id_col = self.get_gold_table_for_format(format_type)
+            else:
+                gold_table, id_col = 'cdm_payment_instruction', 'instruction_id'
 
-            # Parties
-            cur.execute("""
-                SELECT * FROM gold.cdm_party
-                WHERE source_stg_id = %s
-            """, (stg_id,))
-            result['parties'] = [dict(r) for r in cur.fetchall()]
+            result['gold_table'] = gold_table
+            result['id_column'] = id_col
 
-            # Accounts
-            cur.execute("""
-                SELECT * FROM gold.cdm_account
-                WHERE source_stg_id = %s
-            """, (stg_id,))
-            result['accounts'] = [dict(r) for r in cur.fetchall()]
+            # Query the new semantic Gold table first
+            try:
+                cur.execute(f"""
+                    SELECT * FROM gold.{gold_table}
+                    WHERE source_stg_id = %s
+                    LIMIT 1
+                """, (stg_id,))
+                row = cur.fetchone()
+                if row:
+                    result['instruction'] = dict(row)
+                    self._log("DEBUG", f"Found Gold record in {gold_table}",
+                             id=row.get(id_col), stg_id=stg_id)
+            except Exception as e:
+                self._log("WARNING", f"Error querying {gold_table}", error=str(e)[:100])
 
-            # Financial institutions
-            cur.execute("""
-                SELECT * FROM gold.cdm_financial_institution
-                WHERE source_stg_id = %s
-            """, (stg_id,))
-            result['financial_institutions'] = [dict(r) for r in cur.fetchall()]
+            # If not found in new table, try legacy table
+            if not result['instruction'] and gold_table != 'cdm_payment_instruction':
+                try:
+                    cur.execute("""
+                        SELECT * FROM gold.cdm_payment_instruction
+                        WHERE source_stg_id = %s
+                        LIMIT 1
+                    """, (stg_id,))
+                    row = cur.fetchone()
+                    if row:
+                        result['instruction'] = dict(row)
+                        result['gold_table'] = 'cdm_payment_instruction'
+                        result['id_column'] = 'instruction_id'
+                        self._log("DEBUG", f"Found Gold record in legacy cdm_payment_instruction",
+                                 id=row.get('instruction_id'), stg_id=stg_id)
+                except Exception as e:
+                    self._log("WARNING", f"Error querying legacy table", error=str(e)[:100])
+
+            # Parties (still in legacy table)
+            try:
+                cur.execute("""
+                    SELECT * FROM gold.cdm_party
+                    WHERE source_stg_id = %s
+                """, (stg_id,))
+                result['parties'] = [dict(r) for r in cur.fetchall()]
+            except Exception:
+                pass
+
+            # Accounts (still in legacy table)
+            try:
+                cur.execute("""
+                    SELECT * FROM gold.cdm_account
+                    WHERE source_stg_id = %s
+                """, (stg_id,))
+                result['accounts'] = [dict(r) for r in cur.fetchall()]
+            except Exception:
+                pass
+
+            # Financial institutions (still in legacy table)
+            try:
+                cur.execute("""
+                    SELECT * FROM gold.cdm_financial_institution
+                    WHERE source_stg_id = %s
+                """, (stg_id,))
+                result['financial_institutions'] = [dict(r) for r in cur.fetchall()]
+            except Exception:
+                pass
 
         return result
 
@@ -484,31 +724,34 @@ class DynamicE2ETester:
 
     def validate_gold(self, gold_records: Dict[str, Any],
                      silver_record: Dict[str, Any],
-                     gold_mappings: List[Dict[str, Any]]) -> List[FieldValidation]:
+                     gold_mappings: List[Dict[str, Any]],
+                     format_type: str = None) -> List[FieldValidation]:
         """Validate Gold records against expected values derived from Silver."""
         validations = []
 
         instruction = gold_records.get('instruction')
+        gold_table = gold_records.get('gold_table', 'cdm_payment_instruction')
+        id_col = gold_records.get('id_column', 'instruction_id')
 
         # Critical: instruction must exist
         validations.append(FieldValidation(
-            field_name="instruction_exists",
+            field_name="gold_record_exists",
             expected=True,
             actual=instruction is not None,
             passed=instruction is not None,
             source="critical",
-            message="" if instruction else "Payment instruction not created"
+            message="" if instruction else f"Gold record not created in {gold_table}"
         ))
 
         if not instruction:
             return validations
 
-        # Validate instruction_id exists
+        # Validate primary ID exists (using format-specific ID column)
         validations.append(FieldValidation(
-            field_name="instruction_id",
+            field_name=id_col,
             expected="<present>",
-            actual=instruction.get('instruction_id'),
-            passed=instruction.get('instruction_id') is not None,
+            actual=instruction.get(id_col),
+            passed=instruction.get(id_col) is not None,
             source="critical"
         ))
 
@@ -654,13 +897,16 @@ class DynamicE2ETester:
 
             # Step 6: Find and validate Gold
             self._log("INFO", "Checking Gold layer...")
-            gold_records = self.find_gold_records(silver_record['stg_id'])
+            gold_records = self.find_gold_records(silver_record['stg_id'], format_type)
             gold_mappings = self.get_gold_mappings(format_type)
 
             if gold_records.get('instruction'):
-                result.gold.record_id = gold_records['instruction']['instruction_id']
+                id_col = gold_records.get('id_column', 'instruction_id')
+                result.gold.record_id = gold_records['instruction'].get(id_col)
                 result.gold.status = "SUCCESS"
-                result.gold.field_validations = self.validate_gold(gold_records, silver_record, gold_mappings)
+                result.gold.field_validations = self.validate_gold(
+                    gold_records, silver_record, gold_mappings, format_type
+                )
 
                 result.gold_entities = {
                     'parties': len(gold_records.get('parties', [])),
@@ -713,7 +959,7 @@ class DynamicE2ETester:
             print(f"   File: {result.file_name}")
             print(f"   Bronze: {result.bronze.status} (raw_id: {result.bronze.record_id or 'N/A'})")
             print(f"   Silver: {result.silver.status} (stg_id: {result.silver.record_id or 'N/A'})")
-            print(f"   Gold: {result.gold.status} (instruction_id: {result.gold.record_id or 'N/A'})")
+            print(f"   Gold: {result.gold.status} (id: {result.gold.record_id or 'N/A'})")
 
             if result.gold_entities:
                 print(f"   Entities: Parties={result.gold_entities.get('parties', 0)}, "

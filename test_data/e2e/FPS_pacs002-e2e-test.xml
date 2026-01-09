@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10">
+  <FIToFIPmtStsRpt>
+    <GrpHdr>
+      <MsgId>PACS002-E2E-20260108-001</MsgId>
+      <CreDtTm>2026-01-08T11:30:00</CreDtTm>
+    </GrpHdr>
+    <OrgnlGrpInfAndSts>
+      <OrgnlMsgId>PACS008-ORIG-20260107-001</OrgnlMsgId>
+      <OrgnlMsgNmId>pacs.008.001.08</OrgnlMsgNmId>
+      <OrgnlCreDtTm>2026-01-07T10:00:00</OrgnlCreDtTm>
+      <OrgnlNbOfTxs>1</OrgnlNbOfTxs>
+      <GrpSts>ACSP</GrpSts>
+    </OrgnlGrpInfAndSts>
+    <TxInfAndSts>
+      <StsId>STS-20260108-001</StsId>
+      <OrgnlInstrId>INSTR-ORIG-001</OrgnlInstrId>
+      <OrgnlEndToEndId>E2E-ORIG-001</OrgnlEndToEndId>
+      <OrgnlTxId>TXN-ORIG-001</OrgnlTxId>
+      <OrgnlUETR>b2c3d4e5-f6a7-8901-bcde-f23456789012</OrgnlUETR>
+      <TxSts>ACSP</TxSts>
+      <StsRsnInf>
+        <Rsn><Cd>AM04</Cd></Rsn>
+        <AddtlInf>Payment successfully accepted</AddtlInf>
+      </StsRsnInf>
+      <AccptncDtTm>2026-01-08T11:30:00</AccptncDtTm>
+      <FctvIntrBkSttlmDt>2026-01-08</FctvIntrBkSttlmDt>
+      <ClrSysRef>CLR-REF-20260108-001</ClrSysRef>
+      <OrgnlTxRef>
+        <IntrBkSttlmAmt Ccy="USD">50000.00</IntrBkSttlmAmt>
+        <IntrBkSttlmDt>2026-01-08</IntrBkSttlmDt>
+        <Dbtr>
+          <Nm>Test Debtor Corporation</Nm>
+        </Dbtr>
+        <DbtrAcct>
+          <Id><IBAN>US12345678901234567890</IBAN></Id>
+        </DbtrAcct>
+        <DbtrAgt>
+          <FinInstnId><BICFI>CITIUS33XXX</BICFI></FinInstnId>
+        </DbtrAgt>
+        <Cdtr>
+          <Nm>Test Creditor Company</Nm>
+        </Cdtr>
+        <CdtrAcct>
+          <Id><IBAN>DE89370400440532013000</IBAN></Id>
+        </CdtrAcct>
+        <CdtrAgt>
+          <FinInstnId><BICFI>DEUTDEFFXXX</BICFI></FinInstnId>
+        </CdtrAgt>
+      </OrgnlTxRef>
+    </TxInfAndSts>
+  </FIToFIPmtStsRpt>
+</Document>
