@@ -28,6 +28,7 @@ class FieldLineageResponse(BaseModel):
     transformation_logic: Optional[str]
     data_type: str
     message_type: str
+    entity_role: Optional[str] = None  # Role for entity-based mappings (DEBTOR, CREDITOR, etc.)
 
 
 class LayerLineageResponse(BaseModel):
@@ -122,6 +123,7 @@ async def get_field_lineage(
             transformation_logic=f.transformation_logic,
             data_type=f.data_type,
             message_type=f.message_type,
+            entity_role=f.entity_role,
         )
         for f in fields
     ]

@@ -49,6 +49,7 @@ class FieldLineage:
     transformation_logic: Optional[str]
     data_type: str
     message_type: str
+    entity_role: Optional[str] = None  # Role for entity-based mappings (DEBTOR, CREDITOR, etc.)
 
 
 @dataclass
@@ -221,6 +222,7 @@ class LineageService:
                     transformation_logic=transform_expr,
                     data_type="string",
                     message_type=message_type,
+                    entity_role=entity_role,  # Include entity role for role-based mappings
                 )
                 # Group by entity role if specified (e.g., 'DEBTOR', 'CREDITOR')
                 if entity_role:

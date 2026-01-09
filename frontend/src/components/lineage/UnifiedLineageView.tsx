@@ -559,6 +559,40 @@ const graphStyles: any[] = [
       'target-arrow-color': colors.primary.dark,
     },
   },
+  // Highlighted nodes (part of lineage path)
+  {
+    selector: 'node.highlighted',
+    style: {
+      'border-width': 3,
+      'border-color': colors.warning.main,
+      'background-color': colors.warning.light,
+      'z-index': 100,
+    },
+  },
+  // Highlighted edges (part of lineage path)
+  {
+    selector: 'edge.highlighted',
+    style: {
+      width: 3,
+      'line-color': colors.warning.main,
+      'target-arrow-color': colors.warning.main,
+      'z-index': 100,
+    },
+  },
+  // Faded nodes (not part of lineage path when path is selected)
+  {
+    selector: 'node.faded',
+    style: {
+      opacity: 0.3,
+    },
+  },
+  // Faded edges (not part of lineage path when path is selected)
+  {
+    selector: 'edge.faded',
+    style: {
+      opacity: 0.2,
+    },
+  },
 ];
 
 const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
@@ -578,6 +612,8 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [fieldPanelOpen, setFieldPanelOpen] = useState(false);
   const [selectedFieldInfo, setSelectedFieldInfo] = useState<any>(null);
+  const [highlightedPath, setHighlightedPath] = useState<string[]>([]);  // Node IDs in the highlighted path
+  const [lineagePath, setLineagePath] = useState<any[]>([]);  // Ordered lineage mappings for the path
 
   // Sync selectedValue with filterValue prop when it changes externally
   useEffect(() => {
@@ -609,6 +645,99 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
     queryFn: () => lineageApi.getFieldLineage(selectedValue, {}),
     enabled: viewLevel === 'attribute' && filterType === 'message_type',
   });
+
+  // Compute full lineage path for a selected node
+  // Traces backward and forward to build complete Bronze->Silver->Gold path
+  const computeLineagePath = useCallback((nodeId: string) => {
+    if (!fieldLineage || !Array.isArray(fieldLineage)) return;
+
+    const pathNodes = new Set<string>();
+    const pathMappings: any[] = [];
+    const seenMappings = new Set<string>();
+
+    // Extract layer/table/field info from node ID
+    // Format: layer.field.table.field_name or layer.field.table.role.field_name
+    const parts = nodeId.split('.');
+    const layer = parts[0];
+
+    // Find all mappings that involve this node
+    const findMappings = (targetNodeId: string, direction: 'forward' | 'backward') => {
+      fieldLineage.forEach((mapping: any) => {
+        const entityRole = mapping.entity_role;
+        const sourceFieldId = `${mapping.source_layer}.field.${mapping.source_table}.${mapping.source_field.replace(/[\/\[\]@:]/g, '_')}`;
+        const targetFieldId = entityRole
+          ? `${mapping.target_layer}.field.${mapping.target_table}.${entityRole}.${mapping.target_field.replace(/[\/\[\]@:]/g, '_')}`
+          : `${mapping.target_layer}.field.${mapping.target_table}.${mapping.target_field.replace(/[\/\[\]@:]/g, '_')}`;
+
+        const mappingKey = `${sourceFieldId}-${targetFieldId}`;
+
+        if (direction === 'forward' && sourceFieldId === targetNodeId && !seenMappings.has(mappingKey)) {
+          seenMappings.add(mappingKey);
+          pathNodes.add(sourceFieldId);
+          pathNodes.add(targetFieldId);
+          pathMappings.push(mapping);
+          findMappings(targetFieldId, 'forward');
+        }
+
+        if (direction === 'backward' && targetFieldId === targetNodeId && !seenMappings.has(mappingKey)) {
+          seenMappings.add(mappingKey);
+          pathNodes.add(sourceFieldId);
+          pathNodes.add(targetFieldId);
+          pathMappings.push(mapping);
+          findMappings(sourceFieldId, 'backward');
+        }
+      });
+    };
+
+    // Start by finding mappings in both directions from the selected node
+    findMappings(nodeId, 'forward');
+    findMappings(nodeId, 'backward');
+    pathNodes.add(nodeId);
+
+    // Sort mappings by layer order: bronze->silver, then silver->gold
+    const sortedMappings = pathMappings.sort((a, b) => {
+      const layerOrder: Record<string, number> = { bronze: 1, silver: 2, gold: 3 };
+      return (layerOrder[a.source_layer] || 0) - (layerOrder[b.source_layer] || 0);
+    });
+
+    // Deduplicate mappings for display
+    const uniqueMappings: any[] = [];
+    const displayedKeys = new Set<string>();
+    sortedMappings.forEach(m => {
+      const key = `${m.source_layer}.${m.source_field}-${m.target_layer}.${m.target_field}`;
+      if (!displayedKeys.has(key)) {
+        displayedKeys.add(key);
+        uniqueMappings.push(m);
+      }
+    });
+
+    setHighlightedPath(Array.from(pathNodes));
+    setLineagePath(uniqueMappings);
+
+    // Highlight nodes and edges in Cytoscape
+    if (cyRef.current) {
+      // Reset all styles first
+      cyRef.current.nodes().removeClass('highlighted');
+      cyRef.current.edges().removeClass('highlighted');
+
+      // Add highlighted class to path nodes and edges
+      pathNodes.forEach(id => {
+        const node = cyRef.current?.getElementById(id);
+        if (node && node.length) {
+          node.addClass('highlighted');
+        }
+      });
+
+      // Highlight edges between path nodes
+      cyRef.current.edges().forEach(edge => {
+        const sourceId = edge.source().id();
+        const targetId = edge.target().id();
+        if (pathNodes.has(sourceId) && pathNodes.has(targetId)) {
+          edge.addClass('highlighted');
+        }
+      });
+    }
+  }, [fieldLineage]);
 
   // Build elements for forward table-level view (message type -> bronze -> silver -> gold)
   // Shows ALL applicable CDM entities for complete lineage visualization
@@ -1433,20 +1562,25 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
         });
       });
 
-      // Track added fields and create nodes/edges from API data
+      // Track added fields and edges to avoid duplicates
       const fieldsAdded = new Set<string>();
+      const edgesAdded = new Set<string>();
 
-      fieldLineage.forEach((mapping: any, idx: number) => {
+      fieldLineage.forEach((mapping: any) => {
         const sourceTable = mapping.source_table;
         const targetTable = mapping.target_table;
         const sourceField = mapping.source_field;
         const targetField = mapping.target_field;
         const sourceLayer = mapping.source_layer;
         const targetLayer = mapping.target_layer;
+        const entityRole = mapping.entity_role;
 
-        // Create unique field IDs
+        // Create unique field IDs - include entity_role for gold layer to distinguish role-based nodes
         const sourceFieldId = `${sourceLayer}.field.${sourceTable}.${sourceField.replace(/[\/\[\]@:]/g, '_')}`;
-        const targetFieldId = `${targetLayer}.field.${targetTable}.${targetField.replace(/[\/\[\]@:]/g, '_')}`;
+        // For gold layer with entity_role, create separate nodes per role (e.g., DEBTOR vs CREDITOR)
+        const targetFieldId = entityRole
+          ? `${targetLayer}.field.${targetTable}.${entityRole}.${targetField.replace(/[\/\[\]@:]/g, '_')}`
+          : `${targetLayer}.field.${targetTable}.${targetField.replace(/[\/\[\]@:]/g, '_')}`;
 
         // Add source field node if not already added
         if (!fieldsAdded.has(sourceFieldId)) {
@@ -1467,29 +1601,37 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
 
         // Add target field node if not already added
         if (!fieldsAdded.has(targetFieldId)) {
+          // Include entity role in label for gold layer fields
+          const displayLabel = entityRole ? `${targetField} (${entityRole})` : targetField;
           elements.push({
             data: {
               id: targetFieldId,
-              label: truncateLabel(targetField, 16),
+              label: truncateLabel(displayLabel, 20),
+              fullLabel: displayLabel,
               type: 'field',
               layer: targetLayer,
               parent: `${targetLayer}.${targetTable}`,
+              entityRole: entityRole,
               borderColor: zoneColors[targetLayer as keyof typeof zoneColors]?.border || '#666',
             },
           });
           fieldsAdded.add(targetFieldId);
         }
 
-        // Add edge
-        elements.push({
-          data: {
-            id: `edge-${idx}`,
-            source: sourceFieldId,
-            target: targetFieldId,
-            type: 'field_mapping',
-            transform: mapping.transformation_type || 'direct',
-          },
-        });
+        // Create unique edge ID based on source+target to prevent duplicates
+        const edgeId = `edge-${sourceFieldId}-${targetFieldId}`;
+        if (!edgesAdded.has(edgeId)) {
+          elements.push({
+            data: {
+              id: edgeId,
+              source: sourceFieldId,
+              target: targetFieldId,
+              type: 'field_mapping',
+              transform: mapping.transformation_type || 'direct',
+            },
+          });
+          edgesAdded.add(edgeId);
+        }
       });
 
       return elements;
@@ -1677,7 +1819,7 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
       wheelSensitivity: 0.2,
     });
 
-    // Add click handler
+    // Add click handler for nodes
     cyRef.current.on('tap', 'node', (evt) => {
       const node = evt.target;
       const nodeId = node.id();
@@ -1688,12 +1830,47 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
         setSelectedFieldInfo({
           id: nodeId,
           label: node.data('label'),
+          fullLabel: node.data('fullLabel') || node.data('label'),
           layer: node.data('layer'),
+          entityRole: node.data('entityRole'),
         });
         setFieldPanelOpen(true);
+        // Compute and highlight the full lineage path for this field
+        computeLineagePath(nodeId);
       }
 
       onNodeClick?.(nodeId, nodeType);
+    });
+
+    // Add click handler for edges
+    cyRef.current.on('tap', 'edge', (evt) => {
+      const edge = evt.target;
+      const sourceId = edge.source().id();
+      const targetId = edge.target().id();
+
+      // Highlight both endpoint nodes and compute lineage path from source
+      setSelectedNode(sourceId);
+      setSelectedFieldInfo({
+        id: sourceId,
+        label: edge.source().data('label'),
+        fullLabel: edge.source().data('fullLabel') || edge.source().data('label'),
+        layer: edge.source().data('layer'),
+        entityRole: edge.source().data('entityRole'),
+      });
+      setFieldPanelOpen(true);
+      computeLineagePath(sourceId);
+    });
+
+    // Add click handler for background (deselect)
+    cyRef.current.on('tap', (evt) => {
+      if (evt.target === cyRef.current) {
+        // Clicked on background - clear selection and highlighting
+        setSelectedNode(null);
+        setHighlightedPath([]);
+        setLineagePath([]);
+        cyRef.current?.nodes().removeClass('highlighted faded');
+        cyRef.current?.edges().removeClass('highlighted faded');
+      }
     });
 
     // Fit to container
@@ -1705,7 +1882,7 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
         cyRef.current = null;
       }
     };
-  }, [viewLevel, buildElements, onNodeClick]);
+  }, [viewLevel, buildElements, onNodeClick, computeLineagePath]);
 
   // Zoom controls
   const handleZoomIn = () => cyRef.current?.zoom(cyRef.current.zoom() * 1.2);
@@ -1957,8 +2134,22 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
                 Field Name
               </Typography>
               <Typography variant="body1" fontWeight={500} gutterBottom>
-                {selectedFieldInfo.label}
+                {selectedFieldInfo.fullLabel || selectedFieldInfo.label}
               </Typography>
+
+              {selectedFieldInfo.entityRole && (
+                <>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mt: 1 }}>
+                    Entity Role
+                  </Typography>
+                  <Chip
+                    label={selectedFieldInfo.entityRole}
+                    size="small"
+                    color="secondary"
+                    sx={{ fontWeight: 600 }}
+                  />
+                </>
+              )}
 
               <Divider sx={{ my: 2 }} />
 
@@ -1978,29 +2169,60 @@ const UnifiedLineageView: React.FC<UnifiedLineageViewProps> = ({
               <Divider sx={{ my: 2 }} />
 
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Lineage Path
+                Lineage Path ({lineagePath.length} mappings)
               </Typography>
-              <List dense>
-                {fieldLineage?.filter((m: any) =>
-                  m.source_field === selectedFieldInfo.label ||
-                  m.target_field === selectedFieldInfo.label
-                ).map((mapping: any, idx: number) => (
-                  <ListItem key={idx} sx={{ py: 0.5 }}>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: 12 }}>
-                          <Chip label={mapping.source_layer} size="small" sx={{ fontSize: 10 }} />
-                          <Typography variant="caption">{mapping.source_field}</Typography>
-                          <ForwardIcon fontSize="small" sx={{ color: colors.grey[400] }} />
-                          <Chip label={mapping.target_layer} size="small" sx={{ fontSize: 10 }} />
-                          <Typography variant="caption">{mapping.target_field}</Typography>
-                        </Box>
-                      }
-                      secondary={mapping.transformation_type || 'direct'}
-                    />
-                  </ListItem>
-                ))}
-              </List>
+              {lineagePath.length === 0 ? (
+                <Typography variant="caption" color="text.secondary">
+                  Click on a field to see its lineage path
+                </Typography>
+              ) : (
+                <List dense>
+                  {lineagePath.map((mapping: any, idx: number) => (
+                    <ListItem key={idx} sx={{ py: 0.5, px: 0 }}>
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: 12, flexWrap: 'wrap' }}>
+                            <Chip
+                              label={mapping.source_layer}
+                              size="small"
+                              sx={{
+                                fontSize: 9,
+                                height: 20,
+                                backgroundColor: zoneColors[mapping.source_layer]?.bg,
+                                color: zoneColors[mapping.source_layer]?.text,
+                              }}
+                            />
+                            <Typography variant="caption" sx={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {mapping.source_field}
+                            </Typography>
+                            <ForwardIcon fontSize="small" sx={{ color: colors.grey[400], fontSize: 14 }} />
+                            <Chip
+                              label={mapping.target_layer}
+                              size="small"
+                              sx={{
+                                fontSize: 9,
+                                height: 20,
+                                backgroundColor: zoneColors[mapping.target_layer]?.bg,
+                                color: zoneColors[mapping.target_layer]?.text,
+                              }}
+                            />
+                            <Typography variant="caption" sx={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {mapping.target_field}
+                              {mapping.entity_role && ` (${mapping.entity_role})`}
+                            </Typography>
+                          </Box>
+                        }
+                        secondary={
+                          <Typography variant="caption" color="text.secondary">
+                            {mapping.transformation_type || 'direct'}
+                            {mapping.transformation_logic && ` - ${mapping.transformation_logic}`}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
             </Box>
           )}
         </Box>
