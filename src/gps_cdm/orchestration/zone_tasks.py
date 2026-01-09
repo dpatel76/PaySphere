@@ -954,6 +954,11 @@ def process_gold_records(
                 entity_ids = gold_mapper.persist_gold_records(cursor, gold_records, message_type)
                 logger.info(f"[GOLD][{batch_id}] Entity IDs created: {entity_ids}")
 
+                # Persist normalized entity identifiers (IBAN, BIC, LEI, etc.)
+                from gps_cdm.orchestration.dynamic_gold_mapper import persist_identifiers
+                persist_identifiers(cursor, silver_data, entity_ids, message_type, stg_id)
+                logger.debug(f"[GOLD][{batch_id}] Entity identifiers persisted")
+
                 # Count created entities for response
                 if entity_ids.get('debtor_id'):
                     entities_created['parties'] += 1

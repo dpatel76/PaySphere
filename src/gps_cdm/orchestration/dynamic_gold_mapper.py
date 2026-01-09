@@ -187,6 +187,7 @@ class DynamicGoldMapper:
         - Literal string: e.g., "'pain.001'" -> 'pain.001'
         - Generated UUID: '_GENERATED_UUID' -> new UUID
         - Context variable: '_CONTEXT.stg_id' -> context['stg_id']
+        - Entity reference: '_ENTITY_REF.debtor_id' -> passed through, resolved in persist step
         - NULL: 'NULL' or empty -> None
         - COALESCE function: e.g., 'COALESCE(col1, col2, 'default')' -> first non-null value
         """
@@ -200,6 +201,11 @@ class DynamicGoldMapper:
         # Generated UUID
         if expr == '_GENERATED_UUID':
             return str(uuid.uuid4())
+
+        # Entity reference - pass through as-is, resolved during persist_gold_records
+        # when entity IDs are known after entity tables are created
+        if expr.startswith('_ENTITY_REF.'):
+            return expr  # Return the expression itself for later resolution
 
         # Context variable
         if expr.startswith('_CONTEXT.') and context:
@@ -740,7 +746,15 @@ class DynamicGoldMapper:
         table = record.table_name
         columns = record.columns.copy()
 
-        # Add foreign key references for instruction
+        # Resolve _ENTITY_REF expressions in columns (database-driven FK references)
+        # This allows FK columns to be defined in mapping.gold_field_mappings
+        for col_name, col_value in list(columns.items()):
+            if isinstance(col_value, str) and col_value.startswith('_ENTITY_REF.'):
+                entity_key = col_value[12:]  # Remove '_ENTITY_REF.' prefix
+                columns[col_name] = entity_ids.get(entity_key)
+
+        # Add foreign key references for legacy cdm_payment_instruction table
+        # (kept for backwards compatibility - new tables use _ENTITY_REF mappings)
         if table == 'cdm_payment_instruction':
             # Add entity FKs
             columns['debtor_id'] = entity_ids.get('debtor_id')
@@ -764,7 +778,7 @@ class DynamicGoldMapper:
             columns['partition_year'] = now.year
             columns['partition_month'] = now.month
 
-        # Add foreign key references for account statement
+        # Add foreign key references for legacy cdm_account_statement table
         elif table == 'cdm_account_statement':
             # Add account servicer FK
             columns['account_servicer_id'] = entity_ids.get('account_servicer_id')
@@ -1133,13 +1147,15 @@ def persist_identifiers(cursor, silver_data: Dict[str, Any], entity_ids: Dict[st
     Populate normalized identifier tables from Silver data.
 
     Extracts identifiers (BIC, LEI, IBAN, etc.) and stores them in the
-    type/value normalized tables (cdm_party_id, cdm_account_id, cdm_fi_id, cdm_payment_id).
-    """
-    # Payment identifiers
-    instruction_id = entity_ids.get('instruction_id')
-    if instruction_id:
-        _persist_payment_identifiers(cursor, silver_data, instruction_id, format_id, stg_id)
+    normalized entity identifier tables:
+    - cdm_party_identifiers: LEI, BIC, Tax ID, etc. for parties
+    - cdm_account_identifiers: IBAN, BBAN, account numbers
+    - cdm_institution_identifiers: BIC, LEI, clearing codes for FIs
 
+    Note: Transaction/payment identifiers (message_id, end_to_end_id, uetr, etc.)
+    are stored directly in the semantic base tables (cdm_pacs_*, cdm_pain_*, etc.)
+    rather than in a separate normalized table.
+    """
     # Party identifiers (debtor/creditor)
     if entity_ids.get('debtor_id'):
         _persist_party_identifiers(cursor, silver_data, entity_ids['debtor_id'],
@@ -1165,184 +1181,182 @@ def persist_identifiers(cursor, silver_data: Dict[str, Any], entity_ids: Dict[st
                                 'CREDITOR_AGENT', format_id, stg_id)
 
 
-def _persist_payment_identifiers(cursor, silver_data: Dict[str, Any],
-                                instruction_id: str, format_id: str, stg_id: str) -> None:
-    """Persist payment/transaction identifiers."""
-    # Map Silver columns to identifier types
-    payment_id_fields = [
-        ('message_id', 'MSG_ID'),
-        ('payment_information_id', 'PMT_INF_ID'),
-        ('instruction_id', 'INSTR_ID'),
-        ('end_to_end_id', 'END_TO_END_ID'),
-        ('transaction_id', 'TX_ID'),
-        ('uetr', 'UETR'),
-        ('clearing_system_reference', 'CLR_SYS_REF'),
-        # Alternative field names
-        ('msg_id', 'MSG_ID'),
-        ('pmt_inf_id', 'PMT_INF_ID'),
-        ('instr_id', 'INSTR_ID'),
-        ('e2e_id', 'END_TO_END_ID'),
-        ('tx_id', 'TX_ID'),
-    ]
-
-    for field_name, id_type in payment_id_fields:
-        value = silver_data.get(field_name)
-        if value:
-            _upsert_payment_id(cursor, instruction_id, id_type, str(value),
-                              format_id, stg_id)
-
-
 def _persist_party_identifiers(cursor, silver_data: Dict[str, Any],
                                party_id: str, role: str, format_id: str, stg_id: str) -> None:
     """Persist party identifiers (LEI, BIC, tax ID, etc.)."""
-    prefix = role.lower()  # 'debtor' or 'creditor'
+    # ISO 20022 abbreviations mapping
+    iso_abbrev = {
+        'DEBTOR': 'dbtr',
+        'CREDITOR': 'cdtr',
+        'ULTIMATE_DEBTOR': 'ultmt_dbtr',
+        'ULTIMATE_CREDITOR': 'ultmt_cdtr',
+    }
+    abbrev = iso_abbrev.get(role, role.lower()[:4])
+    full_prefix = role.lower()  # 'debtor' or 'creditor'
 
-    # Organization identifiers
+    # Organization identifiers - map to valid ref_identifier_type codes
     org_id_fields = [
-        (f'{prefix}_lei', 'LEI', 'ORG_ID'),
-        (f'{prefix}_bic', 'BIC_PARTY', 'ORG_ID'),
-        (f'{prefix}_tax_id', 'TAX_ID_ORG', 'ORG_ID'),
-        (f'{prefix}_org_id', 'PRTRY_ORG', 'ORG_ID'),
-        # ISO 20022 field names
-        (f'{prefix}_org_id_lei', 'LEI', 'ORG_ID'),
-        (f'{prefix}_org_id_any_bic', 'BIC_PARTY', 'ORG_ID'),
-        (f'{prefix}_org_id_other_id', 'PRTRY_ORG', 'ORG_ID'),
+        # LEI (Legal Entity Identifier)
+        (f'{full_prefix}_lei', 'LEI'),
+        (f'{abbrev}_id_org_id_lei', 'LEI'),
+        (f'{full_prefix}_org_id_lei', 'LEI'),
+        # BIC for parties
+        (f'{full_prefix}_bic', 'PARTY_BIC'),
+        (f'{abbrev}_id_org_id_any_bic', 'PARTY_BIC'),
+        (f'{full_prefix}_org_id_any_bic', 'PARTY_BIC'),
+        # Tax ID
+        (f'{full_prefix}_tax_id', 'TAX_ID'),
+        (f'{abbrev}_id_org_id_tax_id', 'TAX_ID'),
+        # Organization ID (other)
+        (f'{full_prefix}_org_id', 'NATL_REG'),
+        (f'{abbrev}_id_org_id_other_id', 'NATL_REG'),
+        (f'{full_prefix}_org_id_other_id', 'NATL_REG'),
     ]
 
     # Private identifiers (for individuals)
     prvt_id_fields = [
-        (f'{prefix}_passport', 'PASSPORT', 'PRVT_ID'),
-        (f'{prefix}_national_id', 'NATIONAL_ID', 'PRVT_ID'),
-        (f'{prefix}_prvt_id_other_id', 'PRTRY_PRVT', 'PRVT_ID'),
+        (f'{full_prefix}_passport', 'PASSPORT'),
+        (f'{abbrev}_id_prvt_id_passport', 'PASSPORT'),
+        (f'{full_prefix}_national_id', 'NATL_REG'),
+        (f'{abbrev}_id_prvt_id_natl_id', 'NATL_REG'),
+        (f'{full_prefix}_social_security', 'SOC_SEC'),
+        (f'{abbrev}_id_prvt_id_soc_sec', 'SOC_SEC'),
+        # Other private ID
+        (f'{full_prefix}_prvt_id_other_id', 'NATL_REG'),
+        (f'{abbrev}_id_prvt_id_other_id', 'NATL_REG'),
     ]
 
     all_fields = org_id_fields + prvt_id_fields
 
-    for field_name, id_type, category in all_fields:
+    for field_name, id_type in all_fields:
         value = silver_data.get(field_name)
         if value:
-            _upsert_party_id(cursor, party_id, id_type, str(value), category,
-                            format_id, stg_id)
+            _upsert_party_id(cursor, party_id, id_type, str(value))
 
 
 def _persist_account_identifiers(cursor, silver_data: Dict[str, Any],
                                  account_id: str, role: str, format_id: str, stg_id: str) -> None:
     """Persist account identifiers (IBAN, BBAN, proxy IDs)."""
-    prefix = role.lower()  # 'debtor' or 'creditor'
+    # ISO 20022 abbreviations mapping
+    iso_abbrev = {
+        'DEBTOR': 'dbtr',
+        'CREDITOR': 'cdtr',
+    }
+    abbrev = iso_abbrev.get(role, role.lower()[:4])
+    full_prefix = role.lower()  # 'debtor' or 'creditor'
 
+    # Map Silver field patterns to identifier types
+    # Note: Use identifier types from gold.ref_identifier_type
     account_id_fields = [
-        (f'{prefix}_account_iban', 'IBAN'),
-        (f'{prefix}_iban', 'IBAN'),
-        (f'{prefix}_account_bban', 'BBAN'),
-        (f'{prefix}_account_number', 'ACCT_NBR'),
-        (f'{prefix}_account_id', 'ACCT_NBR'),
+        # ISO 20022 field naming (dbtr_acct_id_iban, cdtr_acct_id_iban)
+        (f'{abbrev}_acct_id_iban', 'IBAN'),
+        # Alternative field names
+        (f'{full_prefix}_account_iban', 'IBAN'),
+        (f'{full_prefix}_iban', 'IBAN'),
+        # BBAN
+        (f'{abbrev}_acct_id_bban', 'BBAN'),
+        (f'{full_prefix}_account_bban', 'BBAN'),
+        # Account number (proprietary)
+        (f'{full_prefix}_account_number', 'ACCOUNT_NUM'),
+        (f'{full_prefix}_account_id', 'ACCOUNT_NUM'),
+        (f'{abbrev}_acct_id_othr_id', 'ACCOUNT_NUM'),
         # Proxy identifiers
-        (f'{prefix}_proxy_id', 'PAY_ID'),
-        (f'{prefix}_pix_key', 'PIX_KEY'),
-        (f'{prefix}_upi_vpa', 'UPI_VPA'),
+        (f'{full_prefix}_proxy_id', 'PROXY'),
+        (f'{full_prefix}_pix_key', 'PIX_KEY'),
+        (f'{full_prefix}_upi_vpa', 'PROXY'),
     ]
 
     for field_name, id_type in account_id_fields:
         value = silver_data.get(field_name)
         if value:
-            _upsert_account_id(cursor, account_id, id_type, str(value),
-                              format_id, stg_id)
+            _upsert_account_id(cursor, account_id, id_type, str(value))
 
 
 def _persist_fi_identifiers(cursor, silver_data: Dict[str, Any],
                            fi_id: str, role: str, format_id: str, stg_id: str) -> None:
     """Persist financial institution identifiers (BIC, LEI, national clearing codes)."""
-    prefix = role.lower().replace('_agent', '_agent')  # debtor_agent or creditor_agent
-
-    # Map roles to field name patterns
+    # Map roles to field name patterns (including ISO 20022 abbreviated forms)
     role_prefixes = {
-        'DEBTOR_AGENT': ['debtor_agent', 'ordering_institution', 'sender'],
-        'CREDITOR_AGENT': ['creditor_agent', 'account_with_institution', 'receiver', 'beneficiary_institution'],
-        'INTERMEDIARY_AGENT1': ['intermediary_agent1', 'intermediary'],
-        'INTERMEDIARY_AGENT2': ['intermediary_agent2'],
+        'DEBTOR_AGENT': ['dbtr_agt', 'debtor_agent', 'ordering_institution', 'sender'],
+        'CREDITOR_AGENT': ['cdtr_agt', 'creditor_agent', 'account_with_institution', 'receiver', 'beneficiary_institution'],
+        'INTERMEDIARY_AGENT1': ['intrmy_agt1', 'intermediary_agent1', 'intermediary'],
+        'INTERMEDIARY_AGENT2': ['intrmy_agt2', 'intermediary_agent2'],
         'ACCOUNT_SERVICER': ['sender', 'account_servicer'],
     }
 
-    prefixes = role_prefixes.get(role, [prefix])
+    prefixes = role_prefixes.get(role, [role.lower()])
 
     for pref in prefixes:
         fi_id_fields = [
-            (f'{pref}_bic', 'BIC', None),
-            (f'{pref}_lei', 'LEI_FI', None),
-            (f'{pref}_aba', 'USABA', 'USABA'),
-            (f'{pref}_sort_code', 'GBDSC', 'GBDSC'),
-            (f'{pref}_ifsc', 'INFSC', 'INFSC'),
-            (f'{pref}_cnaps_code', 'CNAPS', 'CNAPS'),
-            (f'{pref}_bsb', 'AUBSB', 'AUBSB'),
-            (f'{pref}_clearing_code', 'NCC', None),
+            # BIC fields - various naming conventions
+            (f'{pref}_bic', 'BIC'),
+            (f'{pref}_fin_instn_id_bic', 'BIC'),
+            (f'{pref}_bicfi', 'BIC'),
+            # LEI
+            (f'{pref}_lei', 'LEI'),
+            (f'{pref}_fin_instn_id_lei', 'LEI'),
+            # National clearing codes
+            (f'{pref}_aba', 'USABA'),
+            (f'{pref}_sort_code', 'GBDSC'),
+            (f'{pref}_ifsc', 'IFSC'),
+            (f'{pref}_cnaps_code', 'CNAPS'),
+            (f'{pref}_bsb', 'BSB'),
+            (f'{pref}_clearing_code', 'NATIONAL_CLR_CODE'),
+            (f'{pref}_clr_sys_mmb_id', 'CLEARING_MEMBER_ID'),
         ]
 
-        for field_name, id_type, clearing_sys in fi_id_fields:
+        for field_name, id_type in fi_id_fields:
             value = silver_data.get(field_name)
             if value:
-                _upsert_fi_id(cursor, fi_id, id_type, str(value),
-                             clearing_sys, format_id, stg_id)
+                _upsert_fi_id(cursor, fi_id, id_type, str(value))
 
 
-def _upsert_payment_id(cursor, instruction_id: str, id_type: str, id_value: str,
-                       format_id: str, stg_id: str) -> None:
-    """Insert or update payment identifier."""
-    try:
-        cursor.execute("""
-            INSERT INTO gold.cdm_payment_identifiers
-                (instruction_id, identifier_type, identifier_value, identifier_scope,
-                 source_message_type, source_stg_id)
-            VALUES (%s, %s, %s, 'INITIATING_PARTY', %s, %s)
-            ON CONFLICT (instruction_id, identifier_type, identifier_value, identifier_scope)
-            DO NOTHING
-        """, (instruction_id, id_type, id_value, format_id, stg_id))
-    except Exception as e:
-        logger.debug(f"Could not insert payment identifier {id_type}: {e}")
-
-
-def _upsert_party_id(cursor, party_id: str, id_type: str, id_value: str,
-                     category: str, format_id: str, stg_id: str) -> None:
+def _upsert_party_id(cursor, party_id: str, id_type: str, id_value: str) -> None:
     """Insert or update party identifier."""
     try:
+        # LEI is typically the primary identifier for parties
+        is_primary = id_type == 'LEI'
         cursor.execute("""
             INSERT INTO gold.cdm_party_identifiers
-                (party_id, identifier_type, identifier_value,
-                 source_message_type, source_stg_id)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (party_id, identifier_type, identifier_value)
-            DO NOTHING
-        """, (party_id, id_type, id_value, format_id, stg_id))
+                (party_id, identifier_type, identifier_value, is_primary)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (party_id, identifier_type) DO UPDATE
+            SET identifier_value = EXCLUDED.identifier_value,
+                is_primary = EXCLUDED.is_primary
+        """, (party_id, id_type, id_value, is_primary))
     except Exception as e:
         logger.debug(f"Could not insert party identifier {id_type}: {e}")
 
 
-def _upsert_account_id(cursor, account_id: str, id_type: str, id_value: str,
-                       format_id: str, stg_id: str) -> None:
+def _upsert_account_id(cursor, account_id: str, id_type: str, id_value: str) -> None:
     """Insert or update account identifier."""
     try:
+        # Determine if this should be the primary identifier
+        is_primary = id_type == 'IBAN'  # IBAN is typically the primary identifier
         cursor.execute("""
             INSERT INTO gold.cdm_account_identifiers
-                (account_id, identifier_type, identifier_value,
-                 source_message_type, source_stg_id)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (account_id, identifier_type, identifier_value)
-            DO NOTHING
-        """, (account_id, id_type, id_value, format_id, stg_id))
+                (account_id, identifier_type, identifier_value, is_primary)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (account_id, identifier_type) DO UPDATE
+            SET identifier_value = EXCLUDED.identifier_value,
+                is_primary = EXCLUDED.is_primary
+        """, (account_id, id_type, id_value, is_primary))
     except Exception as e:
         logger.debug(f"Could not insert account identifier {id_type}: {e}")
 
 
-def _upsert_fi_id(cursor, fi_id: str, id_type: str, id_value: str,
-                  clearing_system: Optional[str], format_id: str, stg_id: str) -> None:
+def _upsert_fi_id(cursor, fi_id: str, id_type: str, id_value: str) -> None:
     """Insert or update financial institution identifier."""
     try:
+        # BIC is typically the primary identifier for FIs
+        is_primary = id_type == 'BIC'
         cursor.execute("""
-            INSERT INTO gold.cdm_fi_identifiers
-                (fi_id, identifier_type, identifier_value, clearing_system,
-                 source_message_type, source_stg_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (fi_id, identifier_type, identifier_value)
-            DO NOTHING
-        """, (fi_id, id_type, id_value, clearing_system, format_id, stg_id))
+            INSERT INTO gold.cdm_institution_identifiers
+                (financial_institution_id, identifier_type, identifier_value, is_primary)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (financial_institution_id, identifier_type) DO UPDATE
+            SET identifier_value = EXCLUDED.identifier_value,
+                is_primary = EXCLUDED.is_primary
+        """, (fi_id, id_type, id_value, is_primary))
     except Exception as e:
         logger.debug(f"Could not insert FI identifier {id_type}: {e}")

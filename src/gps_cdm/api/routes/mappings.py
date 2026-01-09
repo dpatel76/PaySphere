@@ -30,8 +30,9 @@ class MessageFormatSummary(BaseModel):
     standard_name: Optional[str]
     country: Optional[str]
     governing_body: Optional[str]
-    bronze_table: str
-    silver_table: str
+    bronze_table: Optional[str]  # May be NULL for base/abstract formats
+    silver_table: Optional[str]  # May be NULL for base/abstract formats
+    gold_table: Optional[str]  # Primary gold table for format
     total_standard_fields: int
     mapped_to_silver: int
     mapped_to_gold: int
@@ -262,6 +263,7 @@ async def list_message_formats(
                 mf.governing_body,
                 mf.bronze_table,
                 mf.silver_table,
+                mf.gold_table,
                 mf.is_active,
                 COALESCE(cov.total_standard_fields, 0) AS total_standard_fields,
                 COALESCE(cov.mapped_to_silver, 0) AS mapped_to_silver,

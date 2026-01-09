@@ -127,7 +127,7 @@ class LineageService:
             return None
 
     def _load_lineage_from_database(self, message_type: str) -> Optional[FullLineage]:
-        """Load lineage from database mapping tables (single source of truth)."""
+        """Load lineage from database mapping tables using effective mappings (includes inheritance)."""
         conn = self._get_db_connection()
         if not conn:
             return None
@@ -135,32 +135,35 @@ class LineageService:
         try:
             cursor = conn.cursor()
 
-            # First, get the actual Silver table name from message_formats table (handles shared ISO 20022 tables)
+            # First, get the actual Silver and Gold table names from message_formats table
             cursor.execute("""
-                SELECT silver_table, base_iso20022_type
+                SELECT silver_table, gold_table
                 FROM mapping.message_formats
                 WHERE format_id = %s AND is_active = true
-            """, (message_type.upper(),))
+            """, (message_type,))
             row = cursor.fetchone()
             silver_table = row[0] if row and row[0] else f"stg_{message_type.replace('.', '').lower()}"
-            base_iso20022_type = row[1] if row else None
+            gold_table = row[1] if row and row[1] else "cdm_payment_instruction"
 
-            # Get bronze→silver mappings
-            # Schema: source_path (XPath/JSONPath), target_column, data_type, transform_function, transform_expression
-            # For ISO 20022 shared tables, use the base format's mappings if this format doesn't have its own
+            # Get bronze→silver mappings from effective mappings view (includes inherited mappings)
+            # This view resolves the inheritance hierarchy to provide all applicable mappings
             cursor.execute("""
-                SELECT source_path, target_column, data_type,
-                       transform_function, transform_expression
-                FROM mapping.silver_field_mappings
-                WHERE format_id = %s AND is_active = true
-                ORDER BY ordinal_position
-            """, (message_type.upper(),))
+                SELECT source_path, target_column, transform_expression,
+                       is_inherited, effective_from_format
+                FROM mapping.v_effective_silver_mappings
+                WHERE format_id = %s
+                ORDER BY target_column
+            """, (message_type,))
 
             b2s_fields = []
             for row in cursor.fetchall():
-                source_path = row[0]
+                source_path = row[0] or ""
+                target_column = row[1]
+                transform_expr = row[2]
+                is_inherited = row[3]
+                effective_from = row[4]
                 # Extract field name from path (e.g., "GrpHdr/MsgId" -> "MsgId")
-                source_field = source_path.split('/')[-1] if '/' in source_path else source_path
+                source_field = source_path.split('/')[-1] if source_path and '/' in source_path else source_path
                 b2s_fields.append(FieldLineage(
                     source_layer="bronze",
                     source_table="raw_payment_messages",
@@ -168,41 +171,58 @@ class LineageService:
                     source_path=source_path,
                     target_layer="silver",
                     target_table=silver_table,
-                    target_field=row[1],  # target_column
-                    transformation_type=row[3],  # transform_function
-                    transformation_logic=row[4],  # transform_expression
-                    data_type=row[2] or "string",
+                    target_field=target_column,
+                    transformation_type="inherited" if is_inherited else None,
+                    transformation_logic=transform_expr,
+                    data_type="string",
                     message_type=message_type,
                 ))
 
-            # Get silver→gold mappings
-            # Schema: source_expression, gold_table, gold_column, data_type, entity_role, transform_expression
+            # Get silver→gold mappings from effective mappings view (includes inherited mappings)
+            # This view resolves the inheritance hierarchy to provide all applicable mappings
+            # Note: %% is needed to escape % for psycopg2 when using LIKE patterns
             cursor.execute("""
-                SELECT source_expression, gold_table, gold_column, data_type,
-                       entity_role, transform_expression
-                FROM mapping.gold_field_mappings
-                WHERE format_id = %s AND is_active = true
-                ORDER BY gold_table, ordinal_position
+                SELECT source_expression, gold_table, gold_column, entity_role,
+                       transform_expression, is_inherited, effective_from_format
+                FROM mapping.v_effective_gold_mappings
+                WHERE format_id = %s
+                ORDER BY
+                    CASE
+                        WHEN gold_table LIKE 'cdm_pacs%%' OR gold_table LIKE 'cdm_pain%%'
+                             OR gold_table LIKE 'cdm_camt%%' THEN 1
+                        WHEN gold_table = 'cdm_party' THEN 2
+                        WHEN gold_table = 'cdm_financial_institution' THEN 3
+                        WHEN gold_table = 'cdm_account' THEN 4
+                        ELSE 5
+                    END,
+                    gold_table, gold_column
             """, (message_type,))
 
             s2g_fields = []
             entity_mappings: Dict[str, List[FieldLineage]] = {}
             for row in cursor.fetchall():
+                source_expression = row[0]
+                target_gold_table = row[1]
+                gold_column = row[2]
+                entity_role = row[3]
+                transform_expr = row[4]
+                is_inherited = row[5]
+                effective_from = row[6]
+
                 field = FieldLineage(
                     source_layer="silver",
                     source_table=silver_table,
-                    source_field=row[0],  # source_expression
+                    source_field=source_expression,
                     source_path=None,
                     target_layer="gold",
-                    target_table=row[1],  # gold_table
-                    target_field=row[2],  # gold_column
-                    transformation_type=None,
-                    transformation_logic=row[5],  # transform_expression
-                    data_type=row[3] or "string",
+                    target_table=target_gold_table,
+                    target_field=gold_column,
+                    transformation_type="inherited" if is_inherited else None,
+                    transformation_logic=transform_expr,
+                    data_type="string",
                     message_type=message_type,
                 )
-                # Group by entity role if specified (e.g., 'debtor', 'creditor')
-                entity_role = row[4]
+                # Group by entity role if specified (e.g., 'DEBTOR', 'CREDITOR')
                 if entity_role:
                     if entity_role not in entity_mappings:
                         entity_mappings[entity_role] = []
@@ -231,7 +251,7 @@ class LineageService:
                 source_layer="silver",
                 source_table=silver_table,
                 target_layer="gold",
-                target_table="cdm_payment_instruction",
+                target_table=gold_table,  # Use the actual gold table from message_formats
                 field_mappings=s2g_fields,
                 message_type=message_type,
             ) if s2g_fields else None

@@ -14,7 +14,7 @@
  * 9. EXTENSION DATA - Format-specific extension fields
  * 10. LINEAGE & METADATA - Processing and audit fields
  */
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   Box,
   ToggleButtonGroup,
@@ -35,6 +35,7 @@ import {
   Button,
   Alert,
   Snackbar,
+  Collapse,
 } from '@mui/material';
 import {
   DataGrid,
@@ -54,6 +55,10 @@ import {
   Payment as PaymentIcon,
   Extension as ExtensionIcon,
   History as HistoryIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  UnfoldMore as UnfoldMoreIcon,
+  UnfoldLess as UnfoldLessIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { pipelineApi, reprocessApi, mappingsApi } from '../../../api/client';
@@ -124,6 +129,7 @@ const RecordComparisonDialog: React.FC<{
 }> = ({ open, onClose, layer, recordId, messageType }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [showPopulatedOnly, setShowPopulatedOnly] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   // Fetch record lineage data
   const { data: lineage, isLoading: lineageLoading } = useQuery({
@@ -371,32 +377,71 @@ const RecordComparisonDialog: React.FC<{
       ]
     };
 
-    // Sort groups by a logical order
-    // Note: Identifier tables may have composite entity_roles (e.g., DEBTOR_AGENT_BIC)
-    // which represent identifier types - these sort alphabetically after their parent entity
-    const order = [
-      'cdm_payment_instruction',
-      'cdm_party (DEBTOR)',
-      'cdm_party (CREDITOR)',
-      'cdm_party (INITIATING_PARTY)',
-      'cdm_party_identifier', // Identifier tables without role (linked via party_id FK)
-      'cdm_account (DEBTOR)',
-      'cdm_account (CREDITOR)',
-      'cdm_account_identifier', // Identifier tables without role (linked via account_id FK)
-      'cdm_financial_institution (DEBTOR_AGENT)',
-      'cdm_financial_institution (CREDITOR_AGENT)',
-      'cdm_financial_institution (INTERMEDIARY_AGENT1)',
-      'cdm_financial_institution (INTERMEDIARY_AGENT2)',
-      'cdm_institution_identifier', // Identifier tables without role (linked via fi_id FK)
-    ];
+    // Sort groups by CDM entity order:
+    // 1. CDM base tables first (cdm_pacs_*, cdm_pain_*, cdm_camt_*, cdm_payment_instruction)
+    // 2. cdm_party then cdm_party_identifier
+    // 3. cdm_financial_institution then cdm_institution_identifier
+    // 4. cdm_account then cdm_account_identifier
+    // 5. Extension tables
+    // 6. Lineage & Metadata last
+    const getGroupOrder = (category: string): number => {
+      const cat = category.toLowerCase();
+
+      // Base/Payment tables first
+      if (cat.includes('cdm_pacs_')) return 1;
+      if (cat.includes('cdm_pain_')) return 2;
+      if (cat.includes('cdm_camt_')) return 3;
+      if (cat.includes('cdm_payment_instruction')) return 10;
+      if (cat.includes('cdm_payment_status')) return 11;
+      if (cat.includes('cdm_fx_rate')) return 12;
+
+      // Party entities
+      if (cat.includes('cdm_party') && !cat.includes('identifier')) {
+        if (cat.includes('debtor')) return 20;
+        if (cat.includes('creditor')) return 21;
+        if (cat.includes('initiating')) return 22;
+        if (cat.includes('ultimate')) return 23;
+        return 25;
+      }
+      if (cat.includes('cdm_party_identifier') || cat.includes('party_identifier')) return 29;
+
+      // Financial Institution entities
+      if (cat.includes('cdm_financial_institution') || cat.includes('financial_institution')) {
+        if (cat.includes('debtor')) return 30;
+        if (cat.includes('creditor')) return 31;
+        if (cat.includes('intermediary') || cat.includes('instructing') || cat.includes('instructed')) return 32;
+        return 35;
+      }
+      if (cat.includes('cdm_institution_identifier') || cat.includes('fi_identifier')) return 39;
+
+      // Account entities
+      if (cat.includes('cdm_account') && !cat.includes('identifier') && !cat.includes('statement')) {
+        if (cat.includes('debtor')) return 40;
+        if (cat.includes('creditor')) return 41;
+        return 45;
+      }
+      if (cat.includes('cdm_account_identifier') || cat.includes('account_identifier')) return 49;
+
+      // Statement/Transaction entities
+      if (cat.includes('cdm_account_statement')) return 50;
+      if (cat.includes('cdm_transaction')) return 51;
+      if (cat.includes('transaction_identifier') || cat.includes('payment_identifier')) return 52;
+
+      // Extension tables
+      if (cat.includes('extension')) return 60;
+
+      // Lineage & Metadata last
+      if (cat.includes('lineage') || cat.includes('metadata')) return 100;
+
+      return 80; // Unknown tables before lineage
+    };
 
     const sortedGroups = Object.values(groups).sort((a, b) => {
-      const aIdx = order.indexOf(a.category);
-      const bIdx = order.indexOf(b.category);
-      if (aIdx === -1 && bIdx === -1) return a.category.localeCompare(b.category);
-      if (aIdx === -1) return 1;
-      if (bIdx === -1) return -1;
-      return aIdx - bIdx;
+      const aOrder = getGroupOrder(a.category);
+      const bOrder = getGroupOrder(b.category);
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      // If same order, sort alphabetically
+      return a.category.localeCompare(b.category);
     });
 
     return sortedGroups;
@@ -428,11 +473,18 @@ const RecordComparisonDialog: React.FC<{
   // Get icon and color for category
   const getCategoryStyle = (category: string) => {
     const cat = category.toLowerCase();
+
+    // CDM base/payment tables (ISO 20022 aligned)
+    if (cat.includes('cdm_pacs_')) return { icon: PaymentIcon, color: '#fbc02d', bg: '#fffde7' }; // Gold for base tables
+    if (cat.includes('cdm_pain_')) return { icon: PaymentIcon, color: '#fbc02d', bg: '#fffde7' };
+    if (cat.includes('cdm_camt_')) return { icon: PaymentIcon, color: '#fbc02d', bg: '#fffde7' };
+
     // Normalized identifier tables (ISO 20022 CDM enhancements)
     if (cat.includes('party_identifier')) return { icon: PersonIcon, color: '#9c27b0', bg: '#f3e5f5' };
     if (cat.includes('account_identifier')) return { icon: AccountIcon, color: '#00838f', bg: '#e0f7fa' };
     if (cat.includes('fi_identifier') || cat.includes('institution_identifier')) return { icon: BankIcon, color: '#ef6c00', bg: '#fff3e0' };
     if (cat.includes('payment_identifier') || cat.includes('transaction_identifier')) return { icon: PaymentIcon, color: '#1565c0', bg: '#e3f2fd' };
+
     // Core CDM entities
     if (cat.includes('payment_instruction')) return { icon: PaymentIcon, color: '#1976d2', bg: '#e3f2fd' };
     if (cat.includes('payment_status')) return { icon: PaymentIcon, color: '#f57c00', bg: '#fff3e0' };
@@ -457,6 +509,29 @@ const RecordComparisonDialog: React.FC<{
     if (cat.includes('lineage')) return { icon: HistoryIcon, color: '#455a64', bg: '#eceff1' };
     return { icon: PaymentIcon, color: '#666', bg: '#f5f5f5' };
   };
+
+  // Toggle group collapse
+  const toggleGroup = useCallback((category: string) => {
+    setCollapsedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Collapse/Expand all groups
+  const collapseAll = useCallback(() => {
+    const allCategories = filteredData.map(g => g.category);
+    setCollapsedGroups(new Set(allCategories));
+  }, [filteredData]);
+
+  const expandAll = useCallback(() => {
+    setCollapsedGroups(new Set());
+  }, []);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth PaperProps={{ sx: { height: '90vh' } }}>
@@ -484,17 +559,31 @@ const RecordComparisonDialog: React.FC<{
             <Tab label={`Field Mappings (${filteredData.length} groups)`} />
             <Tab label="Raw JSON" />
           </Tabs>
-          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" color="text.secondary">Show populated only:</Typography>
-            <ToggleButton
-              value="check"
-              selected={showPopulatedOnly}
-              onChange={() => setShowPopulatedOnly(!showPopulatedOnly)}
-              size="small"
-              sx={{ px: 1, py: 0.25 }}
-            >
-              {showPopulatedOnly ? 'ON' : 'OFF'}
-            </ToggleButton>
+          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">Show populated only:</Typography>
+              <ToggleButton
+                value="check"
+                selected={showPopulatedOnly}
+                onChange={() => setShowPopulatedOnly(!showPopulatedOnly)}
+                size="small"
+                sx={{ px: 1, py: 0.25 }}
+              >
+                {showPopulatedOnly ? 'ON' : 'OFF'}
+              </ToggleButton>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Tooltip title="Collapse all groups">
+                <IconButton size="small" onClick={collapseAll}>
+                  <UnfoldLessIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Expand all groups">
+                <IconButton size="small" onClick={expandAll}>
+                  <UnfoldMoreIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
           </Box>
         </Box>
 
@@ -533,21 +622,33 @@ const RecordComparisonDialog: React.FC<{
 
                   return (
                     <React.Fragment key={gIdx}>
-                      {/* Entity Category Header */}
+                      {/* Entity Category Header - Clickable to toggle collapse */}
                       <Box component="tr">
-                        <Box component="td" colSpan={6} sx={{
-                          p: 1, py: 0.75, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5,
-                          backgroundColor: style.bg, color: style.color, borderTop: gIdx > 0 ? `2px solid ${style.color}40` : 'none',
-                        }}>
+                        <Box
+                          component="td"
+                          colSpan={6}
+                          onClick={() => toggleGroup(group.category)}
+                          sx={{
+                            p: 1, py: 0.75, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5,
+                            backgroundColor: style.bg, color: style.color, borderTop: gIdx > 0 ? `2px solid ${style.color}40` : 'none',
+                            cursor: 'pointer', userSelect: 'none',
+                            '&:hover': { filter: 'brightness(0.95)' },
+                          }}
+                        >
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {collapsedGroups.has(group.category) ? (
+                              <ExpandMoreIcon sx={{ fontSize: 18 }} />
+                            ) : (
+                              <ExpandLessIcon sx={{ fontSize: 18 }} />
+                            )}
                             <IconComponent sx={{ fontSize: 16 }} />
                             {group.category}
                             <Chip label={`${populatedCount}/${group.rows.length}`} size="small" sx={{ ml: 1, height: 18, fontSize: 10, backgroundColor: 'white' }} />
                           </Box>
                         </Box>
                       </Box>
-                      {/* Data Rows */}
-                      {group.rows.map((row, rIdx) => {
+                      {/* Data Rows - Collapsible */}
+                      {!collapsedGroups.has(group.category) && group.rows.map((row, rIdx) => {
                         const hasAnyData = row.bronzeValue || row.silverValue || row.goldValue;
                         const bronzeHasData = row.bronzeValue;
                         const silverMissing = !!(bronzeHasData && !row.silverValue);

@@ -282,17 +282,40 @@ class MessageSplitter:
         # Debtor (Payer) - IMPORTANT for FPS, CHAPS, and UK payments
         dbtr = txn_elem.find('.//Dbtr')
         if dbtr is not None:
-            content['debtor'] = {
+            debtor_data = {
                 'name': cls._find_text_simple(dbtr, 'Nm'),
                 'country': cls._find_text_simple(dbtr, 'Ctry'),
             }
-            # Also set flat fields for compatibility
-            content['payerName'] = cls._find_text_simple(dbtr, 'Nm')
-            content['debtorName'] = cls._find_text_simple(dbtr, 'Nm')
-            # Address
+            # Organization ID - extract LEI, AnyBIC, and Other ID
+            org_id = dbtr.find('.//Id/OrgId')
+            if org_id is not None:
+                debtor_data['idType'] = 'ORG'
+                debtor_data['lei'] = cls._find_text_simple(org_id, 'LEI')
+                debtor_data['anyBic'] = cls._find_text_simple(org_id, 'AnyBIC')
+                debtor_data['otherId'] = cls._find_text_simple(org_id, 'Othr/Id')
+                debtor_data['otherIdScheme'] = cls._find_text_simple(org_id, 'Othr/SchmeNm/Cd')
+                debtor_data['id'] = debtor_data['lei'] or debtor_data['anyBic'] or debtor_data['otherId']
+            # Private ID - for individuals
+            prvt_id = dbtr.find('.//Id/PrvtId')
+            if prvt_id is not None:
+                debtor_data['idType'] = 'PRVT'
+                debtor_data['otherId'] = cls._find_text_simple(prvt_id, 'Othr/Id')
+                debtor_data['otherIdScheme'] = cls._find_text_simple(prvt_id, 'Othr/SchmeNm/Cd')
+                debtor_data['id'] = debtor_data['otherId']
+            # Address fields
             pstl_adr = dbtr.find('.//PstlAdr')
             if pstl_adr is not None:
+                debtor_data['streetName'] = cls._find_text_simple(pstl_adr, 'StrtNm')
+                debtor_data['buildingNumber'] = cls._find_text_simple(pstl_adr, 'BldgNb')
+                debtor_data['postalCode'] = cls._find_text_simple(pstl_adr, 'PstCd')
+                debtor_data['townName'] = cls._find_text_simple(pstl_adr, 'TwnNm')
+                debtor_data['countrySubDivision'] = cls._find_text_simple(pstl_adr, 'CtrySubDvsn')
+                debtor_data['country'] = cls._find_text_simple(pstl_adr, 'Ctry') or debtor_data.get('country')
                 content['payerAddress'] = cls._find_text_simple(pstl_adr, 'AdrLine')
+            content['debtor'] = debtor_data
+            # Also set flat fields for compatibility
+            content['payerName'] = debtor_data.get('name')
+            content['debtorName'] = debtor_data.get('name')
 
         # Debtor Account
         dbtr_acct = txn_elem.find('.//DbtrAcct')
@@ -312,13 +335,22 @@ class MessageSplitter:
         # Debtor Agent (Payer's Bank)
         dbtr_agt = txn_elem.find('.//DbtrAgt')
         if dbtr_agt is not None:
-            bic = cls._find_text_simple(dbtr_agt, 'BICFI')
+            fin_instn_id = dbtr_agt.find('.//FinInstnId')
+            bic = cls._find_text_simple(dbtr_agt, 'BICFI') or (cls._find_text_simple(fin_instn_id, 'BICFI') if fin_instn_id is not None else None)
+            lei = cls._find_text_simple(fin_instn_id, 'LEI') if fin_instn_id is not None else None
+            name = cls._find_text_simple(fin_instn_id, 'Nm') if fin_instn_id is not None else None
             # UK Sort Code / RTP Member ID (ClrSysMmbId/MmbId)
             member_id_elem = dbtr_agt.find('.//ClrSysMmbId/MmbId')
             member_id = member_id_elem.text if member_id_elem is not None else None
+            # Clearing system code
+            clr_sys_code = cls._find_text_simple(dbtr_agt, 'ClrSysMmbId/ClrSysId/Cd')
             content['debtorAgent'] = {
                 'bic': bic,
+                'lei': lei,
+                'name': name,
                 'memberId': member_id,  # RTP uses memberId
+                'clearingSystemCode': clr_sys_code,
+                'clearingSystemMemberId': member_id,
             }
             if member_id:
                 content['payerSortCode'] = member_id
@@ -327,17 +359,40 @@ class MessageSplitter:
         # Creditor (Payee)
         cdtr = txn_elem.find('.//Cdtr')
         if cdtr is not None:
-            content['creditor'] = {
+            creditor_data = {
                 'name': cls._find_text_simple(cdtr, 'Nm'),
                 'country': cls._find_text_simple(cdtr, 'Ctry'),
             }
-            # Also set flat fields for compatibility
-            content['payeeName'] = cls._find_text_simple(cdtr, 'Nm')
-            content['creditorName'] = cls._find_text_simple(cdtr, 'Nm')
-            # Address
+            # Organization ID - extract LEI, AnyBIC, and Other ID
+            org_id = cdtr.find('.//Id/OrgId')
+            if org_id is not None:
+                creditor_data['idType'] = 'ORG'
+                creditor_data['lei'] = cls._find_text_simple(org_id, 'LEI')
+                creditor_data['anyBic'] = cls._find_text_simple(org_id, 'AnyBIC')
+                creditor_data['otherId'] = cls._find_text_simple(org_id, 'Othr/Id')
+                creditor_data['otherIdScheme'] = cls._find_text_simple(org_id, 'Othr/SchmeNm/Cd')
+                creditor_data['id'] = creditor_data['lei'] or creditor_data['anyBic'] or creditor_data['otherId']
+            # Private ID - for individuals
+            prvt_id = cdtr.find('.//Id/PrvtId')
+            if prvt_id is not None:
+                creditor_data['idType'] = 'PRVT'
+                creditor_data['otherId'] = cls._find_text_simple(prvt_id, 'Othr/Id')
+                creditor_data['otherIdScheme'] = cls._find_text_simple(prvt_id, 'Othr/SchmeNm/Cd')
+                creditor_data['id'] = creditor_data['otherId']
+            # Address fields
             pstl_adr = cdtr.find('.//PstlAdr')
             if pstl_adr is not None:
+                creditor_data['streetName'] = cls._find_text_simple(pstl_adr, 'StrtNm')
+                creditor_data['buildingNumber'] = cls._find_text_simple(pstl_adr, 'BldgNb')
+                creditor_data['postalCode'] = cls._find_text_simple(pstl_adr, 'PstCd')
+                creditor_data['townName'] = cls._find_text_simple(pstl_adr, 'TwnNm')
+                creditor_data['countrySubDivision'] = cls._find_text_simple(pstl_adr, 'CtrySubDvsn')
+                creditor_data['country'] = cls._find_text_simple(pstl_adr, 'Ctry') or creditor_data.get('country')
                 content['payeeAddress'] = cls._find_text_simple(pstl_adr, 'AdrLine')
+            content['creditor'] = creditor_data
+            # Also set flat fields for compatibility
+            content['payeeName'] = creditor_data.get('name')
+            content['creditorName'] = creditor_data.get('name')
 
         # Creditor Account
         cdtr_acct = txn_elem.find('.//CdtrAcct')
@@ -357,13 +412,22 @@ class MessageSplitter:
         # Creditor Agent (Payee's Bank)
         cdtr_agt = txn_elem.find('.//CdtrAgt')
         if cdtr_agt is not None:
-            bic = cls._find_text_simple(cdtr_agt, 'BICFI')
+            fin_instn_id = cdtr_agt.find('.//FinInstnId')
+            bic = cls._find_text_simple(cdtr_agt, 'BICFI') or (cls._find_text_simple(fin_instn_id, 'BICFI') if fin_instn_id is not None else None)
+            lei = cls._find_text_simple(fin_instn_id, 'LEI') if fin_instn_id is not None else None
+            name = cls._find_text_simple(fin_instn_id, 'Nm') if fin_instn_id is not None else None
             # UK Sort Code / RTP Member ID (ClrSysMmbId/MmbId)
             member_id_elem = cdtr_agt.find('.//ClrSysMmbId/MmbId')
             member_id = member_id_elem.text if member_id_elem is not None else None
+            # Clearing system code
+            clr_sys_code = cls._find_text_simple(cdtr_agt, 'ClrSysMmbId/ClrSysId/Cd')
             content['creditorAgent'] = {
                 'bic': bic,
+                'lei': lei,
+                'name': name,
                 'memberId': member_id,  # RTP uses memberId
+                'clearingSystemCode': clr_sys_code,
+                'clearingSystemMemberId': member_id,
             }
             if member_id:
                 content['payeeSortCode'] = member_id

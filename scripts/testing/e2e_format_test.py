@@ -219,34 +219,36 @@ GOLD_TABLE_MAP = {
     # pain.008 variants -> cdm_pain_customer_direct_debit_initiation (2)
     'pain.008': 'cdm_pain_customer_direct_debit_initiation',
     'SEPA_pain008': 'cdm_pain_customer_direct_debit_initiation',
-    # Legacy/regional formats -> cdm_payment_instruction (29)
-    'ACH': 'cdm_payment_instruction',
-    'BACS': 'cdm_payment_instruction',
-    'BOJNET': 'cdm_payment_instruction',
-    'camt.053': 'cdm_payment_instruction',
-    'CHAPS': 'cdm_payment_instruction',
-    'CHIPS': 'cdm_payment_instruction',
-    'CNAPS': 'cdm_payment_instruction',
-    'FEDNOW': 'cdm_payment_instruction',
-    'FEDWIRE': 'cdm_payment_instruction',
-    'FPS': 'cdm_payment_instruction',
-    'INSTAPAY': 'cdm_payment_instruction',
-    'KFTC': 'cdm_payment_instruction',
-    'MEPS_PLUS': 'cdm_payment_instruction',
-    'MT103': 'cdm_payment_instruction',
-    'MT202': 'cdm_payment_instruction',
-    'MT940': 'cdm_payment_instruction',
-    'NPP': 'cdm_payment_instruction',
-    'PAYNOW': 'cdm_payment_instruction',
-    'PIX': 'cdm_payment_instruction',
-    'PROMPTPAY': 'cdm_payment_instruction',
-    'RTGS_HK': 'cdm_payment_instruction',
-    'RTP': 'cdm_payment_instruction',
-    'SARIE': 'cdm_payment_instruction',
-    'SEPA': 'cdm_payment_instruction',
-    'TARGET2': 'cdm_payment_instruction',
-    'UAEFTS': 'cdm_payment_instruction',
-    'UPI': 'cdm_payment_instruction',
+    # Legacy/regional payment formats -> cdm_pacs_fi_customer_credit_transfer (most are pacs.008-like)
+    'ACH': 'cdm_pacs_fi_customer_credit_transfer',
+    'BACS': 'cdm_pacs_fi_customer_credit_transfer',
+    'BOJNET': 'cdm_pacs_fi_customer_credit_transfer',
+    'CHAPS': 'cdm_pacs_fi_customer_credit_transfer',
+    'CHIPS': 'cdm_pacs_fi_customer_credit_transfer',
+    'CNAPS': 'cdm_pacs_fi_customer_credit_transfer',
+    'FEDNOW': 'cdm_pacs_fi_customer_credit_transfer',
+    'FEDWIRE': 'cdm_pacs_fi_customer_credit_transfer',
+    'FPS': 'cdm_pacs_fi_customer_credit_transfer',
+    'INSTAPAY': 'cdm_pacs_fi_customer_credit_transfer',
+    'KFTC': 'cdm_pacs_fi_customer_credit_transfer',
+    'MEPS_PLUS': 'cdm_pacs_fi_customer_credit_transfer',
+    'NPP': 'cdm_pacs_fi_customer_credit_transfer',
+    'PAYNOW': 'cdm_pacs_fi_customer_credit_transfer',
+    'PIX': 'cdm_pacs_fi_customer_credit_transfer',
+    'PROMPTPAY': 'cdm_pacs_fi_customer_credit_transfer',
+    'RTGS_HK': 'cdm_pacs_fi_customer_credit_transfer',
+    'RTP': 'cdm_pacs_fi_customer_credit_transfer',
+    'SARIE': 'cdm_pacs_fi_customer_credit_transfer',
+    'SEPA': 'cdm_pacs_fi_customer_credit_transfer',
+    'TARGET2': 'cdm_pacs_fi_customer_credit_transfer',
+    'UAEFTS': 'cdm_pacs_fi_customer_credit_transfer',
+    'UPI': 'cdm_pacs_fi_customer_credit_transfer',
+    # SWIFT MT formats
+    'MT103': 'cdm_pacs_fi_customer_credit_transfer',  # Customer credit transfer
+    'MT202': 'cdm_pacs_fi_credit_transfer',  # FI-to-FI credit transfer
+    # Statement formats -> cdm_camt_bank_to_customer_statement
+    'MT940': 'cdm_camt_bank_to_customer_statement',
+    'camt.053': 'cdm_camt_bank_to_customer_statement',
 }
 
 # Map Gold tables to their primary ID column
@@ -255,9 +257,14 @@ GOLD_TABLE_ID_COLUMNS = {
     'cdm_pacs_fi_credit_transfer': 'transfer_id',
     'cdm_pacs_fi_payment_status_report': 'status_report_id',
     'cdm_pacs_payment_return': 'return_id',
+    'cdm_pacs_fi_direct_debit': 'direct_debit_id',
     'cdm_pain_customer_credit_transfer_initiation': 'initiation_id',
     'cdm_pain_customer_direct_debit_initiation': 'initiation_id',
-    'cdm_payment_instruction': 'instruction_id',  # Legacy fallback
+    'cdm_pain_customer_payment_status_report': 'status_report_id',
+    'cdm_camt_bank_to_customer_statement': 'statement_id',
+    'cdm_camt_bank_to_customer_account_report': 'report_id',
+    'cdm_camt_bank_to_customer_debit_credit_notification': 'notification_id',
+    'cdm_camt_fi_payment_cancellation_request': 'cancellation_request_id',
 }
 
 
@@ -577,11 +584,15 @@ class DynamicE2ETester:
                 id_col = GOLD_TABLE_ID_COLUMNS.get(gold_table, 'instruction_id')
                 return gold_table, id_col
 
-        # Fallback to legacy table
-        return 'cdm_payment_instruction', 'instruction_id'
+        # No fallback - all formats must have semantic Gold tables
+        raise ValueError(f"No Gold table mapping found for format: {format_type}")
 
     def find_gold_records(self, stg_id: str, format_type: str = None) -> Dict[str, Any]:
-        """Find all Gold records by stg_id, using format-specific tables."""
+        """Find all Gold records by stg_id, using format-specific semantic tables.
+
+        Entities (party, account, fi) are looked up via FK joins from the main Gold table,
+        NOT via source_stg_id (which no longer exists on entity tables).
+        """
         result = {
             'instruction': None,
             'gold_table': None,
@@ -593,15 +604,12 @@ class DynamicE2ETester:
 
         with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Determine which Gold table to query
-            if format_type:
-                gold_table, id_col = self.get_gold_table_for_format(format_type)
-            else:
-                gold_table, id_col = 'cdm_payment_instruction', 'instruction_id'
+            gold_table, id_col = self.get_gold_table_for_format(format_type)
 
             result['gold_table'] = gold_table
             result['id_column'] = id_col
 
-            # Query the new semantic Gold table first
+            # Query the semantic Gold table
             try:
                 cur.execute(f"""
                     SELECT * FROM gold.{gold_table}
@@ -616,53 +624,71 @@ class DynamicE2ETester:
             except Exception as e:
                 self._log("WARNING", f"Error querying {gold_table}", error=str(e)[:100])
 
-            # If not found in new table, try legacy table
-            if not result['instruction'] and gold_table != 'cdm_payment_instruction':
+            # If no instruction found, return early
+            if not result['instruction']:
+                return result
+
+            instruction = result['instruction']
+
+            # Parties - lookup via FK from main Gold table
+            # Semantic tables use *_party_id columns, legacy tables use *_id
+            party_ids = []
+            for fk_col in ['debtor_party_id', 'creditor_party_id', 'ultimate_debtor_party_id',
+                          'ultimate_creditor_party_id', 'initiating_party_id',
+                          # Legacy column names
+                          'debtor_id', 'creditor_id', 'ultimate_debtor_id', 'ultimate_creditor_id']:
+                party_id = instruction.get(fk_col)
+                if party_id and party_id not in party_ids:
+                    party_ids.append(party_id)
+
+            if party_ids:
                 try:
                     cur.execute("""
-                        SELECT * FROM gold.cdm_payment_instruction
-                        WHERE source_stg_id = %s
-                        LIMIT 1
-                    """, (stg_id,))
-                    row = cur.fetchone()
-                    if row:
-                        result['instruction'] = dict(row)
-                        result['gold_table'] = 'cdm_payment_instruction'
-                        result['id_column'] = 'instruction_id'
-                        self._log("DEBUG", f"Found Gold record in legacy cdm_payment_instruction",
-                                 id=row.get('instruction_id'), stg_id=stg_id)
+                        SELECT * FROM gold.cdm_party
+                        WHERE party_id = ANY(%s)
+                    """, (party_ids,))
+                    result['parties'] = [dict(r) for r in cur.fetchall()]
                 except Exception as e:
-                    self._log("WARNING", f"Error querying legacy table", error=str(e)[:100])
+                    self._log("DEBUG", f"Error querying parties", error=str(e)[:100])
 
-            # Parties (still in legacy table)
-            try:
-                cur.execute("""
-                    SELECT * FROM gold.cdm_party
-                    WHERE source_stg_id = %s
-                """, (stg_id,))
-                result['parties'] = [dict(r) for r in cur.fetchall()]
-            except Exception:
-                pass
+            # Accounts - lookup via FK from main Gold table
+            account_ids = []
+            for fk_col in ['debtor_account_id', 'creditor_account_id']:
+                account_id = instruction.get(fk_col)
+                if account_id and account_id not in account_ids:
+                    account_ids.append(account_id)
 
-            # Accounts (still in legacy table)
-            try:
-                cur.execute("""
-                    SELECT * FROM gold.cdm_account
-                    WHERE source_stg_id = %s
-                """, (stg_id,))
-                result['accounts'] = [dict(r) for r in cur.fetchall()]
-            except Exception:
-                pass
+            if account_ids:
+                try:
+                    cur.execute("""
+                        SELECT * FROM gold.cdm_account
+                        WHERE account_id = ANY(%s)
+                    """, (account_ids,))
+                    result['accounts'] = [dict(r) for r in cur.fetchall()]
+                except Exception as e:
+                    self._log("DEBUG", f"Error querying accounts", error=str(e)[:100])
 
-            # Financial institutions (still in legacy table)
-            try:
-                cur.execute("""
-                    SELECT * FROM gold.cdm_financial_institution
-                    WHERE source_stg_id = %s
-                """, (stg_id,))
-                result['financial_institutions'] = [dict(r) for r in cur.fetchall()]
-            except Exception:
-                pass
+            # Financial institutions - lookup via FK from main Gold table
+            # Semantic tables use *_fi_id columns
+            fi_ids = []
+            for fk_col in ['debtor_agent_fi_id', 'creditor_agent_fi_id',
+                          'instructing_agent_fi_id', 'instructed_agent_fi_id',
+                          'intermediary_agent1_fi_id', 'intermediary_agent2_fi_id', 'intermediary_agent3_fi_id',
+                          # Legacy column names
+                          'debtor_agent_id', 'creditor_agent_id', 'intermediary_agent1_id', 'intermediary_agent2_id']:
+                fi_id = instruction.get(fk_col)
+                if fi_id and fi_id not in fi_ids:
+                    fi_ids.append(fi_id)
+
+            if fi_ids:
+                try:
+                    cur.execute("""
+                        SELECT * FROM gold.cdm_financial_institution
+                        WHERE fi_id = ANY(%s)
+                    """, (fi_ids,))
+                    result['financial_institutions'] = [dict(r) for r in cur.fetchall()]
+                except Exception as e:
+                    self._log("DEBUG", f"Error querying financial_institutions", error=str(e)[:100])
 
         return result
 

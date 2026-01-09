@@ -235,7 +235,7 @@ class Pacs008XmlParser:
         return result
 
     def _parse_party(self, party_elem: ET.Element) -> Dict[str, Any]:
-        """Parse party element."""
+        """Parse party element with all identifier types."""
         result = {
             'name': self._find_text(party_elem, 'Nm')
         }
@@ -250,58 +250,106 @@ class Pacs008XmlParser:
             result['countrySubDivision'] = self._find_text(pstl_adr, 'CtrySubDvsn')
             result['country'] = self._find_text(pstl_adr, 'Ctry')
 
-        # Organization ID
+        # Organization ID - extract ALL identifier types separately
         org_id = self._find(party_elem, 'Id/OrgId')
         if org_id is not None:
-            result['id'] = (
-                self._find_text(org_id, 'AnyBIC') or
-                self._find_text(org_id, 'LEI') or
-                self._find_text(org_id, 'Othr/Id')
-            )
             result['idType'] = 'ORG'
+            # LEI (Legal Entity Identifier) - 20 chars
+            result['lei'] = self._find_text(org_id, 'LEI')
+            # AnyBIC - BIC code for organization
+            result['anyBic'] = self._find_text(org_id, 'AnyBIC')
+            # Other ID with scheme
+            result['otherId'] = self._find_text(org_id, 'Othr/Id')
+            result['otherIdScheme'] = self._find_text(org_id, 'Othr/SchmeNm/Cd')
+            result['otherIdSchemeProprietary'] = self._find_text(org_id, 'Othr/SchmeNm/Prtry')
+            result['otherIdIssuer'] = self._find_text(org_id, 'Othr/Issr')
+            # Legacy 'id' field for backward compatibility
+            result['id'] = result['lei'] or result['anyBic'] or result['otherId']
 
-        # Private ID
+        # Private ID - for individuals
         prvt_id = self._find(party_elem, 'Id/PrvtId')
         if prvt_id is not None:
-            result['id'] = self._find_text(prvt_id, 'Othr/Id')
             result['idType'] = 'PRVT'
+            # Date and place of birth
+            result['birthDate'] = self._find_text(prvt_id, 'DtAndPlcOfBirth/BirthDt')
+            result['birthCity'] = self._find_text(prvt_id, 'DtAndPlcOfBirth/CityOfBirth')
+            result['birthCountry'] = self._find_text(prvt_id, 'DtAndPlcOfBirth/CtryOfBirth')
+            # Other ID with scheme
+            result['otherId'] = self._find_text(prvt_id, 'Othr/Id')
+            result['otherIdScheme'] = self._find_text(prvt_id, 'Othr/SchmeNm/Cd')
+            result['otherIdSchemeProprietary'] = self._find_text(prvt_id, 'Othr/SchmeNm/Prtry')
+            result['otherIdIssuer'] = self._find_text(prvt_id, 'Othr/Issr')
+            # Legacy 'id' field
+            result['id'] = result['otherId']
 
         return result
 
     def _parse_account(self, acct_elem: ET.Element) -> Dict[str, Any]:
-        """Parse account element."""
+        """Parse account element with all identifier types."""
         result = {}
 
         acct_id = self._find(acct_elem, 'Id')
         if acct_id is not None:
+            # IBAN (International Bank Account Number)
             result['iban'] = self._find_text(acct_id, 'IBAN')
-            result['other'] = self._find_text(acct_id, 'Othr/Id')
-            result['accountNumber'] = result['iban'] or result['other']
+            # Other account identifier with scheme
+            result['otherId'] = self._find_text(acct_id, 'Othr/Id')
+            result['otherIdScheme'] = self._find_text(acct_id, 'Othr/SchmeNm/Cd')
+            result['otherIdSchemeProprietary'] = self._find_text(acct_id, 'Othr/SchmeNm/Prtry')
+            result['otherIdIssuer'] = self._find_text(acct_id, 'Othr/Issr')
+            # Legacy field
+            result['other'] = result['otherId']
+            result['accountNumber'] = result['iban'] or result['otherId']
 
+        # Currency
         result['currency'] = self._find_text(acct_elem, 'Ccy')
+        # Account type (Cd = code like CACC, SVGS; Prtry = proprietary)
         result['accountType'] = self._find_text(acct_elem, 'Tp/Cd')
+        result['accountTypeProprietary'] = self._find_text(acct_elem, 'Tp/Prtry')
+        # Account name
+        result['name'] = self._find_text(acct_elem, 'Nm')
 
         return result
 
     def _parse_agent(self, agt_elem: ET.Element) -> Dict[str, Any]:
-        """Parse agent element."""
+        """Parse agent element with all identifier types."""
         result = {}
 
         fin_instn_id = self._find(agt_elem, 'FinInstnId')
         if fin_instn_id is not None:
+            # Primary identifiers
             result['bic'] = self._find_text(fin_instn_id, 'BICFI')
             result['lei'] = self._find_text(fin_instn_id, 'LEI')
             result['name'] = self._find_text(fin_instn_id, 'Nm')
 
-            # Clearing System Member ID
+            # Clearing System Member ID with system code
             clr_sys = self._find(fin_instn_id, 'ClrSysMmbId')
             if clr_sys is not None:
+                result['clearingSystemCode'] = self._find_text(clr_sys, 'ClrSysId/Cd')
+                result['clearingSystemProprietary'] = self._find_text(clr_sys, 'ClrSysId/Prtry')
                 result['clearingSystemMemberId'] = self._find_text(clr_sys, 'MmbId')
+
+            # Other identifier (proprietary)
+            othr = self._find(fin_instn_id, 'Othr')
+            if othr is not None:
+                result['otherId'] = self._find_text(othr, 'Id')
+                result['otherIdScheme'] = self._find_text(othr, 'SchmeNm/Cd')
+                result['otherIdSchemeProprietary'] = self._find_text(othr, 'SchmeNm/Prtry')
+                result['otherIdIssuer'] = self._find_text(othr, 'Issr')
 
             # Postal Address
             pstl_adr = self._find(fin_instn_id, 'PstlAdr')
             if pstl_adr is not None:
                 result['country'] = self._find_text(pstl_adr, 'Ctry')
+                result['townName'] = self._find_text(pstl_adr, 'TwnNm')
+                result['streetName'] = self._find_text(pstl_adr, 'StrtNm')
+
+        # Branch ID (separate from FinInstnId)
+        brnch_id = self._find(agt_elem, 'BrnchId')
+        if brnch_id is not None:
+            result['branchId'] = self._find_text(brnch_id, 'Id')
+            result['branchLei'] = self._find_text(brnch_id, 'LEI')
+            result['branchName'] = self._find_text(brnch_id, 'Nm')
 
         return result
 

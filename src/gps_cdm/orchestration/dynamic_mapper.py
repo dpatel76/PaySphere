@@ -154,10 +154,13 @@ class DynamicMapper:
         - Flat camelCase: debtorName -> data['debtorName']
         - Flat snake_case: debtor_name -> data['debtor_name']
         - Direct key: name -> data['name']
+        - CamelCase to nested: debtorAccountIban -> data['debtorAccount']['iban']
 
         Examples:
             'debtor.name' -> tries data['debtor']['name'], data['debtorName'],
                             data['debtor_name'], data['name']
+            'debtorAccountIban' -> tries data['debtorAccountIban'],
+                                   data['debtorAccount']['iban']
         """
         if not path or not data:
             return None
@@ -194,6 +197,54 @@ class DynamicMapper:
         # 5. Try original path as direct key (for paths without dots)
         if path in data:
             return data[path]
+
+        # 6. Try camelCase to nested conversion
+        # debtorAccountIban -> data['debtorAccount']['iban']
+        # creditorAgentBic -> data['creditorAgent']['bic']
+        # This handles parser output that uses nested dicts but mappings use flat keys
+        if '.' not in path:
+            nested_value = self._camel_to_nested(data, path)
+            if nested_value is not None:
+                return nested_value
+
+        return None
+
+    def _camel_to_nested(self, data: Dict[str, Any], camel_path: str) -> Any:
+        """
+        Convert flat camelCase path to nested dict access.
+
+        Examples:
+            debtorAccountIban -> data['debtorAccount']['iban']
+            creditorAgentBic -> data['creditorAgent']['bic']
+            debtorName -> data['debtor']['name']
+            ultimateDebtorName -> data['ultimateDebtor']['name']
+        """
+        import re
+
+        # Split camelCase into parts
+        # "debtorAccountIban" -> ["debtor", "Account", "Iban"]
+        parts = re.findall(r'[a-z]+|[A-Z][a-z]*', camel_path)
+        if len(parts) < 2:
+            return None
+
+        # Try different split points to find nested structure
+        # For "debtorAccountIban", try:
+        #   data['debtor']['accountIban']
+        #   data['debtorAccount']['iban']
+        #   data['debtorAccountIban'] (handled above)
+        for split_idx in range(1, len(parts)):
+            # Build parent key (first parts joined as camelCase)
+            parent_parts = parts[:split_idx]
+            parent_key = parent_parts[0].lower() + ''.join(p.capitalize() for p in parent_parts[1:])
+
+            # Build child key (remaining parts as camelCase, starting lowercase)
+            child_parts = parts[split_idx:]
+            child_key = child_parts[0].lower() + ''.join(p.capitalize() for p in child_parts[1:])
+
+            # Try to access nested value
+            if parent_key in data and isinstance(data[parent_key], dict):
+                if child_key in data[parent_key]:
+                    return data[parent_key][child_key]
 
         return None
 

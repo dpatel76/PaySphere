@@ -114,6 +114,79 @@ def should_use_databricks() -> bool:
     return connector is not None
 
 
+# Cache for format table mappings (refreshed periodically)
+_format_table_cache = None
+_format_table_cache_time = None
+
+
+def get_format_table_mappings(db_cursor=None) -> Dict[str, Dict[str, str]]:
+    """
+    Get table mappings from mapping.message_formats table.
+
+    Returns dict with keys:
+    - 'silver_tables': set of all distinct silver table names
+    - 'gold_tables': set of all distinct gold table names
+    - 'format_to_silver': dict mapping format_id -> silver_table
+    - 'format_to_gold': dict mapping format_id -> gold_table
+    - 'silver_to_formats': dict mapping silver_table -> list of format_ids
+    - 'gold_to_formats': dict mapping gold_table -> list of format_ids
+    """
+    global _format_table_cache, _format_table_cache_time
+
+    # Return cached version if less than 5 minutes old
+    if _format_table_cache and _format_table_cache_time:
+        if datetime.now() - _format_table_cache_time < timedelta(minutes=5):
+            return _format_table_cache
+
+    close_cursor = False
+    if db_cursor is None:
+        conn = get_db_connection()
+        db_cursor = conn.cursor()
+        close_cursor = True
+
+    try:
+        db_cursor.execute("""
+            SELECT format_id, silver_table, gold_table
+            FROM mapping.message_formats
+            WHERE is_active = true
+              AND silver_table IS NOT NULL
+        """)
+
+        result = {
+            'silver_tables': set(),
+            'gold_tables': set(),
+            'format_to_silver': {},
+            'format_to_gold': {},
+            'silver_to_formats': {},
+            'gold_to_formats': {},
+        }
+
+        for row in db_cursor.fetchall():
+            format_id, silver_table, gold_table = row
+
+            if silver_table:
+                result['silver_tables'].add(silver_table)
+                result['format_to_silver'][format_id] = silver_table
+                if silver_table not in result['silver_to_formats']:
+                    result['silver_to_formats'][silver_table] = []
+                result['silver_to_formats'][silver_table].append(format_id)
+
+            if gold_table:
+                result['gold_tables'].add(gold_table)
+                result['format_to_gold'][format_id] = gold_table
+                if gold_table not in result['gold_to_formats']:
+                    result['gold_to_formats'][gold_table] = []
+                result['gold_to_formats'][gold_table].append(format_id)
+
+        _format_table_cache = result
+        _format_table_cache_time = datetime.now()
+        return result
+
+    finally:
+        if close_cursor:
+            conn.close()
+
+
 class PaginatedBatchResponse(BaseModel):
     """Paginated response for batch list."""
     items: List[dict]
@@ -235,23 +308,15 @@ async def list_batches(
             batch_ids.append(batch.get("batch_id"))
             batch_data.append(batch)
 
+        # Get table mappings dynamically from database config
+        table_mappings = get_format_table_mappings(cursor)
+        silver_tables = table_mappings['silver_tables']
+        gold_tables = table_mappings['gold_tables']
+
         # Get actual Silver counts by batch_id
         silver_counts = {}
         if batch_ids:
             placeholders = ','.join(['%s'] * len(batch_ids))
-            # Query all silver tables for actual counts
-            # Query ALL Silver tables for accurate counts
-            # Shared ISO 20022 base tables - check FIRST since many formats now use these
-            silver_tables = [
-                'stg_iso20022_pacs008', 'stg_iso20022_pacs009', 'stg_iso20022_pain001', 'stg_iso20022_camt053',
-                # ISO 20022 direct tables
-                'stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_mt202', 'stg_mt940',
-                'stg_fedwire', 'stg_sepa', 'stg_ach', 'stg_chaps', 'stg_camt053',
-                'stg_bacs', 'stg_fednow', 'stg_rtp', 'stg_faster_payments',
-                'stg_npp', 'stg_upi', 'stg_pix', 'stg_target2', 'stg_meps_plus',
-                'stg_rtgs_hk', 'stg_bojnet', 'stg_kftc', 'stg_cnaps', 'stg_chips',
-                'stg_sarie', 'stg_uaefts', 'stg_promptpay', 'stg_paynow', 'stg_instapay',
-            ]
             for table in silver_tables:
                 try:
                     # First try direct _batch_id match
@@ -278,13 +343,34 @@ async def list_batches(
                         bid, cnt = row
                         silver_counts[bid] = silver_counts.get(bid, 0) + cnt
                 except Exception:
+                    # Rollback and get new cursor to recover from failed transaction
+                    db.rollback()
+                    cursor = db.cursor()
                     pass  # Table might not exist
 
         # Get actual Gold counts by batch_id
         gold_counts = {}
         if batch_ids:
+            for table in gold_tables:
+                try:
+                    # Try direct _batch_id match first
+                    cursor.execute(f"""
+                        SELECT _batch_id, COUNT(*) as cnt
+                        FROM gold.{table}
+                        WHERE _batch_id IN ({placeholders})
+                        GROUP BY _batch_id
+                    """, batch_ids)
+                    for row in cursor.fetchall():
+                        bid, cnt = row
+                        gold_counts[bid] = gold_counts.get(bid, 0) + cnt
+                except Exception as e:
+                    # Rollback and get new cursor to recover from failed transaction
+                    db.rollback()
+                    cursor = db.cursor()
+                    pass  # Table might not have _batch_id column or might not exist
+
+            # Also try lineage_batch_id for legacy cdm_payment_instruction table (if exists)
             try:
-                # First try direct lineage_batch_id match
                 cursor.execute(f"""
                     SELECT lineage_batch_id, COUNT(*) as cnt
                     FROM gold.cdm_payment_instruction
@@ -293,20 +379,8 @@ async def list_batches(
                 """, batch_ids)
                 for row in cursor.fetchall():
                     bid, cnt = row
-                    gold_counts[bid] = cnt
-
-                # Also count via stg_id -> silver -> bronze join (for records where lineage_batch_id is null)
-                cursor.execute(f"""
-                    SELECT b._batch_id, COUNT(*) as cnt
-                    FROM gold.cdm_payment_instruction g
-                    JOIN bronze.raw_payment_messages b ON g.source_raw_id = b.raw_id
-                    WHERE b._batch_id IN ({placeholders})
-                      AND (g.lineage_batch_id IS NULL OR g.lineage_batch_id = '')
-                    GROUP BY b._batch_id
-                """, batch_ids)
-                for row in cursor.fetchall():
-                    bid, cnt = row
-                    gold_counts[bid] = gold_counts.get(bid, 0) + cnt
+                    if bid not in gold_counts:  # Avoid double counting
+                        gold_counts[bid] = gold_counts.get(bid, 0) + cnt
             except Exception:
                 pass
 
@@ -477,40 +551,35 @@ async def get_pipeline_stats(
         bronze_failed = int(bronze_row[2]) if bronze_row[2] else 0
         bronze_pending = int(bronze_row[3]) if bronze_row[3] else 0
 
-        # Query silver tables - need to sum across all stg_* tables
+        # Query silver tables - use dynamic table mappings
         silver_total = 0
         silver_processed = 0
-        silver_query = """
-            SELECT COUNT(*) FROM (
-                SELECT 1 FROM silver.stg_pain001 UNION ALL
-                SELECT 1 FROM silver.stg_pacs008 UNION ALL
-                SELECT 1 FROM silver.stg_mt103 UNION ALL
-                SELECT 1 FROM silver.stg_mt202 UNION ALL
-                SELECT 1 FROM silver.stg_fedwire UNION ALL
-                SELECT 1 FROM silver.stg_sepa UNION ALL
-                SELECT 1 FROM silver.stg_ach UNION ALL
-                SELECT 1 FROM silver.stg_chaps UNION ALL
-                SELECT 1 FROM silver.stg_bacs UNION ALL
-                SELECT 1 FROM silver.stg_fednow UNION ALL
-                SELECT 1 FROM silver.stg_rtp UNION ALL
-                SELECT 1 FROM silver.stg_faster_payments
-            ) as combined
-        """
-        try:
-            cursor.execute(silver_query)
-            silver_row = cursor.fetchone()
-            silver_total = int(silver_row[0]) if silver_row[0] else 0
-            silver_processed = silver_total  # Assume all silver records are processed
-        except Exception:
-            pass  # Some tables might not exist
+        table_mappings = get_format_table_mappings(cursor)
+        silver_tables = list(table_mappings['silver_tables'])
+        gold_tables = list(table_mappings['gold_tables'])
 
-        # Query gold tables
-        gold_query = """
-            SELECT COUNT(*) FROM gold.cdm_payment_instruction
-        """
-        cursor.execute(gold_query)
-        gold_row = cursor.fetchone()
-        gold_total = int(gold_row[0]) if gold_row[0] else 0
+        for table in silver_tables:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM silver.{table}")
+                row = cursor.fetchone()
+                silver_total += int(row[0]) if row and row[0] else 0
+            except Exception:
+                db.rollback()
+                cursor = db.cursor()
+                continue
+        silver_processed = silver_total  # Assume all silver records are processed
+
+        # Query gold tables dynamically
+        gold_total = 0
+        for gold_table in gold_tables:
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM gold.{gold_table}")
+                row = cursor.fetchone()
+                gold_total += int(row[0]) if row and row[0] else 0
+            except Exception:
+                db.rollback()
+                cursor = db.cursor()
+                continue
 
         # Analytical is based on gold (simplified)
         analytical_total = gold_total
@@ -667,12 +736,20 @@ async def get_record_details(layer: str, record_id: str):
                 FROM bronze.raw_payment_messages
                 WHERE raw_id = %s
             """, (record_id,))
+            row = cursor.fetchone()
+            if row:
+                columns = [desc[0] for desc in cursor.description]
+                record = dict(zip(columns, row))
+                record['source_table'] = 'raw_payment_messages'
+                return record
+            raise HTTPException(status_code=404, detail="Record not found")
         elif layer == "silver":
-            # Try different silver tables based on message type
+            # Get dynamic silver table mappings and search all Silver tables
+            table_mappings = get_format_table_mappings(cursor)
+            silver_tables = list(table_mappings['silver_tables'])
+
             record = None
-            for table in ['stg_pain001', 'stg_pacs008', 'stg_mt103', 'stg_mt202',
-                          'stg_fedwire', 'stg_sepa', 'stg_ach', 'stg_chaps',
-                          'stg_bacs', 'stg_fednow', 'stg_rtp', 'stg_faster_payments']:
+            for table in silver_tables:
                 try:
                     cursor.execute(f"""
                         SELECT * FROM silver.{table}
@@ -684,25 +761,41 @@ async def get_record_details(layer: str, record_id: str):
                         record = dict(zip(columns, row))
                         record['source_table'] = table
                         break
-                except Exception:
+                except Exception as e:
+                    # Rollback and get new cursor to recover from failed transaction
+                    db.rollback()
+                    cursor = db.cursor()
                     continue
             if record:
                 return record
             raise HTTPException(status_code=404, detail="Record not found")
         elif layer == "gold":
-            cursor.execute("""
-                SELECT * FROM gold.cdm_payment_instruction
-                WHERE instruction_id = %s
-            """, (record_id,))
+            # Get dynamic gold table mappings and search all Gold tables
+            table_mappings = get_format_table_mappings(cursor)
+            gold_tables = list(table_mappings['gold_tables'])
+
+            for gold_table in gold_tables:
+                try:
+                    # Try to find by primary key (varies by table)
+                    pk_column = 'transfer_id' if 'pacs' in gold_table or 'pain' in gold_table or 'camt' in gold_table else 'instruction_id'
+                    cursor.execute(f"""
+                        SELECT * FROM gold.{gold_table}
+                        WHERE {pk_column} = %s
+                    """, (record_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        columns = [desc[0] for desc in cursor.description]
+                        record = dict(zip(columns, row))
+                        record["source_table"] = gold_table
+                        return record
+                except Exception as e:
+                    # Rollback and get new cursor to recover from failed transaction
+                    db.rollback()
+                    cursor = db.cursor()
+                    continue
+            raise HTTPException(status_code=404, detail="Record not found")
         else:
             raise HTTPException(status_code=400, detail=f"Invalid layer: {layer}")
-
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Record not found")
-
-        columns = [desc[0] for desc in cursor.description]
-        return dict(zip(columns, row))
     finally:
         db.close()
 
@@ -725,30 +818,10 @@ async def get_record_lineage(layer: str, record_id: str):
             "field_mappings": [],
         }
 
-        # List of silver tables to search - includes all 29+ message formats
-        # IMPORTANT: Shared ISO 20022 tables FIRST (formats like FEDWIRE, CHAPS use these now)
-        silver_tables = [
-            # Shared ISO 20022 base tables - check FIRST since many formats now use these
-            'stg_iso20022_pacs008', 'stg_iso20022_pacs009', 'stg_iso20022_pain001', 'stg_iso20022_camt053',
-            # ISO 20022 direct tables
-            'stg_pain001', 'stg_pacs008', 'stg_pacs008_v', 'stg_camt053',
-            # SWIFT MT
-            'stg_mt103', 'stg_mt202', 'stg_mt940',
-            # US Regional (legacy tables - may still have historical data)
-            'stg_fedwire', 'stg_fedwire_v', 'stg_ach', 'stg_chips', 'stg_chips_v',
-            'stg_rtp', 'stg_rtp_v', 'stg_fednow', 'stg_fednow_v',
-            # EU Regional
-            'stg_sepa', 'stg_sepa_v', 'stg_target2', 'stg_target2_v',
-            # UK Regional
-            'stg_chaps', 'stg_chaps_v', 'stg_fps', 'stg_fps_v', 'stg_bacs', 'stg_faster_payments',
-            # Asia-Pacific
-            'stg_npp', 'stg_npp_v', 'stg_meps_plus', 'stg_meps_plus_v',
-            'stg_rtgs_hk', 'stg_rtgs_hk_v', 'stg_cnaps', 'stg_bojnet', 'stg_kftc',
-            # Middle East
-            'stg_sarie', 'stg_uaefts', 'stg_uaefts_v',
-            # Latin America & Southeast Asia
-            'stg_pix', 'stg_upi', 'stg_promptpay', 'stg_paynow', 'stg_instapay', 'stg_instapay_v',
-        ]
+        # Get table mappings dynamically from database config
+        table_mappings = get_format_table_mappings(cursor)
+        silver_tables = list(table_mappings['silver_tables'])
+        gold_tables = list(table_mappings['gold_tables'])
 
         if layer == "bronze":
             # Start from bronze, find linked silver and gold using foreign keys
@@ -784,18 +857,28 @@ async def get_record_lineage(layer: str, record_id: str):
                             result["silver"]["source_table"] = table
                             stg_id = result["silver"].get("stg_id")
 
-                            # Find gold record linked by source_stg_id (proper FK relationship)
+                            # Find gold record linked by source_stg_id across all Gold tables
                             if stg_id:
-                                cursor.execute("""
-                                    SELECT * FROM gold.cdm_payment_instruction
-                                    WHERE source_stg_id = %s
-                                """, (stg_id,))
-                                grow = cursor.fetchone()
-                                if grow:
-                                    gcols = [desc[0] for desc in cursor.description]
-                                    result["gold"] = dict(zip(gcols, grow))
+                                for gold_table in gold_tables:
+                                    try:
+                                        cursor.execute(f"""
+                                            SELECT * FROM gold.{gold_table}
+                                            WHERE source_stg_id = %s
+                                        """, (stg_id,))
+                                        grow = cursor.fetchone()
+                                        if grow:
+                                            gcols = [desc[0] for desc in cursor.description]
+                                            result["gold"] = dict(zip(gcols, grow))
+                                            result["gold"]["source_table"] = gold_table
+                                            break
+                                    except Exception:
+                                        db.rollback()
+                                        cursor = db.cursor()
+                                        continue
                             break
                     except Exception:
+                        db.rollback()
+                        cursor = db.cursor()
                         continue
 
         elif layer == "silver":
@@ -833,30 +916,53 @@ async def get_record_lineage(layer: str, record_id: str):
                                     msg_type = result["bronze"].get("message_type", "")
                                     result["bronze"]["message_format"] = get_message_format(msg_type)
 
-                        # Find gold using source_stg_id FK
+                        # Find gold using source_stg_id FK across all Gold tables
                         if stg_id:
-                            cursor.execute("""
-                                SELECT * FROM gold.cdm_payment_instruction
-                                WHERE source_stg_id = %s
-                            """, (stg_id,))
-                            grow = cursor.fetchone()
-                            if grow:
-                                gcols = [desc[0] for desc in cursor.description]
-                                result["gold"] = dict(zip(gcols, grow))
+                            for gold_table in gold_tables:
+                                try:
+                                    cursor.execute(f"""
+                                        SELECT * FROM gold.{gold_table}
+                                        WHERE source_stg_id = %s
+                                    """, (stg_id,))
+                                    grow = cursor.fetchone()
+                                    if grow:
+                                        gcols = [desc[0] for desc in cursor.description]
+                                        result["gold"] = dict(zip(gcols, grow))
+                                        result["gold"]["source_table"] = gold_table
+                                        break
+                                except Exception:
+                                    db.rollback()
+                                    cursor = db.cursor()
+                                    continue
                         break
                 except Exception:
+                    db.rollback()
+                    cursor = db.cursor()
                     continue
 
         elif layer == "gold":
             # Start from gold, find linked bronze and silver using foreign keys
-            cursor.execute("""
-                SELECT * FROM gold.cdm_payment_instruction
-                WHERE instruction_id = %s
-            """, (record_id,))
-            row = cursor.fetchone()
-            if row:
-                columns = [desc[0] for desc in cursor.description]
-                result["gold"] = dict(zip(columns, row))
+            # Search all Gold tables for the record
+            for gold_table in gold_tables:
+                try:
+                    # Try to find by primary key (varies by table)
+                    pk_column = 'transfer_id' if 'pacs' in gold_table or 'pain' in gold_table or 'camt' in gold_table else 'instruction_id'
+                    cursor.execute(f"""
+                        SELECT * FROM gold.{gold_table}
+                        WHERE {pk_column} = %s
+                    """, (record_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        columns = [desc[0] for desc in cursor.description]
+                        result["gold"] = dict(zip(columns, row))
+                        result["gold"]["source_table"] = gold_table
+                        break
+                except Exception:
+                    db.rollback()
+                    cursor = db.cursor()
+                    continue
+
+            if result["gold"]:
                 stg_id = result["gold"].get("source_stg_id")
                 stg_table = result["gold"].get("source_stg_table")
 
@@ -875,7 +981,8 @@ async def get_record_lineage(layer: str, record_id: str):
                                 result["silver"] = dict(zip(scols, srow))
                                 result["silver"]["source_table"] = stg_table
                         except Exception:
-                            pass
+                            db.rollback()
+                            cursor = db.cursor()
 
                     # Fallback: search all silver tables
                     if not result["silver"]:
@@ -892,6 +999,8 @@ async def get_record_lineage(layer: str, record_id: str):
                                     result["silver"]["source_table"] = table
                                     break
                             except Exception:
+                                db.rollback()
+                                cursor = db.cursor()
                                 continue
 
                     # Find bronze using silver's raw_id FK
