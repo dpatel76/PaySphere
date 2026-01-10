@@ -827,7 +827,7 @@ async def get_record_lineage(layer: str, record_id: str):
             # Start from bronze, find linked silver and gold using foreign keys
             cursor.execute("""
                 SELECT raw_id, _batch_id, message_type, message_format, source_system,
-                       raw_content, processing_status, _ingested_at
+                       raw_content, processing_status, _ingested_at, extractor_output
                 FROM bronze.raw_payment_messages
                 WHERE raw_id = %s
             """, (record_id,))
@@ -902,7 +902,7 @@ async def get_record_lineage(layer: str, record_id: str):
                             cursor.execute("""
                                 SELECT raw_id, _batch_id, message_type, message_format,
                                        source_system, raw_content,
-                                       processing_status, _ingested_at
+                                       processing_status, _ingested_at, extractor_output
                                 FROM bronze.raw_payment_messages
                                 WHERE raw_id = %s
                             """, (raw_id,))
@@ -1010,7 +1010,7 @@ async def get_record_lineage(layer: str, record_id: str):
                             cursor.execute("""
                                 SELECT raw_id, _batch_id, message_type, message_format,
                                        source_system, raw_content,
-                                       processing_status, _ingested_at
+                                       processing_status, _ingested_at, extractor_output
                                 FROM bronze.raw_payment_messages
                                 WHERE raw_id = %s
                             """, (raw_id,))
@@ -1031,15 +1031,16 @@ async def get_record_lineage(layer: str, record_id: str):
             # Initialize gold_entities to hold denormalized party/account/agent data
             result["gold_entities"] = {}
 
-            # Fetch Debtor Party
-            if gold.get("debtor_id"):
+            # Fetch Debtor Party (check multiple FK column names for different Gold tables)
+            debtor_party_id = gold.get("debtor_id") or gold.get("original_debtor_party_id")
+            if debtor_party_id:
                 try:
                     cursor.execute("""
                         SELECT party_id, party_type, name, street_name, building_number,
                                post_code, town_name, country_sub_division, country,
                                identification_type, identification_number, tax_id, tax_id_type
                         FROM gold.cdm_party WHERE party_id = %s
-                    """, (gold["debtor_id"],))
+                    """, (debtor_party_id,))
                     row = cursor.fetchone()
                     if row:
                         cols = [desc[0] for desc in cursor.description]
@@ -1047,13 +1048,14 @@ async def get_record_lineage(layer: str, record_id: str):
                 except Exception:
                     pass
 
-            # Fetch Debtor Account (cdm_account table)
-            if gold.get("debtor_account_id"):
+            # Fetch Debtor Account (cdm_account table - check multiple FK column names)
+            debtor_account_id = gold.get("debtor_account_id") or gold.get("original_debtor_account_id")
+            if debtor_account_id:
                 try:
                     cursor.execute("""
                         SELECT account_id, account_type, iban, account_number, currency
                         FROM gold.cdm_account WHERE account_id = %s
-                    """, (gold["debtor_account_id"],))
+                    """, (debtor_account_id,))
                     row = cursor.fetchone()
                     if row:
                         cols = [desc[0] for desc in cursor.description]
@@ -1061,15 +1063,16 @@ async def get_record_lineage(layer: str, record_id: str):
                 except Exception:
                     pass
 
-            # Fetch Debtor Agent (cdm_financial_institution table - uses fi_id, institution_name)
-            if gold.get("debtor_agent_id"):
+            # Fetch Debtor Agent (cdm_financial_institution table - check multiple FK column names)
+            debtor_agent_id = gold.get("debtor_agent_id") or gold.get("original_debtor_agent_fi_id")
+            if debtor_agent_id:
                 try:
                     cursor.execute("""
                         SELECT fi_id, fi_type, institution_name as name, bic,
                                national_clearing_system as clearing_system_id,
                                national_clearing_code as member_id, country, lei
                         FROM gold.cdm_financial_institution WHERE fi_id = %s
-                    """, (gold["debtor_agent_id"],))
+                    """, (debtor_agent_id,))
                     row = cursor.fetchone()
                     if row:
                         cols = [desc[0] for desc in cursor.description]
@@ -1077,15 +1080,16 @@ async def get_record_lineage(layer: str, record_id: str):
                 except Exception:
                     pass
 
-            # Fetch Creditor Party
-            if gold.get("creditor_id"):
+            # Fetch Creditor Party (check multiple FK column names for different Gold tables)
+            creditor_party_id = gold.get("creditor_id") or gold.get("original_creditor_party_id")
+            if creditor_party_id:
                 try:
                     cursor.execute("""
                         SELECT party_id, party_type, name, street_name, building_number,
                                post_code, town_name, country_sub_division, country,
                                identification_type, identification_number, tax_id, tax_id_type
                         FROM gold.cdm_party WHERE party_id = %s
-                    """, (gold["creditor_id"],))
+                    """, (creditor_party_id,))
                     row = cursor.fetchone()
                     if row:
                         cols = [desc[0] for desc in cursor.description]
@@ -1093,13 +1097,14 @@ async def get_record_lineage(layer: str, record_id: str):
                 except Exception:
                     pass
 
-            # Fetch Creditor Account (cdm_account table)
-            if gold.get("creditor_account_id"):
+            # Fetch Creditor Account (cdm_account table - check multiple FK column names)
+            creditor_account_id = gold.get("creditor_account_id") or gold.get("original_creditor_account_id")
+            if creditor_account_id:
                 try:
                     cursor.execute("""
                         SELECT account_id, account_type, iban, account_number, currency
                         FROM gold.cdm_account WHERE account_id = %s
-                    """, (gold["creditor_account_id"],))
+                    """, (creditor_account_id,))
                     row = cursor.fetchone()
                     if row:
                         cols = [desc[0] for desc in cursor.description]
@@ -1107,15 +1112,16 @@ async def get_record_lineage(layer: str, record_id: str):
                 except Exception:
                     pass
 
-            # Fetch Creditor Agent (cdm_financial_institution table)
-            if gold.get("creditor_agent_id"):
+            # Fetch Creditor Agent (cdm_financial_institution table - check multiple FK column names)
+            creditor_agent_id = gold.get("creditor_agent_id") or gold.get("original_creditor_agent_fi_id")
+            if creditor_agent_id:
                 try:
                     cursor.execute("""
                         SELECT fi_id, fi_type, institution_name as name, bic,
                                national_clearing_system as clearing_system_id,
                                national_clearing_code as member_id, country, lei
                         FROM gold.cdm_financial_institution WHERE fi_id = %s
-                    """, (gold["creditor_agent_id"],))
+                    """, (creditor_agent_id,))
                     row = cursor.fetchone()
                     if row:
                         cols = [desc[0] for desc in cursor.description]
@@ -1138,6 +1144,35 @@ async def get_record_lineage(layer: str, record_id: str):
                             result["gold_entities"][f"intermediary_agent{i}"] = dict(zip(cols, row))
                     except Exception:
                         pass
+
+            # Fetch Instructing/Instructed Agents if present (pacs.002 and similar)
+            if gold.get("instructing_agent_fi_id"):
+                try:
+                    cursor.execute("""
+                        SELECT fi_id, fi_type, institution_name as name, bic,
+                               national_clearing_system as clearing_system_id, country
+                        FROM gold.cdm_financial_institution WHERE fi_id = %s
+                    """, (gold["instructing_agent_fi_id"],))
+                    row = cursor.fetchone()
+                    if row:
+                        cols = [desc[0] for desc in cursor.description]
+                        result["gold_entities"]["instructing_agent"] = dict(zip(cols, row))
+                except Exception:
+                    pass
+
+            if gold.get("instructed_agent_fi_id"):
+                try:
+                    cursor.execute("""
+                        SELECT fi_id, fi_type, institution_name as name, bic,
+                               national_clearing_system as clearing_system_id, country
+                        FROM gold.cdm_financial_institution WHERE fi_id = %s
+                    """, (gold["instructed_agent_fi_id"],))
+                    row = cursor.fetchone()
+                    if row:
+                        cols = [desc[0] for desc in cursor.description]
+                        result["gold_entities"]["instructed_agent"] = dict(zip(cols, row))
+                except Exception:
+                    pass
 
             # Fetch Ultimate Parties if present
             if gold.get("ultimate_debtor_id"):
@@ -1180,67 +1215,21 @@ async def get_record_lineage(layer: str, record_id: str):
         except Exception:
             pass
 
-        # Parse Bronze raw_content using extractors to provide structured fields
-        if result.get("bronze") and result["bronze"].get("raw_content"):
-            try:
-                from gps_cdm.message_formats import get_extractor, ExtractorRegistry
-                msg_type = result["bronze"].get("message_type", "")
-                raw_content = result["bronze"]["raw_content"]
-
-                # Get the extractor for this message type
-                extractor = ExtractorRegistry.get(msg_type)
-                if extractor:
-                    # Parse raw_content - handle both string and dict
-                    content = raw_content
-                    if isinstance(raw_content, str):
-                        try:
-                            content = json.loads(raw_content)
-                        except json.JSONDecodeError:
-                            content = {"_raw_text": raw_content}
-
-                    # Use extractor to get structured Bronze data
-                    batch_id = result["bronze"].get("_batch_id", "")
-                    raw_id_value = result["bronze"].get("raw_id", "")
+        # Use extractor_output from Bronze for parsed field values
+        # This was computed during Bronze ingestion and stored as JSONB
+        if result.get("bronze"):
+            extractor_output = result["bronze"].get("extractor_output")
+            if extractor_output:
+                # extractor_output is already a dict (JSONB) or needs parsing
+                if isinstance(extractor_output, str):
                     try:
-                        bronze_data = extractor.extract_bronze(content, batch_id)
-                        result["bronze_parsed"] = bronze_data
-                    except Exception:
-                        pass  # bronze_parsed is optional enhancement
-
-                    # Also extract Silver-equivalent fields from Bronze
-                    try:
-                        # Parse the raw text to structured format if needed
-                        parsed_content = content
-                        if content.get("_raw_text"):
-                            raw_text = content["_raw_text"]
-                            # Try to parse based on message format
-                            if raw_text.strip().startswith("{1:") or raw_text.strip().startswith("{2:"):
-                                # SWIFT block format - use SWIFT parser
-                                from gps_cdm.message_formats.chaps import ChapsSwiftParser
-                                parser = ChapsSwiftParser()
-                                parsed_content = parser.parse(raw_text)
-                            elif raw_text.strip().startswith("<"):
-                                # XML format - use XML parser if available
-                                if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
-                                    parsed_content = extractor.parser.parse(raw_text)
-                            else:
-                                # Try JSON
-                                try:
-                                    parsed_content = json.loads(raw_text)
-                                except json.JSONDecodeError:
-                                    parsed_content = content
-
-                        # extract_silver(content, raw_id, stg_id, batch_id)
-                        silver_data = extractor.extract_silver(parsed_content, raw_id_value, "", batch_id)
-                        result["bronze_silver_equivalent"] = silver_data
-
-                        # Also include the parsed bronze content for display
-                        if parsed_content != content:
-                            result["bronze_parsed"] = parsed_content
-                    except Exception:
-                        pass  # bronze_silver_equivalent is optional enhancement
-            except Exception:
-                pass  # Extractor enhancement is optional
+                        result["bronze_extracted"] = json.loads(extractor_output)
+                    except json.JSONDecodeError:
+                        result["bronze_extracted"] = {}
+                else:
+                    result["bronze_extracted"] = extractor_output
+            else:
+                result["bronze_extracted"] = {}
 
         # Fetch Gold extension data if available
         if result.get("gold"):
@@ -1261,11 +1250,7 @@ async def get_record_lineage(layer: str, record_id: str):
                 "camt.052": "cdm_payment_extension_iso20022",
                 "camt.053": "cdm_payment_extension_iso20022",
                 "camt.054": "cdm_payment_extension_iso20022",
-                "MT103": "cdm_payment_extension_swift",
-                "MT103STP": "cdm_payment_extension_swift",
-                "MT101": "cdm_payment_extension_swift",
-                "MT202": "cdm_payment_extension_swift",
-                "MT202COV": "cdm_payment_extension_swift",
+                # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
                 "FEDWIRE": "cdm_payment_extension_fedwire",
                 "ACH": "cdm_payment_extension_ach",
                 "SEPA": "cdm_payment_extension_sepa",

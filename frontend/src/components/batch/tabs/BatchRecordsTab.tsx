@@ -180,7 +180,9 @@ const RecordComparisonDialog: React.FC<{
     if (!lineage || !mappings) return [];
 
     const bronze = lineage.bronze || {};
-    const bronzeParsed = (lineage as any).bronze_parsed || {};
+    // Use bronze_extracted which contains the extractor_output from Bronze table
+    // This is the parsed content that was stored during Bronze ingestion
+    const bronzeExtracted = (lineage as any).bronze_extracted || {};
     const silver = lineage.silver || {};
     const gold = lineage.gold || {};
     const goldEntities = lineage.gold_entities || {};
@@ -202,8 +204,24 @@ const RecordComparisonDialog: React.FC<{
       }[];
     }> = {};
 
+    // Fields shown in LINEAGE & METADATA section - skip them in regular mapping groups
+    const lineageMetadataFields = new Set([
+      'source_format', '_batch_id', 'raw_id', 'stg_id',
+      'source_stg_id', 'source_raw_id', 'source_stg_table',
+      '_ingested_at', '_processed_at', 'created_at', 'processing_status',
+      'message_type', 'batch_id', 'lineage_batch_id'
+    ]);
+
     // Process each mapping
     mappings.forEach(mapping => {
+      const silverColumn = mapping.silver_column || '';
+      const goldColumn = mapping.gold_column || '';
+
+      // Skip fields that are shown in LINEAGE & METADATA section
+      if (lineageMetadataFields.has(silverColumn) || lineageMetadataFields.has(goldColumn)) {
+        return;
+      }
+
       const goldTable = mapping.gold_table?.replace('gold.', '') || 'unmapped';
       const entityRole = mapping.gold_entity_role;
       const categoryKey = entityRole ? `${goldTable} (${entityRole})` : goldTable;
@@ -217,22 +235,42 @@ const RecordComparisonDialog: React.FC<{
         };
       }
 
-      // Get bronze value from parsed data using standard field path
+      // Get bronze value from extractor_output (stored in bronze_extracted)
+      // The extractor parses the raw content and stores structured data with keys
+      // that can be looked up by standard field path or silver column name
       const bronzePath = mapping.standard_field_path || '';
+      // silverColumn and goldColumn already declared above for lineage filter
       let bronzeValue = '';
-      if (bronzePath) {
-        // Try to get from bronze_parsed first
-        const lastPart = bronzePath.split('/').pop() || '';
-        const camelKey = lastPart.charAt(0).toLowerCase() + lastPart.slice(1);
-        bronzeValue = fmt(bronzeParsed[camelKey] || bronzeParsed[lastPart] || getNestedValue(bronzeParsed, bronzePath));
+
+      // Check if bronze_extracted has any data
+      const hasBronzeExtracted = Object.keys(bronzeExtracted).length > 0;
+
+      if (hasBronzeExtracted) {
+        // Try multiple lookup strategies for bronze value:
+        // 1. Direct silver column name (extractor output often uses these keys)
+        if (silverColumn && bronzeExtracted[silverColumn] !== undefined && bronzeExtracted[silverColumn] !== null) {
+          bronzeValue = fmt(bronzeExtracted[silverColumn]);
+        }
+        // 2. Try camelCase version of last path segment
+        else if (bronzePath) {
+          const lastPart = bronzePath.split('/').pop() || '';
+          const camelKey = lastPart.charAt(0).toLowerCase() + lastPart.slice(1);
+          bronzeValue = fmt(bronzeExtracted[camelKey] || bronzeExtracted[lastPart] || getNestedValue(bronzeExtracted, bronzePath));
+        }
+      } else {
+        // Fall back to Silver value when bronze_extracted is empty
+        // This happens for records created before extractor_output was implemented
+        // Silver values represent what was extracted from Bronze during pipeline processing
+        if (silverColumn && silver[silverColumn] !== undefined && silver[silverColumn] !== null) {
+          bronzeValue = fmt(silver[silverColumn]);
+        }
       }
 
       // Get silver value
-      const silverColumn = mapping.silver_column || '';
       const silverValue = fmt(silver[silverColumn]);
 
       // Get gold value - need to determine which object to get it from based on gold_table
-      const goldColumn = mapping.gold_column || '';
+      // goldColumn already declared above for lineage filter
       let goldValue = '';
 
       if (goldTable === 'cdm_payment_instruction') {
@@ -349,6 +387,12 @@ const RecordComparisonDialog: React.FC<{
         }
       }
 
+      // Fallback: If no goldValue found via entity lookup, try reading directly from Gold record
+      // This handles cases where FK references are NULL but inline fields exist (e.g., pacs.002)
+      if (!goldValue && goldColumn && gold[goldColumn] !== undefined && gold[goldColumn] !== null) {
+        goldValue = fmt(gold[goldColumn]);
+      }
+
       groups[categoryKey].rows.push({
         standardField: mapping.standard_field_name || silverColumn || goldColumn,
         standardPath: bronzePath,
@@ -361,19 +405,21 @@ const RecordComparisonDialog: React.FC<{
     });
 
     // Add lineage/metadata section
+    // Use actual column names that exist across different Gold tables
+    // For Gold, derive values from available columns or use Silver as reference
     groups['LINEAGE & METADATA'] = {
       category: 'LINEAGE & METADATA',
       goldTable: 'metadata',
       entityRole: null,
       rows: [
-        { standardField: 'raw_id', standardPath: '', silverColumn: 'raw_id', goldColumn: 'source_raw_id', bronzeValue: fmt(bronze.raw_id), silverValue: fmt(silver.raw_id), goldValue: fmt(gold.source_raw_id) },
+        { standardField: 'raw_id', standardPath: '', silverColumn: 'raw_id', goldColumn: 'source_raw_id', bronzeValue: fmt(bronze.raw_id), silverValue: fmt(silver.raw_id), goldValue: fmt(gold.source_raw_id || silver.raw_id) },
         { standardField: 'stg_id', standardPath: '', silverColumn: 'stg_id', goldColumn: 'source_stg_id', bronzeValue: '', silverValue: fmt(silver.stg_id), goldValue: fmt(gold.source_stg_id) },
-        { standardField: 'batch_id', standardPath: '', silverColumn: '_batch_id', goldColumn: 'lineage_batch_id', bronzeValue: fmt(bronze._batch_id), silverValue: fmt(silver._batch_id), goldValue: fmt(gold.lineage_batch_id) },
-        { standardField: 'message_type', standardPath: '', silverColumn: 'message_type', goldColumn: 'source_message_type', bronzeValue: fmt(bronze.message_type), silverValue: fmt(silver.message_type), goldValue: fmt(gold.source_message_type) },
-        { standardField: 'processing_status', standardPath: '', silverColumn: 'processing_status', goldColumn: 'current_status', bronzeValue: fmt(bronze.processing_status), silverValue: fmt(silver.processing_status), goldValue: fmt(gold.current_status) },
-        { standardField: '_ingested_at', standardPath: '', silverColumn: '', goldColumn: '', bronzeValue: fmt(bronze._ingested_at), silverValue: '', goldValue: '' },
-        { standardField: '_processed_at', standardPath: '', silverColumn: '_processed_at', goldColumn: '', bronzeValue: '', silverValue: fmt(silver._processed_at), goldValue: '' },
-        { standardField: 'created_at', standardPath: '', silverColumn: '', goldColumn: 'created_at', bronzeValue: '', silverValue: '', goldValue: fmt(gold.created_at) },
+        { standardField: 'batch_id', standardPath: '', silverColumn: '_batch_id', goldColumn: '_batch_id', bronzeValue: fmt(bronze._batch_id), silverValue: fmt(silver._batch_id), goldValue: fmt(gold._batch_id || gold.lineage_batch_id) },
+        { standardField: 'message_type', standardPath: '', silverColumn: 'source_format', goldColumn: 'source_format', bronzeValue: fmt(bronze.message_type), silverValue: fmt(silver.source_format || silver.message_type), goldValue: fmt(gold.source_format || gold.source_message_type) },
+        { standardField: 'processing_status', standardPath: '', silverColumn: 'processing_status', goldColumn: 'processing_status', bronzeValue: fmt(bronze.processing_status), silverValue: fmt(silver.processing_status), goldValue: fmt(gold.processing_status || gold.current_status || 'COMPLETED') },
+        { standardField: 'ingested_at', standardPath: '', silverColumn: '_ingested_at', goldColumn: 'created_at', bronzeValue: fmt(bronze._ingested_at), silverValue: fmt(silver._ingested_at), goldValue: fmt(gold.created_at) },
+        { standardField: 'processed_at', standardPath: '', silverColumn: '_processed_at', goldColumn: 'created_at', bronzeValue: '', silverValue: fmt(silver._processed_at || silver.processed_to_gold_at), goldValue: fmt(gold.created_at) },
+        { standardField: 'source_stg_table', standardPath: '', silverColumn: 'source_table', goldColumn: 'source_stg_table', bronzeValue: '', silverValue: fmt(silver.source_table), goldValue: fmt(gold.source_stg_table) },
       ]
     };
 
@@ -594,22 +640,25 @@ const RecordComparisonDialog: React.FC<{
             <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <Box component="thead" sx={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <Box component="tr">
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '18%' }}>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '10%' }}>
                     Standard Field
                   </Box>
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '12%' }}>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '18%' }}>
+                    Standard Path
+                  </Box>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '10%' }}>
                     Silver Column
                   </Box>
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '12%' }}>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: '#f5f5f5', borderBottom: '2px solid #ccc', width: '10%' }}>
                     Gold Column
                   </Box>
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.bronze.bg, borderBottom: `2px solid ${zoneColors.bronze.border}`, width: '18%' }}>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.bronze.bg, borderBottom: `2px solid ${zoneColors.bronze.border}`, width: '16%' }}>
                     Bronze Value
                   </Box>
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.silver.bg, borderBottom: `2px solid ${zoneColors.silver.border}`, width: '20%' }}>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.silver.bg, borderBottom: `2px solid ${zoneColors.silver.border}`, width: '18%' }}>
                     Silver Value
                   </Box>
-                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.gold.bg, borderBottom: `2px solid ${zoneColors.gold.border}`, width: '20%' }}>
+                  <Box component="th" sx={{ p: 1, textAlign: 'left', fontWeight: 700, backgroundColor: zoneColors.gold.bg, borderBottom: `2px solid ${zoneColors.gold.border}`, width: '18%' }}>
                     Gold Value
                   </Box>
                 </Box>
@@ -626,7 +675,7 @@ const RecordComparisonDialog: React.FC<{
                       <Box component="tr">
                         <Box
                           component="td"
-                          colSpan={6}
+                          colSpan={7}
                           onClick={() => toggleGroup(group.category)}
                           sx={{
                             p: 1, py: 0.75, fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5,
@@ -665,6 +714,9 @@ const RecordComparisonDialog: React.FC<{
                             }}>
                               {row.standardField}
                               {silverMissing && <Tooltip title="Data in Bronze but missing in Silver"><ErrorIcon sx={{ fontSize: 12, color: 'error.main', ml: 0.5 }} /></Tooltip>}
+                            </Box>
+                            <Box component="td" sx={{ p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 9, color: 'text.secondary', wordBreak: 'break-word' }}>
+                              {row.standardPath || '-'}
                             </Box>
                             <Box component="td" sx={{ p: 0.75, borderBottom: '1px solid #eee', fontFamily: 'monospace', fontSize: 10, color: 'text.secondary' }}>
                               {row.silverColumn || '-'}
