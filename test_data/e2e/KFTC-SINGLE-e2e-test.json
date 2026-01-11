@@ -1,0 +1,52 @@
+{
+  "messageId": "KFTC-SINGLE-E2E-20260106-001",
+  "transactionType": "TRANSFER",
+  "is_bulk": false,
+  "record_count": 1,
+  "creationDateTime": "2026-01-06T10:00:00+09:00",
+  "settlementDate": "2026-01-06",
+  "amount": {
+    "value": 50000000,
+    "currency": "KRW"
+  },
+  "debtor": {
+    "name": "Seoul Electronics Co Ltd",
+    "nameHangul": "서울전자주식회사",
+    "registrationNumber": "123-45-67890",
+    "account": {
+      "number": "123-456-789012",
+      "bankCode": "004"
+    },
+    "address": {
+      "line1": "123 Gangnam-daero",
+      "city": "Seoul",
+      "postalCode": "06164",
+      "country": "KR"
+    }
+  },
+  "debtorAgent": {
+    "bankCode": "004",
+    "name": "KB Kookmin Bank",
+    "swiftCode": "CZNBKRSE"
+  },
+  "creditor": {
+    "name": "Busan Manufacturing Inc",
+    "nameHangul": "부산제조주식회사",
+    "registrationNumber": "987-65-43210",
+    "account": {
+      "number": "987-654-321098",
+      "bankCode": "088"
+    }
+  },
+  "creditorAgent": {
+    "bankCode": "088",
+    "name": "Shinhan Bank",
+    "swiftCode": "SHBKKRSE"
+  },
+  "remittanceInfo": "Payment for invoice #KR-2026-00456",
+  "debtorName": "Seoul Electronics Co Ltd",
+  "debtorAccount": "123-456-789012",
+  "creditorName": "Busan Manufacturing Inc",
+  "creditorAccount": "987-654-321098",
+  "currency": "KRW"
+}

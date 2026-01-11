@@ -16,7 +16,7 @@ Usage:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from gps_cdm.api.routes import exceptions, data_quality, reconciliation, reprocess, lineage, pipeline, auth, schema, graph, errors, websocket, mappings
+from gps_cdm.api.routes import exceptions, data_quality, reconciliation, reprocess, lineage, pipeline, auth, schema, graph, errors, websocket, mappings, catalog
 
 # Create FastAPI app
 app = FastAPI(
@@ -49,6 +49,7 @@ app.include_router(graph.router, prefix="/api/v1/graph", tags=["Graph"])
 app.include_router(errors.router, prefix="/api/v1/errors", tags=["Processing Errors"])
 app.include_router(websocket.router, prefix="/api/v1/ws", tags=["WebSocket"])
 app.include_router(mappings.router, prefix="/api/v1/mappings", tags=["Mappings Documentation"])
+app.include_router(catalog.router, prefix="/api/v1", tags=["CDM Catalog"])
 
 
 @app.get("/health")
@@ -76,6 +77,7 @@ async def root():
             "auth": "/api/v1/auth",
             "websocket": "/api/v1/ws/stream",
             "mappings": "/api/v1/mappings",
+            "catalog": "/api/v1/catalog",
             "docs": "/docs",
         }
     }

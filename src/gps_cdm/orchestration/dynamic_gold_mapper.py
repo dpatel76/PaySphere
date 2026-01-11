@@ -85,7 +85,8 @@ class DynamicGoldMapper:
         """Initialize with database connection."""
         self.conn = conn
 
-    def _load_mappings(self, format_id: str, use_inheritance: bool = True) -> List[GoldMapping]:
+    def _load_mappings(self, format_id: str, use_inheritance: bool = True,
+                       routing_key: Optional[str] = None) -> List[GoldMapping]:
         """Load Gold mappings from database for a format with ISO 20022 inheritance support.
 
         ISO 20022 Inheritance:
@@ -97,14 +98,20 @@ class DynamicGoldMapper:
             - Direct FEDWIRE Gold mappings take precedence
             - Unmapped Gold fields fall back to pacs.008.base mappings
 
+        Conditional Routing:
+            When routing_key is provided, only mappings with matching routing_key
+            or NULL routing_key are returned. This supports format subtypes that
+            route to different ISO message types (e.g., ACH credits vs debits).
+
         Args:
             format_id: Message format identifier (e.g., 'FEDWIRE', 'pain.001')
             use_inheritance: If True, include inherited mappings from parent formats
+            routing_key: Optional routing key for conditional mapping selection
 
         Returns:
             List of GoldMapping objects
         """
-        cache_key = f"{format_id}:{'inherit' if use_inheritance else 'direct'}"
+        cache_key = f"{format_id}:{'inherit' if use_inheritance else 'direct'}:{routing_key or 'default'}"
         if cache_key in self._mappings_cache:
             return self._mappings_cache[cache_key]
 
@@ -548,15 +555,21 @@ class DynamicGoldMapper:
         return value
 
     def build_gold_records(self, format_id: str, silver_data: Dict[str, Any],
-                          stg_id: str, batch_id: str) -> Dict[str, List[GoldRecord]]:
+                          stg_id: str, batch_id: str,
+                          routing_key: Optional[str] = None,
+                          target_iso_type: Optional[str] = None) -> Dict[str, List[GoldRecord]]:
         """
         Build Gold records from Silver data using database mappings.
+
+        Enhanced with conditional routing support:
+        - routing_key: Used to filter mappings for specific message subtypes
+        - target_iso_type: Target ISO 20022 message type for table selection
 
         Returns dict of table_name -> list of GoldRecords to insert.
         For entity tables (party, account, fi), multiple records may be created
         based on entity_role.
         """
-        mappings = self._load_mappings(format_id)
+        mappings = self._load_mappings(format_id, routing_key=routing_key)
 
         # Context for expression evaluation
         now = datetime.utcnow()
@@ -625,7 +638,7 @@ class DynamicGoldMapper:
             # Legacy tables
             'cdm_party': ['name'],
             'cdm_account': ['account_number', 'iban'],
-            'cdm_financial_institution': ['bic', 'lei', 'institution_name'],
+            'cdm_financial_institution': ['bic', 'lei', 'institution_name', 'national_clearing_code', 'branch_identification'],
             'cdm_payment_instruction': ['instruction_id'],
             'cdm_account_statement': ['statement_id'],
             # PAIN tables - check for message_id or key identifiers
@@ -684,7 +697,28 @@ class DynamicGoldMapper:
             'intermediary_agent1_id': None,
             'intermediary_agent2_id': None,
             'account_servicer_id': None,
+            'instructing_agent_id': None,
+            'instructed_agent_id': None,
         }
+
+        # Pre-generate instruction_id for entity tables' source_instruction_id reference
+        # This allows entities to reference the payment they came from before the main table is persisted
+        pre_generated_instruction_id = None
+        for table in records:
+            # Find the main instruction table and pre-generate its ID
+            if table in ('cdm_payment_instruction', 'cdm_pain_customer_credit_transfer_initiation',
+                         'cdm_pacs_fi_customer_credit_transfer', 'cdm_pacs_fi_credit_transfer',
+                         'cdm_pacs_payment_return', 'cdm_pacs_fi_payment_status_report',
+                         'cdm_pain_customer_direct_debit_initiation', 'cdm_pain_customer_payment_status_report',
+                         'cdm_pacs_fi_direct_debit', 'cdm_camt_fi_payment_cancellation_request'):
+                pre_generated_instruction_id = self._generate_id(table)
+                result['instruction_id'] = pre_generated_instruction_id
+                # Store the pre-generated ID in the record so it uses the same ID
+                for record in records[table]:
+                    id_column = self._get_id_column(table)
+                    if id_column:
+                        record.columns[id_column] = pre_generated_instruction_id
+                break
 
         # Persist in order: entities first, then main tables
         # New ISO 20022 semantic tables come last
@@ -740,11 +774,25 @@ class DynamicGoldMapper:
 
         return result
 
+    # Entity tables that use "always INSERT" pattern (preserve payment-level history)
+    ENTITY_TABLES = {'cdm_party', 'cdm_account', 'cdm_financial_institution'}
+
     def _persist_single_record(self, cursor, record: GoldRecord,
                                entity_ids: Dict[str, Any]) -> Optional[str]:
-        """Persist a single Gold record and return its ID."""
+        """Persist a single Gold record and return its ID.
+
+        Entity tables (cdm_party, cdm_account, cdm_financial_institution) use
+        "always INSERT" pattern - each payment creates its own entity records
+        to preserve payment-level history. These records include source_instruction_id
+        for traceability.
+
+        Non-entity tables use ON CONFLICT DO NOTHING (first record wins).
+        """
         table = record.table_name
         columns = record.columns.copy()
+
+        # Check if this is an entity table
+        is_entity_table = table in self.ENTITY_TABLES
 
         # Resolve _ENTITY_REF expressions in columns (database-driven FK references)
         # This allows FK columns to be defined in mapping.gold_field_mappings
@@ -804,9 +852,20 @@ class DynamicGoldMapper:
         # Get ID column name
         id_column = self._get_id_column(table)
 
-        # Generate ID if not present
-        if id_column and not columns.get(id_column):
-            columns[id_column] = self._generate_id(table)
+        # Generate ID if not present (always generate new ID for entity tables)
+        if id_column:
+            if is_entity_table or not columns.get(id_column):
+                columns[id_column] = self._generate_id(table)
+
+        # For entity tables, add source_instruction_id for traceability
+        if is_entity_table:
+            # Get instruction_id from entity_ids (set during main table creation)
+            source_instruction_id = entity_ids.get('instruction_id')
+            if source_instruction_id:
+                columns['source_instruction_id'] = source_instruction_id
+            # Add created_at timestamp
+            columns['created_at'] = datetime.utcnow()
+            columns['updated_at'] = datetime.utcnow()
 
         # Filter out None values for optional columns, keep for nullable ones
         insert_columns = {k: v for k, v in columns.items() if v is not None}
@@ -821,12 +880,22 @@ class DynamicGoldMapper:
         values = [insert_columns[c] for c in col_names]
 
         try:
-            cursor.execute(f"""
-                INSERT INTO gold.{table} ({col_str})
-                VALUES ({placeholders})
-                ON CONFLICT ({id_column}) DO NOTHING
-                RETURNING {id_column}
-            """, values)
+            if is_entity_table:
+                # Entity tables: Always INSERT (no conflict handling)
+                # Each payment creates its own entity records for history preservation
+                cursor.execute(f"""
+                    INSERT INTO gold.{table} ({col_str})
+                    VALUES ({placeholders})
+                    RETURNING {id_column}
+                """, values)
+            else:
+                # Non-entity tables: ON CONFLICT DO NOTHING (first record wins)
+                cursor.execute(f"""
+                    INSERT INTO gold.{table} ({col_str})
+                    VALUES ({placeholders})
+                    ON CONFLICT ({id_column}) DO NOTHING
+                    RETURNING {id_column}
+                """, values)
 
             row = cursor.fetchone()
             return row[0] if row else columns.get(id_column)
@@ -960,6 +1029,8 @@ class DynamicGoldMapper:
                 'INTERMEDIARY_AGENT1': 'intermediary_agent1_id',
                 'INTERMEDIARY_AGENT2': 'intermediary_agent2_id',
                 'ACCOUNT_SERVICER': 'account_servicer_id',
+                'INSTRUCTING_AGENT': 'instructing_agent_id',
+                'INSTRUCTED_AGENT': 'instructed_agent_id',
             }
             if role and role in role_map:
                 result[role_map[role]] = entity_id
@@ -1152,37 +1223,44 @@ def persist_identifiers(cursor, silver_data: Dict[str, Any], entity_ids: Dict[st
     - cdm_account_identifiers: IBAN, BBAN, account numbers
     - cdm_institution_identifiers: BIC, LEI, clearing codes for FIs
 
+    Uses "always INSERT" pattern for payment-level history preservation.
+    Each identifier record includes source_instruction_id for traceability.
+
     Note: Transaction/payment identifiers (message_id, end_to_end_id, uetr, etc.)
     are stored directly in the semantic base tables (cdm_pacs_*, cdm_pain_*, etc.)
     rather than in a separate normalized table.
     """
+    # Get source_instruction_id for traceability
+    source_instruction_id = entity_ids.get('instruction_id')
+
     # Party identifiers (debtor/creditor)
     if entity_ids.get('debtor_id'):
         _persist_party_identifiers(cursor, silver_data, entity_ids['debtor_id'],
-                                   'DEBTOR', format_id, stg_id)
+                                   'DEBTOR', format_id, stg_id, source_instruction_id)
     if entity_ids.get('creditor_id'):
         _persist_party_identifiers(cursor, silver_data, entity_ids['creditor_id'],
-                                   'CREDITOR', format_id, stg_id)
+                                   'CREDITOR', format_id, stg_id, source_instruction_id)
 
     # Account identifiers
     if entity_ids.get('debtor_account_id'):
         _persist_account_identifiers(cursor, silver_data, entity_ids['debtor_account_id'],
-                                     'DEBTOR', format_id, stg_id)
+                                     'DEBTOR', format_id, stg_id, source_instruction_id)
     if entity_ids.get('creditor_account_id'):
         _persist_account_identifiers(cursor, silver_data, entity_ids['creditor_account_id'],
-                                     'CREDITOR', format_id, stg_id)
+                                     'CREDITOR', format_id, stg_id, source_instruction_id)
 
     # Financial institution identifiers
     if entity_ids.get('debtor_agent_id'):
         _persist_fi_identifiers(cursor, silver_data, entity_ids['debtor_agent_id'],
-                                'DEBTOR_AGENT', format_id, stg_id)
+                                'DEBTOR_AGENT', format_id, stg_id, source_instruction_id)
     if entity_ids.get('creditor_agent_id'):
         _persist_fi_identifiers(cursor, silver_data, entity_ids['creditor_agent_id'],
-                                'CREDITOR_AGENT', format_id, stg_id)
+                                'CREDITOR_AGENT', format_id, stg_id, source_instruction_id)
 
 
 def _persist_party_identifiers(cursor, silver_data: Dict[str, Any],
-                               party_id: str, role: str, format_id: str, stg_id: str) -> None:
+                               party_id: str, role: str, format_id: str, stg_id: str,
+                               source_instruction_id: Optional[str] = None) -> None:
     """Persist party identifiers (LEI, BIC, tax ID, etc.)."""
     # ISO 20022 abbreviations mapping
     iso_abbrev = {
@@ -1231,11 +1309,12 @@ def _persist_party_identifiers(cursor, silver_data: Dict[str, Any],
     for field_name, id_type in all_fields:
         value = silver_data.get(field_name)
         if value:
-            _upsert_party_id(cursor, party_id, id_type, str(value))
+            _insert_party_id(cursor, party_id, id_type, str(value), source_instruction_id)
 
 
 def _persist_account_identifiers(cursor, silver_data: Dict[str, Any],
-                                 account_id: str, role: str, format_id: str, stg_id: str) -> None:
+                                 account_id: str, role: str, format_id: str, stg_id: str,
+                                 source_instruction_id: Optional[str] = None) -> None:
     """Persist account identifiers (IBAN, BBAN, proxy IDs)."""
     # ISO 20022 abbreviations mapping
     iso_abbrev = {
@@ -1269,11 +1348,12 @@ def _persist_account_identifiers(cursor, silver_data: Dict[str, Any],
     for field_name, id_type in account_id_fields:
         value = silver_data.get(field_name)
         if value:
-            _upsert_account_id(cursor, account_id, id_type, str(value))
+            _insert_account_id(cursor, account_id, id_type, str(value), source_instruction_id)
 
 
 def _persist_fi_identifiers(cursor, silver_data: Dict[str, Any],
-                           fi_id: str, role: str, format_id: str, stg_id: str) -> None:
+                           fi_id: str, role: str, format_id: str, stg_id: str,
+                           source_instruction_id: Optional[str] = None) -> None:
     """Persist financial institution identifiers (BIC, LEI, national clearing codes)."""
     # Map roles to field name patterns (including ISO 20022 abbreviated forms)
     role_prefixes = {
@@ -1308,55 +1388,73 @@ def _persist_fi_identifiers(cursor, silver_data: Dict[str, Any],
         for field_name, id_type in fi_id_fields:
             value = silver_data.get(field_name)
             if value:
-                _upsert_fi_id(cursor, fi_id, id_type, str(value))
+                _insert_fi_id(cursor, fi_id, id_type, str(value), source_instruction_id)
 
 
-def _upsert_party_id(cursor, party_id: str, id_type: str, id_value: str) -> None:
-    """Insert or update party identifier."""
+def _insert_party_id(cursor, party_id: str, id_type: str, id_value: str,
+                     source_instruction_id: Optional[str] = None) -> None:
+    """Insert party identifier (always INSERT for payment-level history).
+
+    Uses "always INSERT" pattern - each payment creates its own identifier
+    records for traceability. source_instruction_id links back to the payment.
+    """
     try:
+        # Generate new identifier_id for each insert
+        identifier_id = str(uuid.uuid4())
         # LEI is typically the primary identifier for parties
         is_primary = id_type == 'LEI'
         cursor.execute("""
             INSERT INTO gold.cdm_party_identifiers
-                (party_id, identifier_type, identifier_value, is_primary)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (party_id, identifier_type) DO UPDATE
-            SET identifier_value = EXCLUDED.identifier_value,
-                is_primary = EXCLUDED.is_primary
-        """, (party_id, id_type, id_value, is_primary))
+                (id, party_id, identifier_type, identifier_value, is_primary,
+                 source_instruction_id, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (identifier_id, party_id, id_type, id_value, is_primary,
+              source_instruction_id, datetime.utcnow()))
     except Exception as e:
         logger.debug(f"Could not insert party identifier {id_type}: {e}")
 
 
-def _upsert_account_id(cursor, account_id: str, id_type: str, id_value: str) -> None:
-    """Insert or update account identifier."""
+def _insert_account_id(cursor, account_id: str, id_type: str, id_value: str,
+                       source_instruction_id: Optional[str] = None) -> None:
+    """Insert account identifier (always INSERT for payment-level history).
+
+    Uses "always INSERT" pattern - each payment creates its own identifier
+    records for traceability. source_instruction_id links back to the payment.
+    """
     try:
+        # Generate new identifier_id for each insert
+        identifier_id = str(uuid.uuid4())
         # Determine if this should be the primary identifier
         is_primary = id_type == 'IBAN'  # IBAN is typically the primary identifier
         cursor.execute("""
             INSERT INTO gold.cdm_account_identifiers
-                (account_id, identifier_type, identifier_value, is_primary)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (account_id, identifier_type) DO UPDATE
-            SET identifier_value = EXCLUDED.identifier_value,
-                is_primary = EXCLUDED.is_primary
-        """, (account_id, id_type, id_value, is_primary))
+                (id, account_id, identifier_type, identifier_value, is_primary,
+                 source_instruction_id, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (identifier_id, account_id, id_type, id_value, is_primary,
+              source_instruction_id, datetime.utcnow()))
     except Exception as e:
         logger.debug(f"Could not insert account identifier {id_type}: {e}")
 
 
-def _upsert_fi_id(cursor, fi_id: str, id_type: str, id_value: str) -> None:
-    """Insert or update financial institution identifier."""
+def _insert_fi_id(cursor, fi_id: str, id_type: str, id_value: str,
+                  source_instruction_id: Optional[str] = None) -> None:
+    """Insert financial institution identifier (always INSERT for payment-level history).
+
+    Uses "always INSERT" pattern - each payment creates its own identifier
+    records for traceability. source_instruction_id links back to the payment.
+    """
     try:
+        # Generate new identifier_id for each insert
+        identifier_id = str(uuid.uuid4())
         # BIC is typically the primary identifier for FIs
         is_primary = id_type == 'BIC'
         cursor.execute("""
             INSERT INTO gold.cdm_institution_identifiers
-                (financial_institution_id, identifier_type, identifier_value, is_primary)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (financial_institution_id, identifier_type) DO UPDATE
-            SET identifier_value = EXCLUDED.identifier_value,
-                is_primary = EXCLUDED.is_primary
-        """, (fi_id, id_type, id_value, is_primary))
+                (id, financial_institution_id, identifier_type, identifier_value, is_primary,
+                 source_instruction_id, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (identifier_id, fi_id, id_type, id_value, is_primary,
+              source_instruction_id, datetime.utcnow()))
     except Exception as e:
         logger.debug(f"Could not insert FI identifier {id_type}: {e}")

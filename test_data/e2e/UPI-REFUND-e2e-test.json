@@ -1,0 +1,83 @@
+{
+  "Head": {
+    "msgId": "UPI-REFUND-E2E-20260106-001",
+    "orgId": "NPCI",
+    "ts": "2026-01-06T16:45:00+05:30",
+    "ver": "2.0",
+    "txnType": "REFUND"
+  },
+  "Txn": {
+    "id": "TXN-UPI-REFUND-20260106-001",
+    "type": "REFUND",
+    "subType": "REFUND",
+    "ts": "2026-01-06T16:45:00+05:30",
+    "note": "Refund for cancelled order - ORD-2026-00456",
+    "refId": "ORD-2026-00456",
+    "orgTxnId": "TXN-UPI-PAY-20260105-789"
+  },
+  "Payer": {
+    "addr": "refunds@okicici",
+    "name": "Online Retail Mart Pvt Ltd",
+    "type": "ENTITY",
+    "vpa": "refunds@okicici",
+    "Ac": {
+      "addrType": "ACCOUNT",
+      "Detail": [
+        {"name": "ACNUM", "value": "999888777666555"},
+        {"name": "ACTYPE", "value": "CURRENT"},
+        {"name": "IFSC", "value": "ICIC0003456"},
+        {"name": "NAME", "value": "Online Retail Mart Pvt Ltd"}
+      ]
+    },
+    "Amount": {
+      "curr": "INR",
+      "value": "15999.00"
+    }
+  },
+  "Payee": {
+    "addr": "customer123@oksbi",
+    "name": "Amit Kumar",
+    "type": "PERSON",
+    "vpa": "customer123@oksbi",
+    "Ac": {
+      "addrType": "ACCOUNT",
+      "Detail": [
+        {"name": "ACNUM", "value": "123456789012"},
+        {"name": "ACTYPE", "value": "SAVINGS"},
+        {"name": "IFSC", "value": "SBIN0004567"},
+        {"name": "NAME", "value": "Amit Kumar"}
+      ]
+    }
+  },
+  "headMsgId": "UPI-REFUND-E2E-20260106-001",
+  "headOrgId": "NPCI",
+  "headTs": "2026-01-06T16:45:00+05:30",
+  "headVer": "2.0",
+  "txnId": "TXN-UPI-REFUND-20260106-001",
+  "txnType": "REFUND",
+  "txnSubType": "REFUND",
+  "txnTs": "2026-01-06T16:45:00+05:30",
+  "txnNote": "Refund for cancelled order - ORD-2026-00456",
+  "originalTxnId": "TXN-UPI-PAY-20260105-789",
+  "payerAddr": "refunds@okicici",
+  "payerName": "Online Retail Mart Pvt Ltd",
+  "payerType": "ENTITY",
+  "payerAcAcnum": "999888777666555",
+  "payerAcActype": "CURRENT",
+  "payerAcIfsc": "ICIC0003456",
+  "payerAmountCurr": "INR",
+  "payerAmountValue": 15999.00,
+  "payeeAddr": "customer123@oksbi",
+  "payeeName": "Amit Kumar",
+  "payeeType": "PERSON",
+  "payeeAcAcnum": "123456789012",
+  "payeeAcActype": "SAVINGS",
+  "payeeAcIfsc": "SBIN0004567",
+  "transactionId": "UPI-REFUND-E2E-20260106-001",
+  "amount": 15999.00,
+  "currency": "INR",
+  "purposeCode": "RFND",
+  "settlementDate": "2026-01-06",
+  "mti": "0420",
+  "processingCode": "200000"
+}

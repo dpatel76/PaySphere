@@ -182,8 +182,7 @@ class MessageTypeConfig:
         'pacs.002': 2, 'pacs.003': 2, 'pacs.004': 2, 'pacs.008': 3, 'pacs.009': 2,
         'camt.052': 1, 'camt.053': 2, 'camt.054': 1,
 
-        # SWIFT MT (high volume)
-        'MT103': 3, 'MT202': 2, 'MT940': 1, 'MT101': 1, 'MT199': 1,
+        # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
 
         # US Domestic
         'FEDWIRE': 3, 'ACH': 3, 'CHIPS': 2, 'RTP': 2, 'FEDNOW': 2,
@@ -246,6 +245,15 @@ class MessageTypeConfig:
 
         # RTP Composite Formats (US Real-Time Payments - TCH)
         'RTP_pacs008': 2, 'RTP_pacs002': 1, 'RTP_pacs004': 1,
+
+        # BOJNET Composite Formats (Japan BOJ-NET)
+        'BOJNET_pacs008': 1, 'BOJNET_pacs009': 1, 'BOJNET_pacs002': 1, 'BOJNET_pacs004': 1, 'BOJNET_camt053': 1,
+
+        # CNAPS Composite Formats (China)
+        'CNAPS_pacs008': 1, 'CNAPS_pacs009': 1, 'CNAPS_pacs002': 1,
+
+        # KFTC Composite Formats (Korea)
+        'KFTC_pacs008': 1, 'KFTC_pacs009': 1, 'KFTC_pacs002': 1,
     })
 
 
@@ -292,6 +300,79 @@ class MessageFormatDetector:
             return 'TAG_VALUE'
 
         return 'RAW'
+
+
+class ISOSubtypeDetector:
+    """Detects ISO 20022 message subtype from XML content.
+
+    For regional payment schemes that use ISO 20022 (BOJNET, CNAPS, KFTC, etc.),
+    this detects the specific message type (pacs.008, pacs.009, etc.) from the
+    XML root element and returns a composite format_id.
+
+    Example:
+        BOJNET file with <FICdtTrf> root -> BOJNET_pacs009
+        BOJNET file with <FIToFICstmrCdtTrf> root -> BOJNET_pacs008
+    """
+
+    # ISO 20022 root element to message type mapping
+    ROOT_TO_ISO_TYPE = {
+        'FIToFICstmrCdtTrf': 'pacs008',      # pacs.008 - FI to FI Customer Credit Transfer
+        'FICdtTrf': 'pacs009',                # pacs.009 - FI Credit Transfer
+        'FIToFIPmtStsRpt': 'pacs002',         # pacs.002 - Payment Status Report
+        'PmtRtr': 'pacs004',                  # pacs.004 - Payment Return
+        'CstmrCdtTrfInitn': 'pain001',        # pain.001 - Customer Credit Transfer Initiation
+        'CstmrDrctDbtInitn': 'pain008',       # pain.008 - Direct Debit Initiation
+        'BkToCstmrStmt': 'camt053',           # camt.053 - Bank to Customer Statement
+        'BkToCstmrAcctRpt': 'camt052',        # camt.052 - Account Report
+        'BkToCstmrDbtCdtNtfctn': 'camt054',   # camt.054 - Debit Credit Notification
+    }
+
+    # Regional schemes that use ISO 20022 and need subtype routing
+    ISO_REGIONAL_SCHEMES = {
+        'BOJNET',   # Japan BOJ-NET
+        'CNAPS',    # China CNAPS
+        'KFTC',     # Korea KFTC
+        # Note: Other schemes like CHAPS, CHIPS, FEDWIRE already use composite format_ids
+    }
+
+    @classmethod
+    def detect_and_route(cls, content: str, original_message_type: str) -> str:
+        """Detect ISO subtype and return routed message type.
+
+        Args:
+            content: Raw message content (XML)
+            original_message_type: Original message type from Kafka header (e.g., 'BOJNET')
+
+        Returns:
+            Routed message type (e.g., 'BOJNET_pacs009' or original if not applicable)
+        """
+        # Only process regional ISO schemes
+        original_upper = original_message_type.upper()
+        if original_upper not in cls.ISO_REGIONAL_SCHEMES:
+            return original_message_type
+
+        # Only process XML content
+        content_stripped = content.strip() if isinstance(content, str) else ''
+        if not content_stripped.startswith('<?xml') and not content_stripped.startswith('<'):
+            return original_message_type
+
+        # Detect ISO message type from root element
+        iso_type = cls._detect_iso_type(content_stripped)
+        if iso_type:
+            routed_type = f"{original_upper}_{iso_type}"
+            logger.info(f"[ISO_ROUTING] {original_message_type} -> {routed_type}")
+            return routed_type
+
+        return original_message_type
+
+    @classmethod
+    def _detect_iso_type(cls, xml_content: str) -> Optional[str]:
+        """Detect ISO 20022 message type from XML content."""
+        for root_elem, iso_type in cls.ROOT_TO_ISO_TYPE.items():
+            # Check for root element in XML (handles namespaced and non-namespaced)
+            if f'<{root_elem}' in xml_content or f':{root_elem}>' in xml_content:
+                return iso_type
+        return None
 
 
 # =============================================================================
@@ -781,6 +862,10 @@ class BronzeConsumer(ZoneConsumer):
             # Detect format from content
             message_format = MessageFormatDetector.detect(content)
 
+            # For ISO 20022 regional schemes (BOJNET, CNAPS, KFTC), detect and route
+            # to the specific ISO message type (e.g., BOJNET -> BOJNET_pacs009)
+            msg_type = ISOSubtypeDetector.detect_and_route(content, msg_type)
+
             # Split multi-record messages (e.g., pain.001 with multiple CdtTrfTxInf)
             split_records = split_message(content, msg_type)
 
@@ -793,8 +878,12 @@ class BronzeConsumer(ZoneConsumer):
                 parent_context = split_rec.get('parent_context', {})
                 record_index = split_rec.get('index', 0)
 
-                # Merge parent context into content if both are dicts
-                if isinstance(split_content, dict) and parent_context:
+                # Convert string content to dict for merging with parent_context
+                if isinstance(split_content, str) and parent_context:
+                    # Wrap raw string content in dict and merge parent context
+                    split_content = {'raw': split_content, **parent_context}
+                elif isinstance(split_content, dict) and parent_context:
+                    # Merge parent context into existing dict
                     for key, value in parent_context.items():
                         if key not in split_content or split_content[key] is None:
                             split_content[key] = value

@@ -1,0 +1,53 @@
+{
+  "messageId": "BOJNET-CUST-E2E-20260106-001",
+  "transactionType": "CUSTOMER",
+  "is_fi_payment": false,
+  "creationDateTime": "2026-01-06T09:00:00+09:00",
+  "settlementDate": "2026-01-06",
+  "amount": {
+    "value": 5000000,
+    "currency": "JPY"
+  },
+  "debtor": {
+    "name": "Tokyo Manufacturing Corporation",
+    "nameKana": "トウキョウセイゾウカブシキガイシャ",
+    "account": {
+      "number": "1234567",
+      "type": "ORDINARY",
+      "branchCode": "001"
+    },
+    "address": {
+      "line1": "1-1-1 Marunouchi",
+      "city": "Chiyoda-ku, Tokyo",
+      "postalCode": "100-0005",
+      "country": "JP"
+    }
+  },
+  "debtorAgent": {
+    "bic": "BOJPJPJT",
+    "name": "MUFG Bank Ltd",
+    "branchCode": "001",
+    "zenginCode": "0005"
+  },
+  "creditor": {
+    "name": "Osaka Trading Company Ltd",
+    "nameKana": "オオサカショウジカブシキガイシャ",
+    "account": {
+      "number": "7654321",
+      "type": "ORDINARY",
+      "branchCode": "101"
+    }
+  },
+  "creditorAgent": {
+    "bic": "SMBJJPJT",
+    "name": "Sumitomo Mitsui Banking Corporation",
+    "branchCode": "101",
+    "zenginCode": "0009"
+  },
+  "remittanceInfo": "Payment for contract #JP-2026-00123",
+  "debtorName": "Tokyo Manufacturing Corporation",
+  "debtorAccount": "1234567",
+  "creditorName": "Osaka Trading Company Ltd",
+  "creditorAccount": "7654321",
+  "currency": "JPY"
+}

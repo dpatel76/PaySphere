@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr>
+      <MsgId>SARIE-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T10:00:00+03:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <TtlIntrBkSttlmAmt Ccy="SAR">375000.00</TtlIntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>SARIE</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>RIABORIPXXX</BICFI>
+          <Nm>Riyad Bank</Nm>
+          <PstlAdr>
+            <Ctry>SA</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>SABBSARIXXX</BICFI>
+          <Nm>Saudi British Bank</Nm>
+          <PstlAdr>
+            <Ctry>SA</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>SARIE-INSTR-001</InstrId>
+        <EndToEndId>SARIE-E2E-REF001</EndToEndId>
+        <TxId>SARIE-TX-20260106-001</TxId>
+        <UETR>d1e2f3a4-b5c6-7890-1234-567890abcdef</UETR>
+      </PmtId>
+
+      <PmtTpInf>
+        <SvcLvl>
+          <Prtry>RTGS</Prtry>
+        </SvcLvl>
+        <CtgyPurp>
+          <Cd>SUPP</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+
+      <IntrBkSttlmAmt Ccy="SAR">375000.00</IntrBkSttlmAmt>
+
+      <ChrgBr>SHAR</ChrgBr>
+
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>RIABORIPXXX</BICFI>
+          <Nm>Riyad Bank</Nm>
+          <PstlAdr>
+            <Ctry>SA</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </DbtrAgt>
+
+      <Dbtr>
+        <Nm>RIYADH INVESTMENT HOLDINGS LLC</Nm>
+        <PstlAdr>
+          <StrtNm>KING FAHD ROAD 123</StrtNm>
+          <PstCd>11564</PstCd>
+          <TwnNm>RIYADH</TwnNm>
+          <CtrySubDvsn>AL OLAYA DISTRICT</CtrySubDvsn>
+          <Ctry>SA</Ctry>
+        </PstlAdr>
+      </Dbtr>
+
+      <DbtrAcct>
+        <Id>
+          <IBAN>SA0380000000608010167519</IBAN>
+        </Id>
+        <Ccy>SAR</Ccy>
+      </DbtrAcct>
+
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>SABBSARIXXX</BICFI>
+          <Nm>Saudi British Bank</Nm>
+          <PstlAdr>
+            <Ctry>SA</Ctry>
+          </PstlAdr>
+        </FinInstnId>
+      </CdtrAgt>
+
+      <Cdtr>
+        <Nm>JEDDAH TRADING CORPORATION</Nm>
+        <PstlAdr>
+          <StrtNm>PRINCE SULTAN STREET 456</StrtNm>
+          <PstCd>21432</PstCd>
+          <TwnNm>JEDDAH</TwnNm>
+          <CtrySubDvsn>AL RAWDAH DISTRICT</CtrySubDvsn>
+          <Ctry>SA</Ctry>
+        </PstlAdr>
+      </Cdtr>
+
+      <CdtrAcct>
+        <Id>
+          <IBAN>SA0345000000008901234567</IBAN>
+        </Id>
+        <Ccy>SAR</Ccy>
+      </CdtrAcct>
+
+      <Purp>
+        <Cd>SUPP</Cd>
+      </Purp>
+
+      <RmtInf>
+        <Ustrd>INV/INV-JTC-2026-00123 - TRADE SETTLEMENT Q1 2026</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>

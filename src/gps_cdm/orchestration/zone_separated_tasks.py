@@ -57,9 +57,23 @@ class MappingCache:
     _message_formats: Dict[str, Dict] = {}
 
     @classmethod
+    def clear(cls, format_id: str = None) -> None:
+        """Clear cached mappings. If format_id is provided, only clear that format."""
+        if format_id:
+            cls._silver_mappings.pop(format_id, None)
+            cls._gold_mappings.pop(format_id, None)
+            cls._message_formats.pop(format_id, None)
+        else:
+            cls._silver_mappings.clear()
+            cls._gold_mappings.clear()
+            cls._message_formats.clear()
+
+    @classmethod
     def get_silver_mappings(cls, cursor, format_id: str) -> List[Dict]:
         """Get silver field mappings for a format from database."""
-        if format_id not in cls._silver_mappings:
+        # Check if caching is disabled via environment variable
+        disable_cache = os.environ.get('GPS_CDM_DISABLE_MAPPING_CACHE', 'false').lower() == 'true'
+        if disable_cache or format_id not in cls._silver_mappings:
             # Use case-insensitive match for format_id (some are lowercase like pain.001)
             cursor.execute("""
                 SELECT target_column, source_path, data_type, is_required,
@@ -910,10 +924,10 @@ def process_silver_message(
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Read Bronze records
+        # Read Bronze records - use extractor_output which is already parsed
         placeholders = ','.join(['%s'] * len(raw_ids))
         cursor.execute(f"""
-            SELECT raw_id, message_type, message_format, raw_content
+            SELECT raw_id, message_type, message_format, raw_content, extractor_output
             FROM bronze.raw_payment_messages
             WHERE raw_id IN ({placeholders})
               AND processing_status = 'PENDING'
@@ -921,11 +935,15 @@ def process_silver_message(
 
         bronze_records = cursor.fetchall()
 
-        for raw_id, msg_type, msg_format, raw_content in bronze_records:
+        for raw_id, msg_type, msg_format, raw_content, extractor_output in bronze_records:
             try:
-                # Parse content based on format
-                # raw_content is stored AS-IS, so parse it now
-                parsed_content = ContentParser.parse(raw_content, msg_format, msg_type)
+                # Use extractor_output from Bronze if available (already parsed by extractor)
+                # Fall back to ContentParser if extractor_output is None
+                if extractor_output:
+                    parsed_content = extractor_output
+                else:
+                    # Fallback: parse raw_content if extractor_output is missing
+                    parsed_content = ContentParser.parse(raw_content, msg_format, msg_type)
 
                 logger.info(f"Parsed {msg_format} for {raw_id}: keys={list(parsed_content.keys())[:5]}")
 

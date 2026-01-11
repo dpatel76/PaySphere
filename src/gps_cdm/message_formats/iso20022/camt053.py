@@ -741,6 +741,525 @@ class Camt053Parser(BaseISO20022Parser):
 
         return result
 
+    # ==========================================================================
+    # ISO PATH KEY NAMING METHODS (DOT-NOTATION)
+    # ==========================================================================
+
+    def parse_iso_paths(self, xml_content: str) -> Dict[str, Any]:
+        """Parse camt.053 message using full ISO path key naming.
+
+        Returns keys in dot-notation format matching ISO 20022 element paths:
+        - GrpHdr.MsgId, GrpHdr.CreDtTm
+        - Stmt.Id, Stmt.ElctrncSeqNb
+        - Stmt.Acct.Id.IBAN, Stmt.Acct.Ownr.Nm
+        - Stmt.Bal.Amt, Stmt.Bal.CdtDbtInd
+        - Stmt.Ntry.Amt, Stmt.Ntry.CdtDbtInd
+        - Stmt.Ntry.NtryDtls.TxDtls.RltdPties.Dbtr.Nm
+
+        Args:
+            xml_content: Raw XML string
+
+        Returns:
+            Dict with all extracted camt.053 fields using full ISO path keys
+        """
+        root = self._parse_xml(xml_content)
+
+        # Find the BkToCstmrStmt element
+        stmt_root = self._find(root, self.ROOT_ELEMENT)
+        if stmt_root is None:
+            root_tag = self._strip_ns(root.tag)
+            if root_tag == self.ROOT_ELEMENT:
+                stmt_root = root
+            else:
+                raise ValueError(f"Cannot find {self.ROOT_ELEMENT} element in camt.053 message")
+
+        result = {
+            'isISO20022': True,
+            'messageTypeCode': 'camt.053',
+            'messageDefinition': 'BankToCustomerStatement',
+        }
+
+        # Extract Group Header
+        result.update(self._extract_camt053_group_header_iso_path(stmt_root))
+
+        # Extract first Statement
+        stmt = self._find(stmt_root, 'Stmt')
+        if stmt is not None:
+            result.update(self._parse_statement_iso_paths(stmt))
+
+        return result
+
+    def _extract_camt053_group_header_iso_path(self, stmt_root) -> Dict[str, Any]:
+        """Extract Group Header using ISO path keys.
+
+        Args:
+            stmt_root: BkToCstmrStmt element
+
+        Returns:
+            Dict with ISO path keys like 'GrpHdr.MsgId', 'GrpHdr.MsgRcpt.Nm'
+        """
+        result = {}
+        grp_hdr = self._find(stmt_root, 'GrpHdr')
+
+        if grp_hdr is None:
+            return result
+
+        # Core identification
+        result['GrpHdr.MsgId'] = self._find_text(grp_hdr, 'MsgId')
+        result['GrpHdr.CreDtTm'] = self._find_text(grp_hdr, 'CreDtTm')
+
+        # Message Recipient
+        msg_rcpt = self._find(grp_hdr, 'MsgRcpt')
+        if msg_rcpt:
+            result.update(self._extract_party_iso_path(msg_rcpt, 'GrpHdr.MsgRcpt'))
+
+        # Pagination
+        msg_pgntn = self._find(grp_hdr, 'MsgPgntn')
+        if msg_pgntn:
+            result['GrpHdr.MsgPgntn.PgNb'] = self._safe_int(self._find_text(msg_pgntn, 'PgNb'))
+            result['GrpHdr.MsgPgntn.LastPgInd'] = self._find_text(msg_pgntn, 'LastPgInd') == 'true'
+
+        # Additional Info
+        result['GrpHdr.AddtlInf'] = self._find_text(grp_hdr, 'AddtlInf')
+
+        return result
+
+    def _parse_statement_iso_paths(self, stmt) -> Dict[str, Any]:
+        """Parse Stmt element using ISO path keys.
+
+        Args:
+            stmt: Stmt element
+
+        Returns:
+            Dict with ISO path keys like 'Stmt.Id', 'Stmt.Acct.Id.IBAN'
+        """
+        result = {}
+        prefix = 'Stmt'
+
+        # Statement Identification
+        result[f'{prefix}.Id'] = self._find_text(stmt, 'Id')
+        result[f'{prefix}.ElctrncSeqNb'] = self._safe_int(self._find_text(stmt, 'ElctrncSeqNb'))
+        result[f'{prefix}.LglSeqNb'] = self._safe_int(self._find_text(stmt, 'LglSeqNb'))
+        result[f'{prefix}.CreDtTm'] = self._find_text(stmt, 'CreDtTm')
+        result[f'{prefix}.CpyDplctInd'] = self._find_text(stmt, 'CpyDplctInd')
+
+        # Reporting Source
+        rptg_src = self._find(stmt, 'RptgSrc')
+        if rptg_src:
+            result[f'{prefix}.RptgSrc.Cd'] = self._find_text(rptg_src, 'Cd')
+            result[f'{prefix}.RptgSrc.Prtry'] = self._find_text(rptg_src, 'Prtry')
+
+        # Period (From/To Date)
+        fr_to_dt = self._find(stmt, 'FrToDt')
+        if fr_to_dt is not None:
+            result[f'{prefix}.FrToDt.FrDtTm'] = (
+                self._find_text(fr_to_dt, 'FrDtTm') or
+                self._find_text(fr_to_dt, 'FrDt')
+            )
+            result[f'{prefix}.FrToDt.ToDtTm'] = (
+                self._find_text(fr_to_dt, 'ToDtTm') or
+                self._find_text(fr_to_dt, 'ToDt')
+            )
+
+        # Account Information
+        acct = self._find(stmt, 'Acct')
+        if acct is not None:
+            result.update(self._parse_statement_account_iso_paths(acct))
+
+        # Balances
+        result.update(self._parse_balances_iso_paths(stmt))
+
+        # Transaction Summary
+        txs_summry = self._find(stmt, 'TxsSummry')
+        if txs_summry is not None:
+            result.update(self._parse_transaction_summary_iso_paths(txs_summry))
+
+        # Interest
+        intrst = self._find(stmt, 'Intrst')
+        if intrst is not None:
+            result.update(self._parse_interest_iso_paths(intrst))
+
+        # Entries (parse first entry)
+        entries = self._find_all(stmt, 'Ntry')
+        result[f'{prefix}.TotalEntries'] = len(entries)
+
+        if entries:
+            first_entry = entries[0]
+            result.update(self._parse_entry_iso_paths(first_entry, f'{prefix}.Ntry'))
+
+        return result
+
+    def _parse_statement_account_iso_paths(self, acct) -> Dict[str, Any]:
+        """Parse Account element using ISO path keys.
+
+        Args:
+            acct: Acct element
+
+        Returns:
+            Dict with ISO path keys like 'Stmt.Acct.Id.IBAN', 'Stmt.Acct.Ownr.Nm'
+        """
+        result = {}
+        prefix = 'Stmt.Acct'
+
+        # Account Identifier
+        acct_id = self._find(acct, 'Id')
+        if acct_id is not None:
+            result[f'{prefix}.Id.IBAN'] = self._find_text(acct_id, 'IBAN')
+
+            othr = self._find(acct_id, 'Othr')
+            if othr is not None:
+                result[f'{prefix}.Id.Othr.Id'] = self._find_text(othr, 'Id')
+                result[f'{prefix}.Id.Othr.SchmeNm.Cd'] = self._find_text(othr, 'SchmeNm/Cd')
+                result[f'{prefix}.Id.Othr.SchmeNm.Prtry'] = self._find_text(othr, 'SchmeNm/Prtry')
+                result[f'{prefix}.Id.Othr.Issr'] = self._find_text(othr, 'Issr')
+
+        # Account Type
+        acct_tp = self._find(acct, 'Tp')
+        if acct_tp is not None:
+            result[f'{prefix}.Tp.Cd'] = self._find_text(acct_tp, 'Cd')
+            result[f'{prefix}.Tp.Prtry'] = self._find_text(acct_tp, 'Prtry')
+
+        # Currency and Name
+        result[f'{prefix}.Ccy'] = self._find_text(acct, 'Ccy')
+        result[f'{prefix}.Nm'] = self._find_text(acct, 'Nm')
+
+        # Account Owner
+        ownr = self._find(acct, 'Ownr')
+        if ownr is not None:
+            result.update(self._extract_party_iso_path(ownr, f'{prefix}.Ownr'))
+
+        # Account Servicer (Bank)
+        svcr = self._find(acct, 'Svcr')
+        if svcr is not None:
+            result.update(self._extract_financial_institution_iso_path(svcr, f'{prefix}.Svcr'))
+
+        return result
+
+    def _parse_balances_iso_paths(self, stmt) -> Dict[str, Any]:
+        """Parse all Balance elements using ISO path keys.
+
+        Args:
+            stmt: Stmt element
+
+        Returns:
+            Dict with ISO path keys grouped by balance type
+        """
+        result = {}
+
+        for idx, bal in enumerate(self._find_all(stmt, 'Bal')):
+            # Get balance type
+            bal_type = (
+                self._find_text(bal, 'Tp/CdOrPrtry/Cd') or
+                self._find_text(bal, 'Tp/CdOrPrtry/Prtry') or
+                f'Bal{idx}'
+            )
+
+            # Use balance type as key prefix
+            prefix = f'Stmt.Bal.{bal_type}'
+
+            # Amount
+            amt_elem = self._find(bal, 'Amt')
+            if amt_elem is not None:
+                result[f'{prefix}.Amt'] = self._safe_float(amt_elem.text)
+                result[f'{prefix}.Amt@Ccy'] = amt_elem.get('Ccy')
+
+            # Credit/Debit Indicator
+            result[f'{prefix}.CdtDbtInd'] = self._find_text(bal, 'CdtDbtInd')
+
+            # Date
+            result[f'{prefix}.Dt.Dt'] = (
+                self._find_text(bal, 'Dt/Dt') or
+                self._find_text(bal, 'Dt/DtTm')
+            )
+
+        return result
+
+    def _parse_transaction_summary_iso_paths(self, txs_summry) -> Dict[str, Any]:
+        """Parse TxsSummry element using ISO path keys.
+
+        Args:
+            txs_summry: TxsSummry element
+
+        Returns:
+            Dict with ISO path keys like 'Stmt.TxsSummry.TtlNtries.NbOfNtries'
+        """
+        result = {}
+        prefix = 'Stmt.TxsSummry'
+
+        # Total Entries
+        ttl_ntries = self._find(txs_summry, 'TtlNtries')
+        if ttl_ntries is not None:
+            result[f'{prefix}.TtlNtries.NbOfNtries'] = self._safe_int(self._find_text(ttl_ntries, 'NbOfNtries'))
+            result[f'{prefix}.TtlNtries.Sum'] = self._safe_float(self._find_text(ttl_ntries, 'Sum'))
+            result[f'{prefix}.TtlNtries.TtlNetNtryAmt'] = self._safe_float(
+                self._find_text(ttl_ntries, 'TtlNetNtryAmt')
+            )
+            result[f'{prefix}.TtlNtries.CdtDbtInd'] = self._find_text(ttl_ntries, 'CdtDbtInd')
+
+        # Credit Entries
+        ttl_cdt = self._find(txs_summry, 'TtlCdtNtries')
+        if ttl_cdt is not None:
+            result[f'{prefix}.TtlCdtNtries.NbOfNtries'] = self._safe_int(self._find_text(ttl_cdt, 'NbOfNtries'))
+            result[f'{prefix}.TtlCdtNtries.Sum'] = self._safe_float(self._find_text(ttl_cdt, 'Sum'))
+
+        # Debit Entries
+        ttl_dbt = self._find(txs_summry, 'TtlDbtNtries')
+        if ttl_dbt is not None:
+            result[f'{prefix}.TtlDbtNtries.NbOfNtries'] = self._safe_int(self._find_text(ttl_dbt, 'NbOfNtries'))
+            result[f'{prefix}.TtlDbtNtries.Sum'] = self._safe_float(self._find_text(ttl_dbt, 'Sum'))
+
+        return result
+
+    def _parse_interest_iso_paths(self, intrst) -> Dict[str, Any]:
+        """Parse Interest element using ISO path keys.
+
+        Args:
+            intrst: Intrst element
+
+        Returns:
+            Dict with ISO path keys like 'Stmt.Intrst.Tp.Cd'
+        """
+        result = {}
+        prefix = 'Stmt.Intrst'
+
+        result[f'{prefix}.Tp.Cd'] = self._find_text(intrst, 'Tp/Cd')
+
+        # Interest Rate
+        rate = self._find(intrst, 'Rate')
+        if rate is not None:
+            result[f'{prefix}.Rate.Pctg'] = self._safe_float(self._find_text(rate, 'Pctg'))
+            result[f'{prefix}.Rate.Tp'] = self._find_text(rate, 'Tp')
+
+        # Interest Amount
+        amt = self._find(intrst, 'Amt')
+        if amt is not None:
+            result[f'{prefix}.Amt'] = self._safe_float(amt.text)
+            result[f'{prefix}.Amt@Ccy'] = amt.get('Ccy')
+
+        # Period
+        fr_to_dt = self._find(intrst, 'FrToDt')
+        if fr_to_dt is not None:
+            result[f'{prefix}.FrToDt.FrDt'] = self._find_text(fr_to_dt, 'FrDt')
+            result[f'{prefix}.FrToDt.ToDt'] = self._find_text(fr_to_dt, 'ToDt')
+
+        return result
+
+    def _parse_entry_iso_paths(self, ntry, prefix: str) -> Dict[str, Any]:
+        """Parse Ntry element using ISO path keys.
+
+        Args:
+            ntry: Ntry element
+            prefix: ISO path prefix (e.g., 'Stmt.Ntry')
+
+        Returns:
+            Dict with ISO path keys like 'Stmt.Ntry.NtryRef', 'Stmt.Ntry.Amt'
+        """
+        result = {}
+
+        # Basic Entry Fields
+        result[f'{prefix}.NtryRef'] = self._find_text(ntry, 'NtryRef')
+
+        # Amount
+        amt_elem = self._find(ntry, 'Amt')
+        if amt_elem is not None:
+            result[f'{prefix}.Amt'] = self._safe_float(amt_elem.text)
+            result[f'{prefix}.Amt@Ccy'] = amt_elem.get('Ccy')
+
+        result[f'{prefix}.CdtDbtInd'] = self._find_text(ntry, 'CdtDbtInd')
+
+        # Reversal Indicator
+        rvsl_ind = self._find_text(ntry, 'RvslInd')
+        result[f'{prefix}.RvslInd'] = rvsl_ind == 'true' if rvsl_ind else None
+
+        # Status
+        result[f'{prefix}.Sts.Cd'] = (
+            self._find_text(ntry, 'Sts/Cd') or
+            self._find_text(ntry, 'Sts')
+        )
+
+        # Dates
+        result[f'{prefix}.BookgDt.Dt'] = (
+            self._find_text(ntry, 'BookgDt/Dt') or
+            self._find_text(ntry, 'BookgDt/DtTm')
+        )
+        result[f'{prefix}.ValDt.Dt'] = (
+            self._find_text(ntry, 'ValDt/Dt') or
+            self._find_text(ntry, 'ValDt/DtTm')
+        )
+
+        # Account Servicer Reference
+        result[f'{prefix}.AcctSvcrRef'] = self._find_text(ntry, 'AcctSvcrRef')
+
+        # Bank Transaction Code
+        bk_tx_cd = self._find(ntry, 'BkTxCd')
+        if bk_tx_cd is not None:
+            result.update(self._parse_bank_transaction_code_iso_paths(bk_tx_cd, prefix))
+
+        # Entry Details
+        ntry_dtls = self._find(ntry, 'NtryDtls')
+        if ntry_dtls is not None:
+            # Batch info
+            btch = self._find(ntry_dtls, 'Btch')
+            if btch is not None:
+                result[f'{prefix}.NtryDtls.Btch.NbOfTxs'] = self._safe_int(
+                    self._find_text(btch, 'NbOfTxs')
+                )
+                result[f'{prefix}.NtryDtls.Btch.TtlAmt'] = self._safe_float(
+                    self._find_text(btch, 'TtlAmt')
+                )
+                result[f'{prefix}.NtryDtls.Btch.CdtDbtInd'] = self._find_text(btch, 'CdtDbtInd')
+
+            # First Transaction Details
+            tx_dtls = self._find(ntry_dtls, 'TxDtls')
+            if tx_dtls is not None:
+                result.update(self._parse_transaction_details_iso_paths(
+                    tx_dtls, f'{prefix}.NtryDtls.TxDtls'
+                ))
+
+        return result
+
+    def _parse_bank_transaction_code_iso_paths(self, bk_tx_cd, prefix: str) -> Dict[str, Any]:
+        """Parse BkTxCd element using ISO path keys.
+
+        Args:
+            bk_tx_cd: BkTxCd element
+            prefix: ISO path prefix
+
+        Returns:
+            Dict with ISO path keys like 'Stmt.Ntry.BkTxCd.Domn.Cd'
+        """
+        result = {}
+        bk_prefix = f'{prefix}.BkTxCd'
+
+        # Domain
+        domn = self._find(bk_tx_cd, 'Domn')
+        if domn is not None:
+            result[f'{bk_prefix}.Domn.Cd'] = self._find_text(domn, 'Cd')
+
+            fmly = self._find(domn, 'Fmly')
+            if fmly is not None:
+                result[f'{bk_prefix}.Domn.Fmly.Cd'] = self._find_text(fmly, 'Cd')
+                result[f'{bk_prefix}.Domn.Fmly.SubFmlyCd'] = self._find_text(fmly, 'SubFmlyCd')
+
+        # Proprietary
+        prtry = self._find(bk_tx_cd, 'Prtry')
+        if prtry is not None:
+            result[f'{bk_prefix}.Prtry.Cd'] = self._find_text(prtry, 'Cd')
+            result[f'{bk_prefix}.Prtry.Issr'] = self._find_text(prtry, 'Issr')
+
+        return result
+
+    def _parse_transaction_details_iso_paths(self, tx_dtls, prefix: str) -> Dict[str, Any]:
+        """Parse TxDtls element using ISO path keys.
+
+        Args:
+            tx_dtls: TxDtls element
+            prefix: ISO path prefix
+
+        Returns:
+            Dict with ISO path keys like 'Stmt.Ntry.NtryDtls.TxDtls.Refs.EndToEndId'
+        """
+        result = {}
+
+        # References
+        refs = self._find(tx_dtls, 'Refs')
+        if refs is not None:
+            result[f'{prefix}.Refs.MsgId'] = self._find_text(refs, 'MsgId')
+            result[f'{prefix}.Refs.AcctSvcrRef'] = self._find_text(refs, 'AcctSvcrRef')
+            result[f'{prefix}.Refs.PmtInfId'] = self._find_text(refs, 'PmtInfId')
+            result[f'{prefix}.Refs.InstrId'] = self._find_text(refs, 'InstrId')
+            result[f'{prefix}.Refs.EndToEndId'] = self._find_text(refs, 'EndToEndId')
+            result[f'{prefix}.Refs.TxId'] = self._find_text(refs, 'TxId')
+            result[f'{prefix}.Refs.MndtId'] = self._find_text(refs, 'MndtId')
+            result[f'{prefix}.Refs.ChqNb'] = self._find_text(refs, 'ChqNb')
+            result[f'{prefix}.Refs.ClrSysRef'] = self._find_text(refs, 'ClrSysRef')
+            result[f'{prefix}.Refs.UETR'] = self._find_text(refs, 'UETR')
+
+        # Amount Details
+        amt_dtls = self._find(tx_dtls, 'AmtDtls')
+        if amt_dtls is not None:
+            instd_amt = self._find(amt_dtls, 'InstdAmt')
+            if instd_amt is not None:
+                amt = self._find(instd_amt, 'Amt')
+                if amt is not None:
+                    result[f'{prefix}.AmtDtls.InstdAmt.Amt'] = self._safe_float(amt.text)
+                    result[f'{prefix}.AmtDtls.InstdAmt.Amt@Ccy'] = amt.get('Ccy')
+
+        # Related Parties
+        rltd_pties = self._find(tx_dtls, 'RltdPties')
+        if rltd_pties is not None:
+            # Debtor
+            dbtr = self._find(rltd_pties, 'Dbtr/Pty') or self._find(rltd_pties, 'Dbtr')
+            if dbtr is not None:
+                result.update(self._extract_party_iso_path(dbtr, f'{prefix}.RltdPties.Dbtr'))
+
+            dbtr_acct = self._find(rltd_pties, 'DbtrAcct')
+            if dbtr_acct is not None:
+                result.update(self._extract_account_iso_path(dbtr_acct, f'{prefix}.RltdPties.DbtrAcct'))
+
+            # Creditor
+            cdtr = self._find(rltd_pties, 'Cdtr/Pty') or self._find(rltd_pties, 'Cdtr')
+            if cdtr is not None:
+                result.update(self._extract_party_iso_path(cdtr, f'{prefix}.RltdPties.Cdtr'))
+
+            cdtr_acct = self._find(rltd_pties, 'CdtrAcct')
+            if cdtr_acct is not None:
+                result.update(self._extract_account_iso_path(cdtr_acct, f'{prefix}.RltdPties.CdtrAcct'))
+
+            # Ultimate Debtor
+            ultmt_dbtr = self._find(rltd_pties, 'UltmtDbtr')
+            if ultmt_dbtr is not None:
+                result.update(self._extract_party_iso_path(ultmt_dbtr, f'{prefix}.RltdPties.UltmtDbtr'))
+
+            # Ultimate Creditor
+            ultmt_cdtr = self._find(rltd_pties, 'UltmtCdtr')
+            if ultmt_cdtr is not None:
+                result.update(self._extract_party_iso_path(ultmt_cdtr, f'{prefix}.RltdPties.UltmtCdtr'))
+
+        # Related Agents
+        rltd_agts = self._find(tx_dtls, 'RltdAgts')
+        if rltd_agts is not None:
+            dbtr_agt = self._find(rltd_agts, 'DbtrAgt')
+            if dbtr_agt is not None:
+                result.update(self._extract_financial_institution_iso_path(
+                    dbtr_agt, f'{prefix}.RltdAgts.DbtrAgt'
+                ))
+
+            cdtr_agt = self._find(rltd_agts, 'CdtrAgt')
+            if cdtr_agt is not None:
+                result.update(self._extract_financial_institution_iso_path(
+                    cdtr_agt, f'{prefix}.RltdAgts.CdtrAgt'
+                ))
+
+        # Local Instrument
+        lcl_instrm = self._find(tx_dtls, 'LclInstrm')
+        if lcl_instrm is not None:
+            result[f'{prefix}.LclInstrm.Cd'] = self._find_text(lcl_instrm, 'Cd')
+            result[f'{prefix}.LclInstrm.Prtry'] = self._find_text(lcl_instrm, 'Prtry')
+
+        # Purpose
+        purp = self._find(tx_dtls, 'Purp')
+        if purp is not None:
+            result[f'{prefix}.Purp.Cd'] = self._find_text(purp, 'Cd')
+            result[f'{prefix}.Purp.Prtry'] = self._find_text(purp, 'Prtry')
+
+        # Remittance Information
+        rmt_inf = self._find(tx_dtls, 'RmtInf')
+        if rmt_inf is not None:
+            result.update(self._extract_remittance_info_iso_path(rmt_inf, f'{prefix}.RmtInf'))
+
+        # Related Dates
+        rltd_dts = self._find(tx_dtls, 'RltdDts')
+        if rltd_dts is not None:
+            result[f'{prefix}.RltdDts.AccptncDtTm'] = self._find_text(rltd_dts, 'AccptncDtTm')
+            result[f'{prefix}.RltdDts.TradActvtyDt'] = self._find_text(rltd_dts, 'TradActvtyDt')
+            result[f'{prefix}.RltdDts.TradDt'] = self._find_text(rltd_dts, 'TradDt')
+
+        # Additional Transaction Info
+        result[f'{prefix}.AddtlTxInf'] = self._find_text(tx_dtls, 'AddtlTxInf')
+
+        return result
+
 
 class Camt053Extractor(BaseISO20022Extractor):
     """Base extractor for camt.053 Bank to Customer Account Statement.

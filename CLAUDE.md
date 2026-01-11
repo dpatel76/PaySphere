@@ -58,22 +58,43 @@ The architecture uses zone-separated Kafka topics with dedicated consumers for e
 
 ### Starting Zone Consumers
 
+**⚠️ CRITICAL: ZONE CONSUMERS MUST BE SUBSCRIBED TO ALL MESSAGE TYPES BEFORE RUNNING E2E TESTS**
+
+This is a recurring issue that causes E2E test failures. Zone consumers only process messages for the types they are subscribed to. If a test sends a message type that consumers aren't listening for, it will fail at Bronze layer with "NOT_FOUND".
+
+**BEFORE running any E2E tests:**
+1. Kill existing zone consumers
+2. Start consumers with the COMPLETE list of all 61 message types
+3. Verify consumers are running and subscribed
+
+**Complete list of all 61 message types:**
+```bash
+ALL_TYPES="pacs.002,pacs.004,pacs.008,pacs.009,pain.001,pain.008,camt.053,ACH,BACS,BOJNET,CNAPS,KFTC,PAYNOW,PIX,PROMPTPAY,SARIE,UPI,CHAPS_pacs002,CHAPS_pacs004,CHAPS_pacs008,CHAPS_pacs009,CHIPS_pacs002,CHIPS_pacs008,CHIPS_pacs009,FEDNOW_pacs002,FEDNOW_pacs004,FEDNOW_pacs008,FEDNOW_pacs009,FEDWIRE_pacs002,FEDWIRE_pacs004,FEDWIRE_pacs008,FEDWIRE_pacs009,FPS_pacs002,FPS_pacs008,INSTAPAY_pacs002,INSTAPAY_pacs008,INSTAPAY_pacs009,MEPS_PLUS_pacs002,MEPS_PLUS_pacs008,MEPS_PLUS_pacs009,NPP_pacs002,NPP_pacs004,NPP_pacs008,RTGS_HK_pacs002,RTGS_HK_pacs008,RTGS_HK_pacs009,RTP_pacs002,RTP_pacs008,SEPA_pacs002,SEPA_pacs008,SEPA_pain001,SEPA_pain008,SEPA_INST_pacs002,SEPA_INST_pacs008,TARGET2_pacs002,TARGET2_pacs004,TARGET2_pacs008,TARGET2_pacs009,UAEFTS_pacs002,UAEFTS_pacs008,UAEFTS_pacs009"
+```
+
 ```bash
 # Start all three zone consumers (each in separate terminal)
 source .venv/bin/activate
 
-# Bronze consumer
+# Bronze consumer - ALL 61 types
 PYTHONPATH=src:$PYTHONPATH python -m gps_cdm.streaming.zone_consumers \
-    --zone bronze --types pain.001,MT103,pacs.008,FEDWIRE,ACH,SEPA,RTP
+    --zone bronze --types $ALL_TYPES
 
-# Silver consumer
+# Silver consumer - ALL 61 types
 PYTHONPATH=src:$PYTHONPATH python -m gps_cdm.streaming.zone_consumers \
-    --zone silver --types pain.001,MT103,pacs.008,FEDWIRE,ACH,SEPA,RTP
+    --zone silver --types $ALL_TYPES
 
-# Gold consumer
+# Gold consumer - ALL 61 types
 PYTHONPATH=src:$PYTHONPATH python -m gps_cdm.streaming.zone_consumers \
-    --zone gold --types pain.001,MT103,pacs.008,FEDWIRE,ACH,SEPA,RTP
+    --zone gold --types $ALL_TYPES
 ```
+
+**Symptoms of missing subscriptions:**
+- E2E test shows "Bronze record NOT FOUND" for specific formats
+- Messages sent to NiFi but never appear in database
+- Some formats pass while others fail at Bronze layer
+
+**DO NOT** start consumers with a partial list of types when running full E2E tests!
 
 ### Performance Targets
 

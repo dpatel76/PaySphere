@@ -1,0 +1,66 @@
+{
+  "messageId": "KFTC-BULK-E2E-20260106-001",
+  "transactionType": "BULK",
+  "is_bulk": true,
+  "record_count": 3,
+  "creationDateTime": "2026-01-06T08:00:00+09:00",
+  "settlementDate": "2026-01-06",
+  "batchInfo": {
+    "batchId": "BATCH-KFTC-20260106-001",
+    "numberOfTransactions": 3,
+    "controlSum": 150000000
+  },
+  "initiatingParty": {
+    "name": "Seoul Payroll Services Ltd",
+    "nameHangul": "서울급여서비스주식회사",
+    "registrationNumber": "111-22-33333"
+  },
+  "paymentInstructions": [
+    {
+      "paymentId": "PMT-KFTC-001",
+      "debtor": {
+        "name": "Seoul Payroll Services Ltd",
+        "account": {"number": "111-222-333444", "bankCode": "004"}
+      },
+      "creditor": {
+        "name": "Kim Min-jun",
+        "nameHangul": "김민준",
+        "account": {"number": "444-555-666777", "bankCode": "088"}
+      },
+      "amount": {"value": 50000000, "currency": "KRW"},
+      "remittanceInfo": "January 2026 Salary"
+    },
+    {
+      "paymentId": "PMT-KFTC-002",
+      "debtor": {
+        "name": "Seoul Payroll Services Ltd",
+        "account": {"number": "111-222-333444", "bankCode": "004"}
+      },
+      "creditor": {
+        "name": "Park Seo-yeon",
+        "nameHangul": "박서연",
+        "account": {"number": "555-666-777888", "bankCode": "011"}
+      },
+      "amount": {"value": 55000000, "currency": "KRW"},
+      "remittanceInfo": "January 2026 Salary"
+    },
+    {
+      "paymentId": "PMT-KFTC-003",
+      "debtor": {
+        "name": "Seoul Payroll Services Ltd",
+        "account": {"number": "111-222-333444", "bankCode": "004"}
+      },
+      "creditor": {
+        "name": "Lee Ji-hoon",
+        "nameHangul": "이지훈",
+        "account": {"number": "666-777-888999", "bankCode": "020"}
+      },
+      "amount": {"value": 45000000, "currency": "KRW"},
+      "remittanceInfo": "January 2026 Salary"
+    }
+  ],
+  "debtorName": "Seoul Payroll Services Ltd",
+  "debtorAccount": "111-222-333444",
+  "controlSum": 150000000,
+  "currency": "KRW"
+}

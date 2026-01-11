@@ -1,0 +1,43 @@
+{
+  "transactionId": "PIX-RETURN-E2E-20260106-001",
+  "transactionType": "DEVOLUTION",
+  "tipo": "DEVOLUTION",
+  "creationDateTime": "2026-01-06T14:30:00-03:00",
+  "originalTransactionId": "PIX-PAY-20260105-789",
+  "amount": 1500.00,
+  "currency": "BRL",
+  "debtor": {
+    "name": "Comercio Online Ltda",
+    "taxId": "12.345.678/0001-90",
+    "account": {
+      "number": "987654321",
+      "branch": "0001",
+      "bankCode": "341",
+      "ispb": "60701190"
+    }
+  },
+  "creditor": {
+    "name": "Maria Silva Santos",
+    "taxId": "123.456.789-01",
+    "pixKey": "maria.silva@email.com.br",
+    "account": {
+      "number": "123456789",
+      "branch": "0002",
+      "bankCode": "001",
+      "ispb": "00000000"
+    }
+  },
+  "returnReason": {
+    "code": "BE08",
+    "description": "Requested by customer - order cancelled"
+  },
+  "remittanceInfo": "Refund for cancelled order #ORD-2026-00456",
+  "purposeCode": "RFND",
+  "settlementDate": "2026-01-06",
+  "debtorName": "Comercio Online Ltda",
+  "debtorAccount": "987654321",
+  "debtorBankCode": "341",
+  "creditorName": "Maria Silva Santos",
+  "creditorAccount": "123456789",
+  "creditorBankCode": "001"
+}

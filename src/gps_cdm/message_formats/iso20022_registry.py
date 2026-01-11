@@ -119,6 +119,7 @@ ExtractorRegistry.register('FPS_pacs002', _create_composite_extractor(Pacs002Ext
 # SEPA Composite Formats (EU Payments)
 # -----------------------------------------------------------------------------
 ExtractorRegistry.register('SEPA_pacs008', _create_composite_extractor(Pacs008Extractor, 'SEPA_pacs008', 'SEPA'))
+ExtractorRegistry.register('SEPA_pain001', _create_composite_extractor(Pain001Extractor, 'SEPA_pain001', 'SEPA'))
 ExtractorRegistry.register('SEPA_pain008', _create_composite_extractor(Pain008Extractor, 'SEPA_pain008', 'SEPA'))
 ExtractorRegistry.register('SEPA_pacs002', _create_composite_extractor(Pacs002Extractor, 'SEPA_pacs002', 'SEPA'))
 ExtractorRegistry.register('SEPA_pacs004', _create_composite_extractor(Pacs004Extractor, 'SEPA_pacs004', 'SEPA'))

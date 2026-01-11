@@ -47,6 +47,9 @@ class BaseISO20022Parser(ABC):
     def _parse_xml(self, xml_content: str) -> ET.Element:
         """Parse XML content and return root element.
 
+        Handles both regular ISO 20022 XML and split transaction XML
+        (wrapped in <SplitTransaction> by MessageSplitter).
+
         Args:
             xml_content: Raw XML string
 
@@ -66,10 +69,49 @@ class BaseISO20022Parser(ABC):
             content = content[1:]
 
         try:
-            return ET.fromstring(content)
+            root = ET.fromstring(content)
+
+            # Check if this is a split transaction wrapper from MessageSplitter
+            if self._strip_ns(root.tag) == 'SplitTransaction':
+                # Store parent context for later access
+                self._split_grp_hdr = self._find(root, 'ParentGrpHdr/GrpHdr')
+                self._split_pmt_inf = self._find(root, 'ParentPmtInf/PmtInf')
+                # Return the actual transaction element for processing
+                txn = self._find(root, 'Transaction')
+                if txn is not None and len(txn) > 0:
+                    return txn[0]  # Return first child (CdtTrfTxInf)
+                return root
+            else:
+                # Regular ISO 20022 document
+                self._split_grp_hdr = None
+                self._split_pmt_inf = None
+                return root
+
         except ET.ParseError as e:
             logger.error(f"Failed to parse ISO 20022 XML: {e}")
             raise ValueError(f"Invalid ISO 20022 XML: {e}")
+
+    def _get_split_grp_hdr(self) -> Optional[ET.Element]:
+        """Get GrpHdr element from split transaction context.
+
+        When MessageSplitter splits a multi-transaction file, the GrpHdr
+        is preserved in the wrapper. This method retrieves it for extraction.
+
+        Returns:
+            GrpHdr element if available, None otherwise
+        """
+        return getattr(self, '_split_grp_hdr', None)
+
+    def _get_split_pmt_inf(self) -> Optional[ET.Element]:
+        """Get PmtInf element from split transaction context.
+
+        When MessageSplitter splits a multi-transaction file, the PmtInf
+        (without CdtTrfTxInf children) is preserved in the wrapper.
+
+        Returns:
+            PmtInf element if available, None otherwise
+        """
+        return getattr(self, '_split_pmt_inf', None)
 
     # ==========================================================================
     # NAMESPACE HANDLING
@@ -596,6 +638,369 @@ class BaseISO20022Parser(ABC):
         }
 
     # ==========================================================================
+    # FULL ISO PATH EXTRACTION METHODS (DOT-NOTATION)
+    # ==========================================================================
+    # These methods produce keys using full ISO 20022 paths with dot notation
+    # e.g., 'GrpHdr.MsgId', 'PmtInf.Dbtr.Nm', 'CdtTrfTxInf.Amt.InstdAmt@Ccy'
+    #
+    # Key rules:
+    # - Path separator: '.' (dot)
+    # - Attributes: '@' suffix (e.g., 'Amt@Ccy')
+    # - Arrays: '[n]' index (e.g., 'AdrLine[0]')
+    # - Use ISO element names: Nm, Ctry, BICFI (not name, country, bic)
+    # ==========================================================================
+
+    def _make_key(self, *path_parts: str) -> str:
+        """Build full ISO path key from parts.
+
+        Examples:
+            _make_key('GrpHdr', 'MsgId') -> 'GrpHdr.MsgId'
+            _make_key('PmtInf', 'Dbtr', 'Nm') -> 'PmtInf.Dbtr.Nm'
+
+        Args:
+            *path_parts: Variable path segments
+
+        Returns:
+            Dot-separated ISO path key
+        """
+        return '.'.join(p for p in path_parts if p)
+
+    def _extract_party_iso_path(self, party_element: ET.Element, path_prefix: str) -> Dict[str, Any]:
+        """Extract party information using full ISO path keys.
+
+        Args:
+            party_element: Party element (e.g., Dbtr, Cdtr)
+            path_prefix: ISO path prefix (e.g., 'PmtInf.Dbtr', 'CdtTrfTxInf.Cdtr')
+
+        Returns:
+            Dict with full ISO path keys like 'PmtInf.Dbtr.Nm', 'PmtInf.Dbtr.PstlAdr.Ctry'
+        """
+        if party_element is None:
+            return {}
+
+        result = {}
+
+        # Name
+        result[self._make_key(path_prefix, 'Nm')] = self._find_text(party_element, 'Nm')
+
+        # Postal Address
+        pstl_adr = self._find(party_element, 'PstlAdr')
+        if pstl_adr:
+            addr_prefix = self._make_key(path_prefix, 'PstlAdr')
+            result[self._make_key(addr_prefix, 'StrtNm')] = self._find_text(pstl_adr, 'StrtNm')
+            result[self._make_key(addr_prefix, 'BldgNb')] = self._find_text(pstl_adr, 'BldgNb')
+            result[self._make_key(addr_prefix, 'BldgNm')] = self._find_text(pstl_adr, 'BldgNm')
+            result[self._make_key(addr_prefix, 'PstCd')] = self._find_text(pstl_adr, 'PstCd')
+            result[self._make_key(addr_prefix, 'TwnNm')] = self._find_text(pstl_adr, 'TwnNm')
+            result[self._make_key(addr_prefix, 'CtrySubDvsn')] = self._find_text(pstl_adr, 'CtrySubDvsn')
+            result[self._make_key(addr_prefix, 'Ctry')] = self._find_text(pstl_adr, 'Ctry')
+
+            # Address lines (with array index)
+            adr_lines = self._find_all(pstl_adr, 'AdrLine')
+            for i, line in enumerate(adr_lines):
+                result[f'{addr_prefix}.AdrLine[{i}]'] = line.text if line.text else None
+
+        # Organization ID
+        org_id = self._find(party_element, 'Id/OrgId')
+        if org_id:
+            id_prefix = self._make_key(path_prefix, 'Id', 'OrgId')
+            result[self._make_key(id_prefix, 'LEI')] = self._find_text(org_id, 'LEI')
+            result[self._make_key(id_prefix, 'AnyBIC')] = self._find_text(org_id, 'AnyBIC')
+            result[self._make_key(id_prefix, 'Othr', 'Id')] = self._find_text(org_id, 'Othr/Id')
+            result[self._make_key(id_prefix, 'Othr', 'SchmeNm', 'Cd')] = self._find_text(org_id, 'Othr/SchmeNm/Cd')
+            result[self._make_key(id_prefix, 'Othr', 'Issr')] = self._find_text(org_id, 'Othr/Issr')
+
+        # Private ID (for individuals)
+        prvt_id = self._find(party_element, 'Id/PrvtId')
+        if prvt_id:
+            id_prefix = self._make_key(path_prefix, 'Id', 'PrvtId')
+            result[self._make_key(id_prefix, 'Othr', 'Id')] = self._find_text(prvt_id, 'Othr/Id')
+            result[self._make_key(id_prefix, 'DtAndPlcOfBirth', 'BirthDt')] = self._find_text(
+                prvt_id, 'DtAndPlcOfBirth/BirthDt'
+            )
+            result[self._make_key(id_prefix, 'DtAndPlcOfBirth', 'CityOfBirth')] = self._find_text(
+                prvt_id, 'DtAndPlcOfBirth/CityOfBirth'
+            )
+            result[self._make_key(id_prefix, 'DtAndPlcOfBirth', 'CtryOfBirth')] = self._find_text(
+                prvt_id, 'DtAndPlcOfBirth/CtryOfBirth'
+            )
+
+        # Contact Details
+        ctct_dtls = self._find(party_element, 'CtctDtls')
+        if ctct_dtls:
+            ctct_prefix = self._make_key(path_prefix, 'CtctDtls')
+            result[self._make_key(ctct_prefix, 'Nm')] = self._find_text(ctct_dtls, 'Nm')
+            result[self._make_key(ctct_prefix, 'PhneNb')] = self._find_text(ctct_dtls, 'PhneNb')
+            result[self._make_key(ctct_prefix, 'EmailAdr')] = self._find_text(ctct_dtls, 'EmailAdr')
+
+        return result
+
+    def _extract_account_iso_path(self, acct_element: ET.Element, path_prefix: str) -> Dict[str, Any]:
+        """Extract account information using full ISO path keys.
+
+        Args:
+            acct_element: Account element (e.g., DbtrAcct, CdtrAcct)
+            path_prefix: ISO path prefix (e.g., 'PmtInf.DbtrAcct', 'CdtTrfTxInf.CdtrAcct')
+
+        Returns:
+            Dict with full ISO path keys like 'PmtInf.DbtrAcct.Id.IBAN'
+        """
+        if acct_element is None:
+            return {}
+
+        result = {
+            self._make_key(path_prefix, 'Id', 'IBAN'): self._find_text(acct_element, 'Id/IBAN'),
+            self._make_key(path_prefix, 'Id', 'Othr', 'Id'): self._find_text(acct_element, 'Id/Othr/Id'),
+            self._make_key(path_prefix, 'Id', 'Othr', 'SchmeNm', 'Cd'): self._find_text(
+                acct_element, 'Id/Othr/SchmeNm/Cd'
+            ),
+            self._make_key(path_prefix, 'Tp', 'Cd'): self._find_text(acct_element, 'Tp/Cd'),
+            self._make_key(path_prefix, 'Ccy'): self._find_text(acct_element, 'Ccy'),
+            self._make_key(path_prefix, 'Nm'): self._find_text(acct_element, 'Nm'),
+        }
+
+        return result
+
+    def _extract_financial_institution_iso_path(
+        self, fi_element: ET.Element, path_prefix: str
+    ) -> Dict[str, Any]:
+        """Extract financial institution information using full ISO path keys.
+
+        Args:
+            fi_element: Agent element (contains FinInstnId)
+            path_prefix: ISO path prefix (e.g., 'PmtInf.DbtrAgt', 'CdtTrfTxInf.CdtrAgt')
+
+        Returns:
+            Dict with full ISO path keys like 'PmtInf.DbtrAgt.FinInstnId.BICFI'
+        """
+        if fi_element is None:
+            return {}
+
+        fin_instn_id = self._find(fi_element, 'FinInstnId')
+        if fin_instn_id is None:
+            return {}
+
+        fi_prefix = self._make_key(path_prefix, 'FinInstnId')
+
+        result = {
+            self._make_key(fi_prefix, 'BICFI'): self._find_text(fin_instn_id, 'BICFI'),
+            self._make_key(fi_prefix, 'LEI'): self._find_text(fin_instn_id, 'LEI'),
+            self._make_key(fi_prefix, 'Nm'): self._find_text(fin_instn_id, 'Nm'),
+            self._make_key(fi_prefix, 'ClrSysMmbId', 'ClrSysId', 'Cd'): self._find_text(
+                fin_instn_id, 'ClrSysMmbId/ClrSysId/Cd'
+            ),
+            self._make_key(fi_prefix, 'ClrSysMmbId', 'MmbId'): self._find_text(
+                fin_instn_id, 'ClrSysMmbId/MmbId'
+            ),
+        }
+
+        # Postal address
+        pstl_adr = self._find(fin_instn_id, 'PstlAdr')
+        if pstl_adr:
+            addr_prefix = self._make_key(fi_prefix, 'PstlAdr')
+            result[self._make_key(addr_prefix, 'StrtNm')] = self._find_text(pstl_adr, 'StrtNm')
+            result[self._make_key(addr_prefix, 'PstCd')] = self._find_text(pstl_adr, 'PstCd')
+            result[self._make_key(addr_prefix, 'TwnNm')] = self._find_text(pstl_adr, 'TwnNm')
+            result[self._make_key(addr_prefix, 'Ctry')] = self._find_text(pstl_adr, 'Ctry')
+
+            # Address lines
+            adr_lines = self._find_all(pstl_adr, 'AdrLine')
+            for i, line in enumerate(adr_lines):
+                result[f'{addr_prefix}.AdrLine[{i}]'] = line.text if line.text else None
+
+        return result
+
+    def _extract_amount_iso_path(
+        self, parent: ET.Element, amount_path: str, path_prefix: str
+    ) -> Dict[str, Any]:
+        """Extract amount element with currency using full ISO path keys.
+
+        Args:
+            parent: Parent element containing amount
+            amount_path: Path to amount element (e.g., 'IntrBkSttlmAmt', 'InstdAmt')
+            path_prefix: ISO path prefix (e.g., 'CdtTrfTxInf')
+
+        Returns:
+            Dict with keys like 'CdtTrfTxInf.IntrBkSttlmAmt', 'CdtTrfTxInf.IntrBkSttlmAmt@Ccy'
+        """
+        amt_elem = self._find(parent, amount_path)
+        if amt_elem is None:
+            return {}
+
+        key_base = self._make_key(path_prefix, amount_path)
+        return {
+            key_base: self._safe_float(amt_elem.text),
+            f'{key_base}@Ccy': amt_elem.get('Ccy'),
+        }
+
+    def _extract_group_header_iso_path(self, parent: ET.Element) -> Dict[str, Any]:
+        """Extract GrpHdr using full ISO path keys.
+
+        Args:
+            parent: Parent element containing GrpHdr
+
+        Returns:
+            Dict with keys like 'GrpHdr.MsgId', 'GrpHdr.CreDtTm'
+        """
+        result = {}
+        grp_hdr = self._find(parent, 'GrpHdr')
+
+        if grp_hdr is None:
+            return result
+
+        # Core identification
+        result['GrpHdr.MsgId'] = self._find_text(grp_hdr, 'MsgId')
+        result['GrpHdr.CreDtTm'] = self._find_text(grp_hdr, 'CreDtTm')
+        result['GrpHdr.NbOfTxs'] = self._safe_int(self._find_text(grp_hdr, 'NbOfTxs'))
+        result['GrpHdr.CtrlSum'] = self._safe_float(self._find_text(grp_hdr, 'CtrlSum'))
+
+        # Batch booking
+        result['GrpHdr.BtchBookg'] = self._find_text(grp_hdr, 'BtchBookg')
+
+        # Total interbank settlement amount
+        ttl_amt = self._find(grp_hdr, 'TtlIntrBkSttlmAmt')
+        if ttl_amt is not None:
+            result['GrpHdr.TtlIntrBkSttlmAmt'] = self._safe_float(ttl_amt.text)
+            result['GrpHdr.TtlIntrBkSttlmAmt@Ccy'] = ttl_amt.get('Ccy')
+
+        result['GrpHdr.IntrBkSttlmDt'] = self._find_text(grp_hdr, 'IntrBkSttlmDt')
+
+        # Settlement info
+        result['GrpHdr.SttlmInf.SttlmMtd'] = self._find_text(grp_hdr, 'SttlmInf/SttlmMtd')
+        result['GrpHdr.SttlmInf.ClrSys.Cd'] = self._find_text(grp_hdr, 'SttlmInf/ClrSys/Cd')
+
+        # Initiating Party (pain.001)
+        initg_pty = self._find(grp_hdr, 'InitgPty')
+        if initg_pty:
+            result.update(self._extract_party_iso_path(initg_pty, 'GrpHdr.InitgPty'))
+
+        # Instructing Agent (pacs.008)
+        instg_agt = self._find(grp_hdr, 'InstgAgt')
+        if instg_agt:
+            result.update(self._extract_financial_institution_iso_path(instg_agt, 'GrpHdr.InstgAgt'))
+
+        # Instructed Agent (pacs.008)
+        instd_agt = self._find(grp_hdr, 'InstdAgt')
+        if instd_agt:
+            result.update(self._extract_financial_institution_iso_path(instd_agt, 'GrpHdr.InstdAgt'))
+
+        return result
+
+    def _extract_payment_id_iso_path(self, pmt_id: ET.Element, path_prefix: str) -> Dict[str, Any]:
+        """Extract PmtId using full ISO path keys.
+
+        Args:
+            pmt_id: PmtId element
+            path_prefix: ISO path prefix (e.g., 'CdtTrfTxInf.PmtId')
+
+        Returns:
+            Dict with keys like 'CdtTrfTxInf.PmtId.InstrId', 'CdtTrfTxInf.PmtId.EndToEndId'
+        """
+        if pmt_id is None:
+            return {}
+
+        return {
+            self._make_key(path_prefix, 'InstrId'): self._find_text(pmt_id, 'InstrId'),
+            self._make_key(path_prefix, 'EndToEndId'): self._find_text(pmt_id, 'EndToEndId'),
+            self._make_key(path_prefix, 'TxId'): self._find_text(pmt_id, 'TxId'),
+            self._make_key(path_prefix, 'UETR'): self._find_text(pmt_id, 'UETR'),
+            self._make_key(path_prefix, 'ClrSysRef'): self._find_text(pmt_id, 'ClrSysRef'),
+        }
+
+    def _extract_payment_type_info_iso_path(
+        self, pmt_tp_inf: ET.Element, path_prefix: str
+    ) -> Dict[str, Any]:
+        """Extract PmtTpInf using full ISO path keys.
+
+        Args:
+            pmt_tp_inf: PmtTpInf element
+            path_prefix: ISO path prefix (e.g., 'PmtInf.PmtTpInf', 'CdtTrfTxInf.PmtTpInf')
+
+        Returns:
+            Dict with keys like 'PmtInf.PmtTpInf.InstrPrty', 'PmtInf.PmtTpInf.SvcLvl.Cd'
+        """
+        if pmt_tp_inf is None:
+            return {}
+
+        return {
+            self._make_key(path_prefix, 'InstrPrty'): self._find_text(pmt_tp_inf, 'InstrPrty'),
+            self._make_key(path_prefix, 'SvcLvl', 'Cd'): self._find_text(pmt_tp_inf, 'SvcLvl/Cd'),
+            self._make_key(path_prefix, 'SvcLvl', 'Prtry'): self._find_text(pmt_tp_inf, 'SvcLvl/Prtry'),
+            self._make_key(path_prefix, 'LclInstrm', 'Cd'): self._find_text(pmt_tp_inf, 'LclInstrm/Cd'),
+            self._make_key(path_prefix, 'LclInstrm', 'Prtry'): self._find_text(pmt_tp_inf, 'LclInstrm/Prtry'),
+            self._make_key(path_prefix, 'SeqTp'): self._find_text(pmt_tp_inf, 'SeqTp'),
+            self._make_key(path_prefix, 'CtgyPurp', 'Cd'): self._find_text(pmt_tp_inf, 'CtgyPurp/Cd'),
+        }
+
+    def _extract_remittance_info_iso_path(
+        self, rmt_inf: ET.Element, path_prefix: str
+    ) -> Dict[str, Any]:
+        """Extract RmtInf using full ISO path keys.
+
+        Args:
+            rmt_inf: RmtInf element
+            path_prefix: ISO path prefix (e.g., 'CdtTrfTxInf.RmtInf')
+
+        Returns:
+            Dict with keys like 'CdtTrfTxInf.RmtInf.Ustrd', 'CdtTrfTxInf.RmtInf.Strd.CdtrRefInf.Ref'
+        """
+        if rmt_inf is None:
+            return {}
+
+        result = {
+            self._make_key(path_prefix, 'Ustrd'): self._find_text(rmt_inf, 'Ustrd'),
+        }
+
+        # Structured remittance
+        strd = self._find(rmt_inf, 'Strd')
+        if strd:
+            strd_prefix = self._make_key(path_prefix, 'Strd')
+
+            # Referenced document
+            result[self._make_key(strd_prefix, 'RfrdDocInf', 'Tp', 'CdOrPrtry', 'Cd')] = self._find_text(
+                strd, 'RfrdDocInf/Tp/CdOrPrtry/Cd'
+            )
+            result[self._make_key(strd_prefix, 'RfrdDocInf', 'Nb')] = self._find_text(
+                strd, 'RfrdDocInf/Nb'
+            )
+            result[self._make_key(strd_prefix, 'RfrdDocInf', 'RltdDt')] = self._find_text(
+                strd, 'RfrdDocInf/RltdDt'
+            )
+
+            # Creditor reference
+            result[self._make_key(strd_prefix, 'CdtrRefInf', 'Tp', 'CdOrPrtry', 'Cd')] = self._find_text(
+                strd, 'CdtrRefInf/Tp/CdOrPrtry/Cd'
+            )
+            result[self._make_key(strd_prefix, 'CdtrRefInf', 'Ref')] = self._find_text(
+                strd, 'CdtrRefInf/Ref'
+            )
+
+        return result
+
+    def _extract_regulatory_reporting_iso_path(
+        self, rgltry_rptg: ET.Element, path_prefix: str
+    ) -> Dict[str, Any]:
+        """Extract RgltryRptg using full ISO path keys.
+
+        Args:
+            rgltry_rptg: RgltryRptg element
+            path_prefix: ISO path prefix (e.g., 'CdtTrfTxInf.RgltryRptg')
+
+        Returns:
+            Dict with keys like 'CdtTrfTxInf.RgltryRptg.DbtCdtRptgInd'
+        """
+        if rgltry_rptg is None:
+            return {}
+
+        return {
+            self._make_key(path_prefix, 'DbtCdtRptgInd'): self._find_text(rgltry_rptg, 'DbtCdtRptgInd'),
+            self._make_key(path_prefix, 'Authrty', 'Nm'): self._find_text(rgltry_rptg, 'Authrty/Nm'),
+            self._make_key(path_prefix, 'Authrty', 'Ctry'): self._find_text(rgltry_rptg, 'Authrty/Ctry'),
+            self._make_key(path_prefix, 'Dtls', 'Cd'): self._find_text(rgltry_rptg, 'Dtls/Cd'),
+            self._make_key(path_prefix, 'Dtls', 'Inf'): self._find_text(rgltry_rptg, 'Dtls/Inf'),
+        }
+
+    # ==========================================================================
     # ABSTRACT METHOD - SUBCLASSES MUST IMPLEMENT
     # ==========================================================================
 
@@ -610,3 +1015,19 @@ class BaseISO20022Parser(ABC):
             Dict with all extracted fields using standardized key names
         """
         pass
+
+    def parse_iso_paths(self, content: str) -> Dict[str, Any]:
+        """Parse message content using full ISO path key naming.
+
+        This method should be overridden by subclasses to provide
+        full ISO path dot-notation keys in the result.
+
+        Args:
+            content: Raw message content (XML string)
+
+        Returns:
+            Dict with all extracted fields using full ISO path keys
+            (e.g., 'GrpHdr.MsgId', 'PmtInf.Dbtr.Nm')
+        """
+        # Default implementation - subclasses should override
+        return self.parse(content)

@@ -220,9 +220,7 @@ from gps_cdm.orchestration.dynamic_gold_mapper import DynamicGoldMapper
 # Each module registers its extractor when imported
 from gps_cdm.message_formats import pain001  # noqa: F401
 from gps_cdm.message_formats import pacs008  # noqa: F401
-from gps_cdm.message_formats import mt103    # noqa: F401
-from gps_cdm.message_formats import mt202    # noqa: F401
-from gps_cdm.message_formats import mt940    # noqa: F401
+# NOTE: All SWIFT MT imports removed - decommissioned Nov 2025
 from gps_cdm.message_formats import fedwire  # noqa: F401
 from gps_cdm.message_formats import ach      # noqa: F401
 from gps_cdm.message_formats import rtp      # noqa: F401
@@ -439,19 +437,77 @@ def process_bronze_records(
                 # Get message format
                 message_format = get_message_format(message_type)
 
+                # Run extractor to parse content and store output as JSON
+                # This enables Bronze-to-Silver mapping to use JSON keys
+                extractor_output_json = None
+                try:
+                    extractor = ExtractorRegistry.get(message_type)
+                    if extractor:
+                        # Get raw text from content
+                        raw_text = None
+                        if isinstance(msg_content, dict):
+                            # Extract raw text for parsing - check 'raw' key first (even if multiple keys)
+                            # This handles pre-split ACH/BACS messages that have {raw, file_header, batch_header}
+                            if 'raw' in msg_content:
+                                raw_text = msg_content['raw']
+                            elif '_raw_text' in msg_content:
+                                raw_text = msg_content['_raw_text']
+
+                        # Parse based on format
+                        parsed_content = None
+                        if raw_text:
+                            # Try extractor's parser - prefer parse_iso_paths() for ISO 20022 dot-notation keys
+                            if hasattr(extractor, 'parser'):
+                                parser = extractor.parser
+                                try:
+                                    # Use parse_iso_paths() for ISO 20022 formats to get dot-notation keys
+                                    if hasattr(parser, 'parse_iso_paths'):
+                                        parsed_content = parser.parse_iso_paths(raw_text)
+                                    elif hasattr(parser, 'parse'):
+                                        parsed_content = parser.parse(raw_text)
+                                except Exception as parse_err:
+                                    logger.debug(f"Extractor parser failed for {raw_id}: {parse_err}")
+
+                            # Try generic parsing if extractor parser failed
+                            if parsed_content is None:
+                                try:
+                                    # Try JSON
+                                    parsed_content = json.loads(raw_text)
+                                except (json.JSONDecodeError, TypeError):
+                                    # Try XML via extractor's extract methods
+                                    if raw_text.strip().startswith('<'):
+                                        try:
+                                            # Call extract_silver which handles XML parsing
+                                            temp_record = extractor.extract_silver(
+                                                {'_raw_text': raw_text}, raw_id, 'temp_stg', batch_id
+                                            )
+                                            parsed_content = temp_record
+                                        except Exception:
+                                            parsed_content = {'_raw_text': raw_text}
+                                    else:
+                                        parsed_content = {'_raw_text': raw_text}
+                        else:
+                            # Content is already a dict (pre-parsed JSON)
+                            parsed_content = msg_content
+
+                        extractor_output_json = json.dumps(parsed_content) if parsed_content else None
+                except Exception as ext_err:
+                    logger.warning(f"Failed to compute extractor output for {raw_id}: {ext_err}")
+                    extractor_output_json = None
+
                 # Insert into Bronze
                 cursor.execute("""
                     INSERT INTO bronze.raw_payment_messages (
                         raw_id, message_type, message_format, raw_content,
                         raw_content_hash, source_system, source_file_path,
-                        processing_status, _batch_id, _ingested_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        processing_status, _batch_id, _ingested_at, extractor_output
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (raw_id) DO NOTHING
                     RETURNING raw_id
                 """, (
                     raw_id, message_type, message_format, content_str,
                     content_hash, 'NIFI', f'nifi://batch/{batch_id}',
-                    'PENDING', batch_id, datetime.utcnow()
+                    'PENDING', batch_id, datetime.utcnow(), extractor_output_json
                 ))
 
                 result = cursor.fetchone()
@@ -584,10 +640,10 @@ def process_silver_records(
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Read Bronze records
+        # Read Bronze records (include extractor_output for pre-parsed content)
         placeholders = ','.join(['%s'] * len(raw_ids))
         cursor.execute(f"""
-            SELECT raw_id, message_type, raw_content
+            SELECT raw_id, message_type, raw_content, extractor_output
             FROM bronze.raw_payment_messages
             WHERE raw_id IN ({placeholders})
               AND processing_status = 'PENDING'
@@ -595,20 +651,30 @@ def process_silver_records(
 
         bronze_records = cursor.fetchall()
 
-        for raw_id, msg_type, raw_content in bronze_records:
+        for raw_id, msg_type, raw_content, extractor_output in bronze_records:
             try:
-                # Parse content
-                msg_content = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
+                # Use extractor_output if available (pre-parsed in Bronze processing)
+                raw_text = None  # Initialize for legacy fallback
+                if extractor_output:
+                    if isinstance(extractor_output, str):
+                        msg_content = json.loads(extractor_output)
+                    else:
+                        msg_content = extractor_output
+                    logger.info(f"[SILVER] Using pre-parsed extractor_output for {raw_id}")
+                else:
+                    # Fall back to parsing raw_content (legacy records without extractor_output)
+                    # Parse content
+                    msg_content = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
 
-                # Unwrap raw content if it was stored with {"raw": "..."} or {"_raw_text": "..."}
-                raw_text = None
-                if isinstance(msg_content, dict):
-                    if 'raw' in msg_content and len(msg_content) == 1:
-                        raw_text = msg_content['raw']
-                    elif '_raw_text' in msg_content:
-                        raw_text = msg_content['_raw_text']
+                    # Unwrap raw content if it was stored with {"raw": "..."} or {"_raw_text": "..."}
+                    # Note: 'raw' key may exist with other keys (e.g., {raw, file_header, batch_header})
+                    if isinstance(msg_content, dict):
+                        if 'raw' in msg_content:
+                            raw_text = msg_content['raw']
+                        elif '_raw_text' in msg_content:
+                            raw_text = msg_content['_raw_text']
 
-                if raw_text:
+                if not extractor_output and raw_text:
                     # Try to parse the raw text as JSON first
                     try:
                         msg_content = json.loads(raw_text)
@@ -640,9 +706,16 @@ def process_silver_records(
                                     msg_content = {'_raw_text': raw_text, '_format': 'swift_mt'}
                         elif raw_text.strip().startswith('<'):
                             # XML format - use extractor's parser if available
-                            if hasattr(extractor, 'parser') and hasattr(extractor.parser, 'parse'):
+                            # Prefer parse_iso_paths() for ISO 20022 dot-notation keys
+                            if hasattr(extractor, 'parser'):
+                                parser = extractor.parser
                                 try:
-                                    msg_content = extractor.parser.parse(raw_text)
+                                    if hasattr(parser, 'parse_iso_paths'):
+                                        msg_content = parser.parse_iso_paths(raw_text)
+                                    elif hasattr(parser, 'parse'):
+                                        msg_content = parser.parse(raw_text)
+                                    else:
+                                        msg_content = {'_raw_text': raw_text, '_format': 'xml'}
                                 except Exception:
                                     msg_content = {'_raw_text': raw_text, '_format': 'xml'}
                             else:
@@ -696,17 +769,62 @@ def process_silver_records(
                 # Generate stg_id
                 stg_id = extractor.generate_stg_id()
 
-                # Extract Silver record using either DynamicMapper (database-driven) or hardcoded extractor
-                if USE_DYNAMIC_MAPPINGS:
-                    # Use database-driven field mappings
+                # Determine if content is JSON (proprietary format) vs XML (ISO 20022)
+                # Regional systems like PIX, PayNow, KFTC, PROMPTPAY support both formats:
+                # - JSON: domestic/proprietary format -> use extractor's extract_silver()
+                # - XML: ISO 20022 format -> use DynamicMapper with ISO 20022 mappings
+                is_json_content = False
+                is_xml_content = False
+
+                # Check raw content format (raw_content is from Bronze DB, may be JSON-wrapped)
+                raw_str = raw_content if isinstance(raw_content, str) else str(raw_content)
+                # Check if it was wrapped in {"raw": "..."} format
+                if raw_text:
+                    raw_str = raw_text  # Use unwrapped content
+
+                if isinstance(raw_str, str):
+                    stripped = raw_str.strip()
+                    if stripped.startswith('{') and not stripped.startswith('{1:'):  # JSON but not SWIFT MT
+                        is_json_content = True
+                    elif stripped.startswith('<?xml') or stripped.startswith('<Document') or stripped.startswith('<'):
+                        is_xml_content = True
+
+                # Also check parsed content for format indicators
+                if isinstance(msg_content, dict):
+                    # Check if parsed content indicates format
+                    content_format = msg_content.get('_format', '')
+                    if content_format in ('json', 'JSON'):
+                        is_json_content = True
+                    elif content_format in ('xml', 'iso20022'):
+                        is_xml_content = True
+                    # Check for ISO 20022 indicators
+                    elif msg_content.get('isISO20022') or msg_content.get('Document'):
+                        is_xml_content = True
+                    # Check for JSON-only fields (no ISO 20022 equivalent path)
+                    elif any(k in msg_content for k in ['payerName', 'payeeName', 'payerAccount', 'payeeAccount',
+                                                        'payerProxyType', 'payeeProxyType', 'payerIspb', 'payeeIspb']):
+                        is_json_content = True
+
+                # NOTE: We use DynamicMapper for ALL formats (both XML and JSON)
+                # The DynamicMapper's _resolve_path() handles multiple path formats:
+                # - Nested paths: debtor.name -> data['debtor']['name']
+                # - Flat camelCase: debtorName -> data['debtorName']
+                # - Direct key: messageId -> data['messageId']
+                # This approach is consistent with the user's preference for database-driven mappings
+                use_extractor_for_silver = False  # Always use dynamic mappings
+
+                # ENHANCED LOGGING: Log source data before extraction
+                logger.info(f"[SILVER][{batch_id}] raw_id={raw_id}, message_type={message_type}")
+                logger.info(f"[SILVER][{batch_id}] Format detection: is_json={is_json_content}, is_xml={is_xml_content}, use_extractor={use_extractor_for_silver}")
+                if isinstance(msg_content, dict):
+                    sample_keys = list(msg_content.keys())[:10]
+                    logger.info(f"[SILVER][{batch_id}] Source data keys: {sample_keys}")
+
+                # Extract Silver record using appropriate method
+                if USE_DYNAMIC_MAPPINGS and not use_extractor_for_silver:
+                    # Use database-driven field mappings (for XML/ISO 20022 content)
                     from gps_cdm.orchestration.dynamic_mapper import DynamicMapper
                     mapper = DynamicMapper(conn)
-
-                    # ENHANCED LOGGING: Log source data before extraction
-                    logger.info(f"[SILVER][{batch_id}] raw_id={raw_id}, message_type={message_type}")
-                    if isinstance(msg_content, dict):
-                        sample_keys = list(msg_content.keys())[:10]
-                        logger.info(f"[SILVER][{batch_id}] Source data keys: {sample_keys}")
 
                     silver_record = mapper.extract_silver_record(message_type, msg_content, raw_id, batch_id)
                     silver_record['stg_id'] = stg_id  # Override generated stg_id
@@ -729,11 +847,17 @@ def process_silver_records(
                         sample = non_null_cols[:5]
                         logger.info(f"[SILVER][{batch_id}] Sample values: {sample}")
                 else:
-                    # Use hardcoded extractor (legacy)
+                    # Use extractor's extract_silver() for JSON/proprietary content
+                    # The extractor handles JSON field mapping internally
+                    logger.info(f"[SILVER][{batch_id}] Using extractor.extract_silver() for {message_type}")
                     silver_record = extractor.extract_silver(msg_content, raw_id, stg_id, batch_id)
                     silver_table = extractor.SILVER_TABLE
                     columns = extractor.get_silver_columns()
                     values = extractor.get_silver_values(silver_record)
+
+                    # Log extractor results
+                    non_null_count = sum(1 for v in values if v is not None and str(v).strip())
+                    logger.info(f"[SILVER][{batch_id}] Extractor result: table={silver_table}, columns={len(columns)}, non_null_values={non_null_count}")
 
                 # Build INSERT statement
                 col_names = ', '.join(columns)
@@ -933,13 +1057,28 @@ def process_gold_records(
                 # map Silver columns to all Gold tables (cdm_party, cdm_account,
                 # cdm_financial_institution, cdm_payment_instruction, extensions)
                 from gps_cdm.orchestration.dynamic_gold_mapper import DynamicGoldMapper
+                from gps_cdm.message_formats.base import detect_message_routing
 
                 gold_mapper = DynamicGoldMapper(conn)
 
+                # Detect message routing for formats that require subtype detection
+                # This determines which ISO 20022 message type to route to based on
+                # the actual content (e.g., ACH credit vs debit → pacs.008 vs pain.008)
+                raw_content = silver_data.get('_raw_content', '')
+                subtype, target_iso, routing_key = detect_message_routing(
+                    message_type, raw_content, silver_data
+                )
+                logger.info(
+                    f"[GOLD][{batch_id}] Routing: subtype={subtype.name}, "
+                    f"target_iso={target_iso}, routing_key={routing_key}"
+                )
+
                 # Build Gold records from Silver data using database mappings
+                # Pass routing info for conditional mapping selection
                 logger.info(f"[GOLD][{batch_id}] Building Gold records for {message_type}")
                 gold_records = gold_mapper.build_gold_records(
-                    message_type, silver_data, stg_id, batch_id
+                    message_type, silver_data, stg_id, batch_id,
+                    routing_key=routing_key, target_iso_type=target_iso
                 )
 
                 # ENHANCED LOGGING: Log what Gold records are being built
@@ -1472,8 +1611,9 @@ def process_medallion_pipeline(
                         try:
                             msg_content = json.loads(raw_content)
                             # Check if JSON-wrapped raw content
+                            # Note: 'raw' key may exist with other keys (e.g., {raw, file_header, batch_header})
                             if isinstance(msg_content, dict):
-                                if 'raw' in msg_content and len(msg_content) == 1:
+                                if 'raw' in msg_content:
                                     raw_text = msg_content['raw']
                                 elif '_raw_text' in msg_content:
                                     raw_text = msg_content['_raw_text']

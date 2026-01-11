@@ -36,6 +36,7 @@ import {
   MonitorHeart as MonitoringIcon,
   ErrorOutline as ErrorIcon,
   Description as MappingsIcon,
+  Storage as CatalogIcon,
 } from '@mui/icons-material';
 import { colors } from '../../styles/design-system';
 import { useAuth } from '../../contexts/AuthContext';
@@ -51,6 +52,7 @@ const navItems = [
   { path: '/reconciliation', label: 'Reconciliation', icon: <CompareArrowsIcon /> },
   { path: '/lineage', label: 'Data Lineage', icon: <AccountTreeIcon /> },
   { path: '/mappings', label: 'Mappings Documentation', icon: <MappingsIcon /> },
+  { path: '/catalog', label: 'CDM Data Catalog', icon: <CatalogIcon /> },
   { path: '/process', label: 'Process File', icon: <UploadIcon /> },
   { path: '/reprocess', label: 'Reprocess', icon: <RefreshIcon /> },
 ];

@@ -223,6 +223,190 @@ class Pacs008Parser(BaseISO20022Parser):
 
         return result
 
+    def parse_iso_paths(self, xml_content: str) -> Dict[str, Any]:
+        """Parse pacs.008 message using full ISO path key naming.
+
+        Returns keys using ISO 20022 element path notation:
+        - GrpHdr.MsgId, GrpHdr.CreDtTm, GrpHdr.NbOfTxs
+        - CdtTrfTxInf.PmtId.InstrId, CdtTrfTxInf.PmtId.EndToEndId
+        - CdtTrfTxInf.Dbtr.Nm, CdtTrfTxInf.Dbtr.PstlAdr.Ctry (parties are customers)
+        - CdtTrfTxInf.DbtrAgt.FinInstnId.BICFI
+        - CdtTrfTxInf.CdtrAgt.FinInstnId.BICFI
+
+        Args:
+            xml_content: Raw XML string
+
+        Returns:
+            Dict with full ISO path keys
+        """
+        root = self._parse_xml(xml_content)
+
+        # Find the FIToFICstmrCdtTrf element
+        fi_transfer = self._find(root, self.ROOT_ELEMENT)
+        if fi_transfer is None:
+            root_tag = self._strip_ns(root.tag)
+            if root_tag == self.ROOT_ELEMENT:
+                fi_transfer = root
+            else:
+                raise ValueError(f"Cannot find {self.ROOT_ELEMENT} element in pacs.008 message")
+
+        result = {
+            'isISO20022': True,
+            'messageTypeCode': 'pacs.008',
+        }
+
+        # Extract Group Header using ISO paths
+        result.update(self._extract_group_header_iso_path(fi_transfer))
+
+        # Extract first Credit Transfer Transaction using ISO paths
+        cdt_trf = self._find(fi_transfer, 'CdtTrfTxInf')
+        if cdt_trf is not None:
+            result.update(self._parse_credit_transfer_tx_iso_paths(cdt_trf))
+
+        return result
+
+    def _parse_credit_transfer_tx_iso_paths(self, cdt_trf) -> Dict[str, Any]:
+        """Parse CdtTrfTxInf element using full ISO path keys.
+
+        Args:
+            cdt_trf: CdtTrfTxInf element
+
+        Returns:
+            Dict with full ISO path keys
+        """
+        result = {}
+        prefix = 'CdtTrfTxInf'
+
+        # Payment Identification
+        pmt_id = self._find(cdt_trf, 'PmtId')
+        if pmt_id:
+            result.update(self._extract_payment_id_iso_path(pmt_id, f'{prefix}.PmtId'))
+
+        # Payment Type Information
+        pmt_tp_inf = self._find(cdt_trf, 'PmtTpInf')
+        if pmt_tp_inf:
+            result.update(self._extract_payment_type_info_iso_path(pmt_tp_inf, f'{prefix}.PmtTpInf'))
+
+        # Interbank Settlement Amount
+        result.update(self._extract_amount_iso_path(cdt_trf, 'IntrBkSttlmAmt', f'{prefix}.IntrBkSttlmAmt'))
+
+        # Interbank Settlement Date
+        result[f'{prefix}.IntrBkSttlmDt'] = self._find_text(cdt_trf, 'IntrBkSttlmDt')
+
+        # Settlement Priority
+        result[f'{prefix}.SttlmPrty'] = self._find_text(cdt_trf, 'SttlmPrty')
+
+        # Charge Bearer
+        result[f'{prefix}.ChrgBr'] = self._find_text(cdt_trf, 'ChrgBr')
+
+        # Instructed Amount
+        result.update(self._extract_amount_iso_path(cdt_trf, 'InstdAmt', f'{prefix}.InstdAmt'))
+
+        # Exchange Rate
+        result[f'{prefix}.XchgRate'] = self._find_text(cdt_trf, 'XchgRate')
+
+        # Debtor (Party - customer in pacs.008)
+        dbtr = self._find(cdt_trf, 'Dbtr')
+        if dbtr:
+            result.update(self._extract_party_iso_path(dbtr, f'{prefix}.Dbtr'))
+
+        # Debtor Account
+        dbtr_acct = self._find(cdt_trf, 'DbtrAcct')
+        if dbtr_acct:
+            result.update(self._extract_account_iso_path(dbtr_acct, f'{prefix}.DbtrAcct'))
+
+        # Debtor Agent
+        dbtr_agt = self._find(cdt_trf, 'DbtrAgt')
+        if dbtr_agt:
+            result.update(self._extract_financial_institution_iso_path(dbtr_agt, f'{prefix}.DbtrAgt'))
+
+        # Creditor Agent
+        cdtr_agt = self._find(cdt_trf, 'CdtrAgt')
+        if cdtr_agt:
+            result.update(self._extract_financial_institution_iso_path(cdtr_agt, f'{prefix}.CdtrAgt'))
+
+        # Creditor (Party - customer in pacs.008)
+        cdtr = self._find(cdt_trf, 'Cdtr')
+        if cdtr:
+            result.update(self._extract_party_iso_path(cdtr, f'{prefix}.Cdtr'))
+
+        # Creditor Account
+        cdtr_acct = self._find(cdt_trf, 'CdtrAcct')
+        if cdtr_acct:
+            result.update(self._extract_account_iso_path(cdtr_acct, f'{prefix}.CdtrAcct'))
+
+        # Ultimate Debtor
+        ultmt_dbtr = self._find(cdt_trf, 'UltmtDbtr')
+        if ultmt_dbtr:
+            result.update(self._extract_party_iso_path(ultmt_dbtr, f'{prefix}.UltmtDbtr'))
+
+        # Ultimate Creditor
+        ultmt_cdtr = self._find(cdt_trf, 'UltmtCdtr')
+        if ultmt_cdtr:
+            result.update(self._extract_party_iso_path(ultmt_cdtr, f'{prefix}.UltmtCdtr'))
+
+        # Intermediary Agents
+        intrmy_agt1 = self._find(cdt_trf, 'IntrmyAgt1')
+        if intrmy_agt1:
+            result.update(self._extract_financial_institution_iso_path(intrmy_agt1, f'{prefix}.IntrmyAgt1'))
+
+        intrmy_agt2 = self._find(cdt_trf, 'IntrmyAgt2')
+        if intrmy_agt2:
+            result.update(self._extract_financial_institution_iso_path(intrmy_agt2, f'{prefix}.IntrmyAgt2'))
+
+        intrmy_agt3 = self._find(cdt_trf, 'IntrmyAgt3')
+        if intrmy_agt3:
+            result.update(self._extract_financial_institution_iso_path(intrmy_agt3, f'{prefix}.IntrmyAgt3'))
+
+        # Purpose
+        purp = self._find(cdt_trf, 'Purp')
+        if purp:
+            result[f'{prefix}.Purp.Cd'] = self._find_text(purp, 'Cd')
+            result[f'{prefix}.Purp.Prtry'] = self._find_text(purp, 'Prtry')
+
+        # Remittance Information
+        rmt_inf = self._find(cdt_trf, 'RmtInf')
+        if rmt_inf:
+            result.update(self._extract_remittance_info_iso_path(rmt_inf, f'{prefix}.RmtInf'))
+
+        # Regulatory Reporting
+        rgltry_rptg = self._find(cdt_trf, 'RgltryRptg')
+        if rgltry_rptg:
+            result.update(self._extract_regulatory_reporting_iso_path(rgltry_rptg, f'{prefix}.RgltryRptg'))
+
+        return result
+
+    def _extract_regulatory_reporting_iso_path(self, rgltry_rptg, path_prefix: str) -> Dict[str, Any]:
+        """Extract RgltryRptg using full ISO path keys.
+
+        Args:
+            rgltry_rptg: RgltryRptg element
+            path_prefix: ISO path prefix
+
+        Returns:
+            Dict with full ISO path keys
+        """
+        if rgltry_rptg is None:
+            return {}
+
+        result = {}
+        result[f'{path_prefix}.DbtCdtRptgInd'] = self._find_text(rgltry_rptg, 'DbtCdtRptgInd')
+
+        # Authority
+        authrty = self._find(rgltry_rptg, 'Authrty')
+        if authrty:
+            result[f'{path_prefix}.Authrty.Nm'] = self._find_text(authrty, 'Nm')
+            result[f'{path_prefix}.Authrty.Ctry'] = self._find_text(authrty, 'Ctry')
+
+        # Details
+        dtls = self._find(rgltry_rptg, 'Dtls')
+        if dtls:
+            result[f'{path_prefix}.Dtls.Tp'] = self._find_text(dtls, 'Tp')
+            result[f'{path_prefix}.Dtls.Cd'] = self._find_text(dtls, 'Cd')
+            result[f'{path_prefix}.Dtls.Inf'] = self._find_text(dtls, 'Inf')
+
+        return result
+
 
 class Pacs008Extractor(BaseISO20022Extractor):
     """Base extractor for all pacs.008-based payment systems.

@@ -267,6 +267,232 @@ class Pain008Parser(BaseISO20022Parser):
 
         return result
 
+    # ==========================================================================
+    # ISO PATH KEY NAMING METHODS (DOT-NOTATION)
+    # ==========================================================================
+
+    def parse_iso_paths(self, xml_content: str) -> Dict[str, Any]:
+        """Parse pain.008 message using full ISO path key naming.
+
+        Returns keys in dot-notation format matching ISO 20022 element paths:
+        - GrpHdr.MsgId, GrpHdr.CreDtTm, GrpHdr.InitgPty.Nm
+        - PmtInf.PmtInfId, PmtInf.PmtMtd, PmtInf.ReqdColltnDt
+        - PmtInf.Cdtr.Nm, PmtInf.CdtrAcct.Id.IBAN
+        - PmtInf.DrctDbtTxInf.PmtId.EndToEndId
+        - PmtInf.DrctDbtTxInf.DrctDbtTx.MndtRltdInf.MndtId
+
+        Args:
+            xml_content: Raw XML string
+
+        Returns:
+            Dict with all extracted pain.008 fields using full ISO path keys
+        """
+        root = self._parse_xml(xml_content)
+
+        # Find the CstmrDrctDbtInitn element
+        dd_initn = self._find(root, self.ROOT_ELEMENT)
+        if dd_initn is None:
+            root_tag = self._strip_ns(root.tag)
+            if root_tag == self.ROOT_ELEMENT:
+                dd_initn = root
+            else:
+                raise ValueError(f"Cannot find {self.ROOT_ELEMENT} element in pain.008 message")
+
+        result = {
+            'isISO20022': True,
+            'messageTypeCode': 'pain.008',
+        }
+
+        # Extract Group Header
+        result.update(self._extract_dd_group_header_iso_path(dd_initn))
+
+        # Extract first Payment Information block
+        pmt_inf = self._find(dd_initn, 'PmtInf')
+        if pmt_inf is not None:
+            result.update(self._parse_payment_info_iso_paths(pmt_inf))
+
+        return result
+
+    def _extract_dd_group_header_iso_path(self, dd_initn: 'ET.Element') -> Dict[str, Any]:
+        """Extract Group Header using ISO path keys.
+
+        Args:
+            dd_initn: CstmrDrctDbtInitn element
+
+        Returns:
+            Dict with ISO path keys like 'GrpHdr.MsgId', 'GrpHdr.InitgPty.Nm'
+        """
+        result = {}
+        grp_hdr = self._find(dd_initn, 'GrpHdr')
+
+        if grp_hdr is None:
+            return result
+
+        result['GrpHdr.MsgId'] = self._find_text(grp_hdr, 'MsgId')
+        result['GrpHdr.CreDtTm'] = self._find_text(grp_hdr, 'CreDtTm')
+        result['GrpHdr.NbOfTxs'] = self._safe_int(self._find_text(grp_hdr, 'NbOfTxs'))
+        result['GrpHdr.CtrlSum'] = self._safe_float(self._find_text(grp_hdr, 'CtrlSum'))
+
+        # Initiating Party
+        initg_pty = self._find(grp_hdr, 'InitgPty')
+        if initg_pty:
+            result.update(self._extract_party_iso_path(initg_pty, 'GrpHdr.InitgPty'))
+
+        return result
+
+    def _parse_payment_info_iso_paths(self, pmt_inf: 'ET.Element') -> Dict[str, Any]:
+        """Parse PmtInf element using ISO path keys.
+
+        Args:
+            pmt_inf: PmtInf element
+
+        Returns:
+            Dict with ISO path keys like 'PmtInf.PmtInfId', 'PmtInf.Cdtr.Nm'
+        """
+        result = {}
+        prefix = 'PmtInf'
+
+        # Payment Information Identification
+        result[f'{prefix}.PmtInfId'] = self._find_text(pmt_inf, 'PmtInfId')
+        result[f'{prefix}.PmtMtd'] = self._find_text(pmt_inf, 'PmtMtd')
+        result[f'{prefix}.BtchBookg'] = self._find_text(pmt_inf, 'BtchBookg')
+        result[f'{prefix}.NbOfTxs'] = self._safe_int(self._find_text(pmt_inf, 'NbOfTxs'))
+        result[f'{prefix}.CtrlSum'] = self._safe_float(self._find_text(pmt_inf, 'CtrlSum'))
+
+        # Payment Type Information
+        pmt_tp_inf = self._find(pmt_inf, 'PmtTpInf')
+        if pmt_tp_inf:
+            result.update(self._extract_payment_type_info_iso_path(pmt_tp_inf, f'{prefix}.PmtTpInf'))
+
+        # Requested Collection Date
+        result[f'{prefix}.ReqdColltnDt'] = self._find_text(pmt_inf, 'ReqdColltnDt')
+
+        # Creditor (the party initiating the direct debit)
+        cdtr = self._find(pmt_inf, 'Cdtr')
+        if cdtr:
+            result.update(self._extract_party_iso_path(cdtr, f'{prefix}.Cdtr'))
+
+        # Creditor Account
+        cdtr_acct = self._find(pmt_inf, 'CdtrAcct')
+        if cdtr_acct:
+            result.update(self._extract_account_iso_path(cdtr_acct, f'{prefix}.CdtrAcct'))
+
+        # Creditor Agent
+        cdtr_agt = self._find(pmt_inf, 'CdtrAgt')
+        if cdtr_agt:
+            result.update(self._extract_financial_institution_iso_path(cdtr_agt, f'{prefix}.CdtrAgt'))
+
+        # Creditor Scheme Identification
+        cdtr_schme_id = self._find(pmt_inf, 'CdtrSchmeId')
+        if cdtr_schme_id:
+            schme_prefix = f'{prefix}.CdtrSchmeId'
+            result[f'{schme_prefix}.Id.PrvtId.Othr.Id'] = self._find_text(
+                cdtr_schme_id, 'Id/PrvtId/Othr/Id'
+            )
+            result[f'{schme_prefix}.Id.PrvtId.Othr.SchmeNm.Prtry'] = self._find_text(
+                cdtr_schme_id, 'Id/PrvtId/Othr/SchmeNm/Prtry'
+            )
+            result[f'{schme_prefix}.Id.PrvtId.Othr.SchmeNm.Cd'] = self._find_text(
+                cdtr_schme_id, 'Id/PrvtId/Othr/SchmeNm/Cd'
+            )
+
+        # Extract first Direct Debit Transaction
+        drct_dbt_tx_inf = self._find(pmt_inf, 'DrctDbtTxInf')
+        if drct_dbt_tx_inf:
+            result.update(self._parse_direct_debit_tx_iso_paths(drct_dbt_tx_inf))
+
+        return result
+
+    def _parse_direct_debit_tx_iso_paths(self, dd_tx: 'ET.Element') -> Dict[str, Any]:
+        """Parse DrctDbtTxInf element using ISO path keys.
+
+        Args:
+            dd_tx: DrctDbtTxInf element
+
+        Returns:
+            Dict with ISO path keys like 'PmtInf.DrctDbtTxInf.PmtId.EndToEndId'
+        """
+        result = {}
+        prefix = 'PmtInf.DrctDbtTxInf'
+
+        # Payment Identification
+        pmt_id = self._find(dd_tx, 'PmtId')
+        if pmt_id:
+            result.update(self._extract_payment_id_iso_path(pmt_id, f'{prefix}.PmtId'))
+
+        # Instructed Amount
+        result.update(self._extract_amount_iso_path(dd_tx, 'InstdAmt', prefix))
+
+        # Charge Bearer
+        result[f'{prefix}.ChrgBr'] = self._find_text(dd_tx, 'ChrgBr')
+
+        # Direct Debit Transaction (Mandate Information)
+        drct_dbt_tx = self._find(dd_tx, 'DrctDbtTx')
+        if drct_dbt_tx:
+            mndt_prefix = f'{prefix}.DrctDbtTx.MndtRltdInf'
+            mndt_rltd_inf = self._find(drct_dbt_tx, 'MndtRltdInf')
+            if mndt_rltd_inf:
+                result[f'{mndt_prefix}.MndtId'] = self._find_text(mndt_rltd_inf, 'MndtId')
+                result[f'{mndt_prefix}.DtOfSgntr'] = self._find_text(mndt_rltd_inf, 'DtOfSgntr')
+                result[f'{mndt_prefix}.AmdmntInd'] = self._find_text(mndt_rltd_inf, 'AmdmntInd')
+
+                # Amendment Information Details
+                amdmnt_inf_dtls = self._find(mndt_rltd_inf, 'AmdmntInfDtls')
+                if amdmnt_inf_dtls:
+                    amdmnt_prefix = f'{mndt_prefix}.AmdmntInfDtls'
+                    result[f'{amdmnt_prefix}.OrgnlMndtId'] = self._find_text(
+                        amdmnt_inf_dtls, 'OrgnlMndtId'
+                    )
+                    result[f'{amdmnt_prefix}.OrgnlDbtrAcct.Id.IBAN'] = self._find_text(
+                        amdmnt_inf_dtls, 'OrgnlDbtrAcct/Id/IBAN'
+                    )
+                    result[f'{amdmnt_prefix}.OrgnlDbtrAgt.FinInstnId.BICFI'] = self._find_text(
+                        amdmnt_inf_dtls, 'OrgnlDbtrAgt/FinInstnId/BICFI'
+                    )
+
+            # Creditor Scheme ID at transaction level
+            result[f'{prefix}.DrctDbtTx.CdtrSchmeId.Id.PrvtId.Othr.Id'] = self._find_text(
+                drct_dbt_tx, 'CdtrSchmeId/Id/PrvtId/Othr/Id'
+            )
+
+        # Debtor Agent
+        dbtr_agt = self._find(dd_tx, 'DbtrAgt')
+        if dbtr_agt:
+            result.update(self._extract_financial_institution_iso_path(dbtr_agt, f'{prefix}.DbtrAgt'))
+
+        # Debtor
+        dbtr = self._find(dd_tx, 'Dbtr')
+        if dbtr:
+            result.update(self._extract_party_iso_path(dbtr, f'{prefix}.Dbtr'))
+
+        # Debtor Account
+        dbtr_acct = self._find(dd_tx, 'DbtrAcct')
+        if dbtr_acct:
+            result.update(self._extract_account_iso_path(dbtr_acct, f'{prefix}.DbtrAcct'))
+
+        # Ultimate Creditor
+        ultmt_cdtr = self._find(dd_tx, 'UltmtCdtr')
+        if ultmt_cdtr:
+            result.update(self._extract_party_iso_path(ultmt_cdtr, f'{prefix}.UltmtCdtr'))
+
+        # Ultimate Debtor
+        ultmt_dbtr = self._find(dd_tx, 'UltmtDbtr')
+        if ultmt_dbtr:
+            result.update(self._extract_party_iso_path(ultmt_dbtr, f'{prefix}.UltmtDbtr'))
+
+        # Purpose
+        purp = self._find(dd_tx, 'Purp')
+        if purp:
+            result[f'{prefix}.Purp.Cd'] = self._find_text(purp, 'Cd')
+            result[f'{prefix}.Purp.Prtry'] = self._find_text(purp, 'Prtry')
+
+        # Remittance Information
+        rmt_inf = self._find(dd_tx, 'RmtInf')
+        if rmt_inf:
+            result.update(self._extract_remittance_info_iso_path(rmt_inf, f'{prefix}.RmtInf'))
+
+        return result
+
 
 class Pain008Extractor(BaseISO20022Extractor):
     """Base extractor for all pain.008-based direct debit messages.

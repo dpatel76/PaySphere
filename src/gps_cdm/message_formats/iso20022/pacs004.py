@@ -227,6 +227,209 @@ class Pacs004Parser(BaseISO20022Parser):
 
         return result
 
+    # ==========================================================================
+    # ISO PATH KEY NAMING METHODS (DOT-NOTATION)
+    # ==========================================================================
+
+    def parse_iso_paths(self, xml_content: str) -> Dict[str, Any]:
+        """Parse pacs.004 message using full ISO path key naming.
+
+        Returns keys in dot-notation format matching ISO 20022 element paths:
+        - GrpHdr.MsgId, GrpHdr.CreDtTm
+        - OrgnlGrpInf.OrgnlMsgId, OrgnlGrpInf.OrgnlMsgNmId
+        - TxInf.RtrId, TxInf.OrgnlEndToEndId
+        - TxInf.RtrRsnInf.Rsn.Cd
+        - TxInf.OrgnlTxRef.Dbtr.Nm
+
+        Args:
+            xml_content: Raw XML string
+
+        Returns:
+            Dict with all extracted pacs.004 fields using full ISO path keys
+        """
+        root = self._parse_xml(xml_content)
+
+        # Find the PmtRtr element
+        pmt_rtr = self._find(root, self.ROOT_ELEMENT)
+        if pmt_rtr is None:
+            root_tag = self._strip_ns(root.tag)
+            if root_tag == self.ROOT_ELEMENT:
+                pmt_rtr = root
+            else:
+                raise ValueError(f"Cannot find {self.ROOT_ELEMENT} element in pacs.004 message")
+
+        result = {
+            'isISO20022': True,
+            'messageTypeCode': 'pacs.004',
+        }
+
+        # Extract Group Header
+        result.update(self._extract_group_header_iso_path(pmt_rtr))
+
+        # Extract Original Group Information
+        orgnl_grp_inf = self._find(pmt_rtr, 'OrgnlGrpInf')
+        if orgnl_grp_inf is not None:
+            result.update(self._extract_original_group_info_iso_path(orgnl_grp_inf))
+
+        # Extract first Transaction Information
+        tx_inf = self._find(pmt_rtr, 'TxInf')
+        if tx_inf is not None:
+            result.update(self._parse_return_tx_info_iso_paths(tx_inf))
+
+        return result
+
+    def _extract_original_group_info_iso_path(self, orgnl_grp: 'ET.Element') -> Dict[str, Any]:
+        """Extract OrgnlGrpInf element using ISO path keys.
+
+        Args:
+            orgnl_grp: OrgnlGrpInf element
+
+        Returns:
+            Dict with ISO path keys like 'OrgnlGrpInf.OrgnlMsgId'
+        """
+        if orgnl_grp is None:
+            return {}
+
+        prefix = 'OrgnlGrpInf'
+        return {
+            f'{prefix}.OrgnlMsgId': self._find_text(orgnl_grp, 'OrgnlMsgId'),
+            f'{prefix}.OrgnlMsgNmId': self._find_text(orgnl_grp, 'OrgnlMsgNmId'),
+            f'{prefix}.OrgnlCreDtTm': self._find_text(orgnl_grp, 'OrgnlCreDtTm'),
+            f'{prefix}.OrgnlNbOfTxs': self._safe_int(self._find_text(orgnl_grp, 'OrgnlNbOfTxs')),
+            f'{prefix}.OrgnlCtrlSum': self._safe_float(self._find_text(orgnl_grp, 'OrgnlCtrlSum')),
+            f'{prefix}.GrpRtrRsn.RsnCd': self._find_text(orgnl_grp, 'RtrRsnInf/Rsn/Cd'),
+        }
+
+    def _parse_return_tx_info_iso_paths(self, tx_inf: 'ET.Element') -> Dict[str, Any]:
+        """Parse TxInf element using ISO path keys.
+
+        Args:
+            tx_inf: TxInf element
+
+        Returns:
+            Dict with ISO path keys like 'TxInf.RtrId', 'TxInf.RtrRsnInf.Rsn.Cd'
+        """
+        result = {}
+        prefix = 'TxInf'
+
+        # Return identification
+        result[f'{prefix}.RtrId'] = self._find_text(tx_inf, 'RtrId')
+
+        # Original payment identification
+        result[f'{prefix}.OrgnlInstrId'] = self._find_text(tx_inf, 'OrgnlInstrId')
+        result[f'{prefix}.OrgnlEndToEndId'] = self._find_text(tx_inf, 'OrgnlEndToEndId')
+        result[f'{prefix}.OrgnlTxId'] = self._find_text(tx_inf, 'OrgnlTxId')
+        result[f'{prefix}.OrgnlUETR'] = self._find_text(tx_inf, 'OrgnlUETR')
+        result[f'{prefix}.OrgnlClrSysRef'] = self._find_text(tx_inf, 'OrgnlClrSysRef')
+
+        # Returned Interbank Settlement Amount
+        result.update(self._extract_amount_iso_path(tx_inf, 'RtrdIntrBkSttlmAmt', prefix))
+
+        # Interbank Settlement Date
+        result[f'{prefix}.IntrBkSttlmDt'] = self._find_text(tx_inf, 'IntrBkSttlmDt')
+
+        # Settlement Priority
+        result[f'{prefix}.SttlmPrty'] = self._find_text(tx_inf, 'SttlmPrty')
+
+        # Return Reason Information
+        rtr_rsn_inf = self._find(tx_inf, 'RtrRsnInf')
+        if rtr_rsn_inf:
+            rsn_prefix = f'{prefix}.RtrRsnInf'
+            result[f'{rsn_prefix}.Rsn.Cd'] = self._find_text(rtr_rsn_inf, 'Rsn/Cd')
+            result[f'{rsn_prefix}.Rsn.Prtry'] = self._find_text(rtr_rsn_inf, 'Rsn/Prtry')
+            result[f'{rsn_prefix}.AddtlInf'] = self._find_text(rtr_rsn_inf, 'AddtlInf')
+
+            # Return Originator
+            orgtr = self._find(rtr_rsn_inf, 'Orgtr')
+            if orgtr:
+                result[f'{rsn_prefix}.Orgtr.Nm'] = self._find_text(orgtr, 'Nm')
+                result[f'{rsn_prefix}.Orgtr.Id.OrgId.AnyBIC'] = self._find_text(orgtr, 'Id/OrgId/AnyBIC')
+
+        # Instructing Agent
+        instg_agt = self._find(tx_inf, 'InstgAgt')
+        if instg_agt:
+            result.update(self._extract_financial_institution_iso_path(instg_agt, f'{prefix}.InstgAgt'))
+
+        # Instructed Agent
+        instd_agt = self._find(tx_inf, 'InstdAgt')
+        if instd_agt:
+            result.update(self._extract_financial_institution_iso_path(instd_agt, f'{prefix}.InstdAgt'))
+
+        # Original Transaction Reference
+        orgnl_tx_ref = self._find(tx_inf, 'OrgnlTxRef')
+        if orgnl_tx_ref:
+            result.update(self._extract_original_tx_reference_iso_path(orgnl_tx_ref))
+
+        return result
+
+    def _extract_original_tx_reference_iso_path(self, orgnl_tx_ref: 'ET.Element') -> Dict[str, Any]:
+        """Extract OrgnlTxRef using ISO path keys.
+
+        Args:
+            orgnl_tx_ref: OrgnlTxRef element
+
+        Returns:
+            Dict with ISO path keys like 'TxInf.OrgnlTxRef.Dbtr.Nm'
+        """
+        if orgnl_tx_ref is None:
+            return {}
+
+        result = {}
+        prefix = 'TxInf.OrgnlTxRef'
+
+        # Original Amount
+        result.update(self._extract_amount_iso_path(orgnl_tx_ref, 'IntrBkSttlmAmt', prefix))
+
+        # Original Settlement Date
+        result[f'{prefix}.IntrBkSttlmDt'] = self._find_text(orgnl_tx_ref, 'IntrBkSttlmDt')
+
+        # Original Debtor
+        dbtr = self._find(orgnl_tx_ref, 'Dbtr')
+        if dbtr:
+            result.update(self._extract_party_iso_path(dbtr, f'{prefix}.Dbtr'))
+
+        # Original Debtor Account
+        dbtr_acct = self._find(orgnl_tx_ref, 'DbtrAcct')
+        if dbtr_acct:
+            result.update(self._extract_account_iso_path(dbtr_acct, f'{prefix}.DbtrAcct'))
+
+        # Original Debtor Agent
+        dbtr_agt = self._find(orgnl_tx_ref, 'DbtrAgt')
+        if dbtr_agt:
+            result.update(self._extract_financial_institution_iso_path(dbtr_agt, f'{prefix}.DbtrAgt'))
+
+        # Original Creditor
+        cdtr = self._find(orgnl_tx_ref, 'Cdtr')
+        if cdtr:
+            result.update(self._extract_party_iso_path(cdtr, f'{prefix}.Cdtr'))
+
+        # Original Creditor Account
+        cdtr_acct = self._find(orgnl_tx_ref, 'CdtrAcct')
+        if cdtr_acct:
+            result.update(self._extract_account_iso_path(cdtr_acct, f'{prefix}.CdtrAcct'))
+
+        # Original Creditor Agent
+        cdtr_agt = self._find(orgnl_tx_ref, 'CdtrAgt')
+        if cdtr_agt:
+            result.update(self._extract_financial_institution_iso_path(cdtr_agt, f'{prefix}.CdtrAgt'))
+
+        # Ultimate Debtor
+        ultmt_dbtr = self._find(orgnl_tx_ref, 'UltmtDbtr')
+        if ultmt_dbtr:
+            result.update(self._extract_party_iso_path(ultmt_dbtr, f'{prefix}.UltmtDbtr'))
+
+        # Ultimate Creditor
+        ultmt_cdtr = self._find(orgnl_tx_ref, 'UltmtCdtr')
+        if ultmt_cdtr:
+            result.update(self._extract_party_iso_path(ultmt_cdtr, f'{prefix}.UltmtCdtr'))
+
+        # Remittance Information
+        rmt_inf = self._find(orgnl_tx_ref, 'RmtInf')
+        if rmt_inf:
+            result.update(self._extract_remittance_info_iso_path(rmt_inf, f'{prefix}.RmtInf'))
+
+        return result
+
 
 class Pacs004Extractor(BaseISO20022Extractor):
     """Base extractor for all pacs.004-based payment return messages.

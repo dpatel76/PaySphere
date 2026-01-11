@@ -324,13 +324,7 @@ class LineageService:
             "pacs002": "pacs002.yaml",
             "camt.053": "camt053.yaml",
             "camt053": "camt053.yaml",
-            # SWIFT MT
-            "MT103": "mt103.yaml",
-            "mt103": "mt103.yaml",
-            "MT202": "mt202.yaml",
-            "mt202": "mt202.yaml",
-            "MT940": "mt940.yaml",
-            "mt940": "mt940.yaml",
+            # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
             # US Regional
             "FEDWIRE": "fedwire.yaml",
             "fedwire": "fedwire.yaml",
@@ -571,10 +565,9 @@ class LineageService:
         source_mappings = []
         message_types = set()
 
-        # Search all 29 message types
+        # Search all supported message types (NOTE: All SWIFT MT decommissioned Nov 2025)
         all_msg_types = [
             'pain.001', 'pain.002', 'pacs.008', 'pacs.009', 'pacs.002', 'camt.053',
-            'MT103', 'MT202', 'MT940',
             'FEDWIRE', 'ACH', 'CHIPS', 'RTP', 'FEDNOW',
             'SEPA', 'TARGET2',
             'CHAPS', 'FPS', 'BACS',

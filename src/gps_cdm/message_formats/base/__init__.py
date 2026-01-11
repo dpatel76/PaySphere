@@ -2,13 +2,35 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 import uuid
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Import message routing components
+from .message_routing import (
+    AdoptionStatus,
+    MessageSubtype,
+    SubtypeDetector,
+    PaymentStandardInfo,
+    PAYMENT_STANDARDS,
+    SUBTYPE_DETECTORS,
+    ISO_TO_CDM_TABLE,
+    SUBTYPE_TO_ISO,
+    detect_message_routing,
+    get_payment_standard,
+    get_subtype_detector,
+    get_target_cdm_table,
+    get_silver_table_for_iso,
+    is_message_type_supported,
+    ACHSubtypeDetector,
+    BACSSubtypeDetector,
+    UPISubtypeDetector,
+    CNAPSSubtypeDetector,
+)
 
 
 def trunc(value: Optional[str], max_length: int) -> Optional[str]:
@@ -630,22 +652,8 @@ class GoldEntityPersister:
             )
             return cls.persist_sepa_extension(cursor, instruction_id, ext)
 
-        elif msg_type_upper in ('MT103', 'MT202', 'MT202COV'):
-            ext = SwiftExtension(
-                swift_message_type=staging_record.get('message_type'),
-                sender_bic=staging_record.get('sender_bic'),
-                receiver_bic=staging_record.get('receiver_bic'),
-                message_priority=staging_record.get('priority'),
-                senders_correspondent_bic=staging_record.get('senders_correspondent_bic'),
-                senders_correspondent_account=staging_record.get('senders_correspondent_account'),
-                receivers_correspondent_bic=staging_record.get('receivers_correspondent_bic'),
-                receivers_correspondent_account=staging_record.get('receivers_correspondent_account'),
-                ordering_institution_bic=staging_record.get('ordering_institution_bic'),
-                account_with_institution_bic=staging_record.get('account_with_institution_bic'),
-                sender_to_receiver_information=staging_record.get('sender_to_receiver_information'),
-                instruction_codes=staging_record.get('instruction_code'),
-            )
-            return cls.persist_swift_extension(cursor, instruction_id, ext)
+        # NOTE: MT103 and MT202 extension handling removed - decommissioned by SWIFT Nov 2025
+        # MT940/MT950 statement messages don't have payment instruction extensions
 
         elif msg_type_upper == 'RTP':
             ext = RtpExtension(
@@ -674,11 +682,22 @@ class GoldEntityPersister:
 # =============================================================================
 
 class BaseExtractor(ABC):
-    """Base class for all message format extractors."""
+    """Base class for all message format extractors.
+
+    Enhanced with subtype detection for intelligent routing to appropriate
+    ISO 20022 message types and CDM Gold tables.
+    """
 
     # Override in subclasses
     MESSAGE_TYPE: str = "UNKNOWN"
     SILVER_TABLE: str = "stg_unknown"
+
+    def __init__(self):
+        """Initialize extractor with optional subtype detector."""
+        self._subtype_detector: Optional[SubtypeDetector] = None
+        self._detected_subtype: Optional[MessageSubtype] = None
+        self._target_iso_type: Optional[str] = None
+        self._routing_key: Optional[str] = None
 
     @classmethod
     def trunc(cls, val: Any, max_len: int) -> Optional[str]:
@@ -688,6 +707,84 @@ class BaseExtractor(ABC):
         if len(str(val)) > max_len:
             return str(val)[:max_len]
         return str(val) if val else None
+
+    # =========================================================================
+    # SUBTYPE DETECTION AND ROUTING
+    # =========================================================================
+
+    def detect_and_route(
+        self,
+        raw_content: str,
+        parsed_data: Dict[str, Any]
+    ) -> Tuple[MessageSubtype, str, str]:
+        """
+        Detect message subtype and determine routing.
+
+        Args:
+            raw_content: Original raw message content
+            parsed_data: Parsed/structured message data
+
+        Returns:
+            Tuple of (MessageSubtype, target_iso_type, routing_key)
+        """
+        # Use format-specific detection
+        subtype, iso_type, routing_key = detect_message_routing(
+            self.MESSAGE_TYPE,
+            raw_content,
+            parsed_data
+        )
+
+        # Cache for later use
+        self._detected_subtype = subtype
+        self._target_iso_type = iso_type
+        self._routing_key = routing_key
+
+        return (subtype, iso_type, routing_key)
+
+    def get_detected_subtype(self) -> Optional[MessageSubtype]:
+        """Get the last detected message subtype."""
+        return self._detected_subtype
+
+    def get_target_iso_type(self) -> str:
+        """Get the target ISO 20022 message type."""
+        return self._target_iso_type or self._default_iso_type()
+
+    def get_routing_key(self) -> str:
+        """Get the routing key for database mapping lookup."""
+        return self._routing_key or f"{self.MESSAGE_TYPE}_pacs.008_CREDIT_TRANSFER_CUSTOMER"
+
+    def get_target_gold_table(self) -> str:
+        """Get the target CDM Gold table based on detected routing."""
+        iso_type = self.get_target_iso_type()
+        return get_target_cdm_table(iso_type)
+
+    def get_target_silver_table(self) -> str:
+        """Get the target Silver table based on detected routing."""
+        # For native extractors, use SILVER_TABLE
+        # For routed messages, derive from ISO type
+        if self._target_iso_type:
+            return get_silver_table_for_iso(self._target_iso_type)
+        return self.SILVER_TABLE
+
+    def _default_iso_type(self) -> str:
+        """Return default ISO type when detection not performed."""
+        standard = get_payment_standard(self.MESSAGE_TYPE)
+        if standard:
+            return standard.default_iso_type
+        return 'pacs.008'
+
+    def get_payment_standard_info(self) -> Optional[PaymentStandardInfo]:
+        """Get payment standard information for this extractor."""
+        return get_payment_standard(self.MESSAGE_TYPE)
+
+    def requires_subtype_detection(self) -> bool:
+        """Check if this format requires subtype detection."""
+        standard = get_payment_standard(self.MESSAGE_TYPE)
+        return standard.requires_subtype_detection if standard else False
+
+    # =========================================================================
+    # ABSTRACT METHODS
+    # =========================================================================
 
     @abstractmethod
     def extract_bronze(self, raw_content: Dict[str, Any], batch_id: str) -> Dict[str, Any]:

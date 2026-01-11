@@ -56,7 +56,11 @@ def load_test_file(filename: str) -> str:
 
 
 def get_test_data() -> Dict[str, Dict[str, Any]]:
-    """Get test data for all message formats."""
+    """Get test data for all message formats.
+
+    NOTE: SWIFT MT messages (MT103, MT202, MT940) were decommissioned by SWIFT in Nov 2025.
+    Use ISO 20022 equivalents: MT103→pacs.008, MT202→pacs.009, MT940/MT950→camt.053
+    """
     return {
         # ISO 20022 Family
         'pain.001': {
@@ -70,20 +74,6 @@ def get_test_data() -> Dict[str, Dict[str, Any]]:
         'camt.053': {
             'file': 'camt.053_nifi_e2e.xml',
             'content_type': 'xml',
-        },
-
-        # SWIFT MT Family
-        'MT103': {
-            'file': 'MT103_nifi_e2e.txt',
-            'content_type': 'swift',
-        },
-        'MT202': {
-            'file': 'MT202_nifi_e2e.txt',
-            'content_type': 'swift',
-        },
-        'MT940': {
-            'file': 'MT940_nifi_e2e.txt',
-            'content_type': 'swift',
         },
 
         # US Domestic
@@ -229,13 +219,15 @@ def verify_bronze_record(conn, raw_id: str) -> Optional[Dict]:
 def verify_silver_record(conn, message_type: str, raw_id: str) -> Optional[Dict]:
     """Check if Silver record exists."""
     # Map message types to table names
+    # NOTE: SWIFT MT messages (MT103, MT202, MT940) were decommissioned by SWIFT in Nov 2025
     table_map = {
         'pain.001': 'stg_pain001',
         'pacs.008': 'stg_pacs008',
+        'pacs.002': 'stg_pacs002',
+        'pacs.004': 'stg_pacs004',
+        'pacs.009': 'stg_pacs009',
+        'pain.008': 'stg_pain008',
         'camt.053': 'stg_camt053',
-        'MT103': 'stg_mt103',
-        'MT202': 'stg_mt202',
-        'MT940': 'stg_mt940',
         'FEDWIRE': 'stg_fedwire',
         'ACH': 'stg_ach',
         'RTP': 'stg_rtp',

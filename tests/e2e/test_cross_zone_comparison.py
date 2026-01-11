@@ -23,13 +23,15 @@ from psycopg2.extras import RealDictCursor
 
 
 # Message type to Silver table mapping
+# NOTE: SWIFT MT messages (MT103, MT202, MT940) were decommissioned by SWIFT in Nov 2025
 SILVER_TABLES = {
     'pain.001': 'stg_pain001',
     'pacs.008': 'stg_pacs008',
+    'pacs.002': 'stg_pacs002',
+    'pacs.004': 'stg_pacs004',
+    'pacs.009': 'stg_pacs009',
+    'pain.008': 'stg_pain008',
     'camt.053': 'stg_camt053',
-    'MT103': 'stg_mt103',
-    'MT202': 'stg_mt202',
-    'MT940': 'stg_mt940',
     'FEDWIRE': 'stg_fedwire',
     'ACH': 'stg_ach',
     'SEPA': 'stg_sepa',
@@ -56,18 +58,20 @@ SILVER_TABLES = {
 }
 
 # Message type to extension table mapping
+# NOTE: SWIFT MT messages (MT103, MT202, MT940) were decommissioned by SWIFT in Nov 2025
 EXTENSION_TABLES = {
     'pain.001': 'cdm_payment_extension_iso20022',
     'pacs.008': 'cdm_payment_extension_iso20022',
+    'pacs.002': 'cdm_payment_extension_iso20022',
+    'pacs.004': 'cdm_payment_extension_iso20022',
+    'pacs.009': 'cdm_payment_extension_iso20022',
+    'pain.008': 'cdm_payment_extension_iso20022',
     'camt.053': 'cdm_payment_extension_iso20022',
-    'MT103': 'cdm_payment_extension_swift',
-    'MT202': 'cdm_payment_extension_swift',
-    'MT940': 'cdm_payment_extension_swift',
     'FEDWIRE': 'cdm_payment_extension_fedwire',
     'ACH': 'cdm_payment_extension_ach',
     'SEPA': 'cdm_payment_extension_sepa',
     'RTP': 'cdm_payment_extension_rtp',
-    # Other schemes may not have extension tables yet
+    # Other schemes use their respective extension tables
 }
 
 # Key fields to compare across zones

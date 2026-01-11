@@ -3388,42 +3388,9 @@ MESSAGE_PARSERS = {
     "acmt.007.001.04": Acmt007Parser,
 
     # =========================================================================
-    # SWIFT MT Messages
+    # SWIFT MT Messages - ALL DECOMMISSIONED by SWIFT Nov 2025
+    # Use ISO 20022 equivalents: MT103→pacs.008, MT202→pacs.009, MT940/MT950→camt.053
     # =========================================================================
-    # MT1xx - Customer Payments and Cheques
-    "MT103": MT103Parser,
-    "mt103": MT103Parser,
-    "103": MT103Parser,
-    "MT103+": MT103Parser,
-    "mt103+": MT103Parser,
-
-    # MT2xx - Financial Institution Transfers
-    "MT200": MT200Parser,
-    "mt200": MT200Parser,
-    "200": MT200Parser,
-    "MT202": MT202Parser,
-    "mt202": MT202Parser,
-    "202": MT202Parser,
-    "MT202COV": MT202COVParser,
-    "mt202cov": MT202COVParser,
-    "202COV": MT202COVParser,
-
-    # MT9xx - Cash Management and Status
-    "MT900": MT900Parser,
-    "mt900": MT900Parser,
-    "900": MT900Parser,
-    "MT910": MT910Parser,
-    "mt910": MT910Parser,
-    "910": MT910Parser,
-    "MT940": MT940Parser,
-    "mt940": MT940Parser,
-    "940": MT940Parser,
-    "MT942": MT942Parser,
-    "mt942": MT942Parser,
-    "942": MT942Parser,
-    "MT950": MT950Parser,
-    "mt950": MT950Parser,
-    "950": MT950Parser,
 
     # =========================================================================
     # Domestic Payment Schemes

@@ -242,12 +242,20 @@ class AchFixedWidthParser:
 
 
 class AchExtractor(BaseExtractor):
-    """Extractor for NACHA ACH messages."""
+    """Extractor for NACHA ACH messages.
+
+    ACH requires subtype detection to route to appropriate ISO 20022 types:
+    - Credit transactions → pacs.008
+    - Debit transactions → pain.008
+    - Returns → pacs.004
+    - Bulk files → pain.001
+    """
 
     MESSAGE_TYPE = "ACH"
     SILVER_TABLE = "stg_ach"
 
     def __init__(self):
+        super().__init__()  # Initialize base class with routing support
         self.parser = AchFixedWidthParser()
 
     def _safe_int(self, value) -> int | None:

@@ -379,6 +379,8 @@ class Pacs008Extractor(BaseExtractor):
     SILVER_TABLE = "stg_iso20022_pacs008"  # Shared ISO 20022 pacs.008 table
 
     def __init__(self):
+        """Initialize extractor with routing support."""
+        super().__init__()  # Initialize base class with routing support
         self.parser = Pacs008XmlParser()
 
     # =========================================================================

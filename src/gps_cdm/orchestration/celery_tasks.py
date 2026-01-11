@@ -278,71 +278,8 @@ def get_table_routing(message_type: str) -> dict:
             "scheme": "ISO20022",
         }
 
-    # SWIFT MT Messages
-    elif msg_type_lower in ["mt103", "103", "mt103+"]:
-        return {
-            "bronze_table": "bronze_mt103",
-            "silver_table": "silver_mt103",
-            "gold_tables": ["gold_cdm_payment_instruction", "gold_cdm_party", "gold_cdm_account", "gold_cdm_financial_institution"],
-            "payment_type": "CREDIT_TRANSFER",  # Standardized - MT103 is Single Customer Credit Transfer
-            "scheme": "SWIFT",
-        }
-    elif msg_type_lower in ["mt200", "200"]:
-        return {
-            "bronze_table": "bronze_mt200",
-            "silver_table": "silver_mt200",
-            "gold_tables": ["gold_cdm_payment_instruction", "gold_cdm_financial_institution"],
-            "payment_type": "FI_OWN_TRANSFER",
-            "scheme": "SWIFT",
-        }
-    elif msg_type_lower in ["mt202", "202"]:
-        return {
-            "bronze_table": "bronze_mt202",
-            "silver_table": "silver_mt202",
-            "gold_tables": ["gold_cdm_payment_instruction", "gold_cdm_financial_institution"],
-            "payment_type": "FI_TRANSFER",
-            "scheme": "SWIFT",
-        }
-    elif msg_type_lower in ["mt202cov", "202cov"]:
-        return {
-            "bronze_table": "bronze_mt202cov",
-            "silver_table": "silver_mt202cov",
-            "gold_tables": ["gold_cdm_payment_instruction", "gold_cdm_party", "gold_cdm_financial_institution"],
-            "payment_type": "COVER_PAYMENT",
-            "scheme": "SWIFT",
-        }
-    elif msg_type_lower in ["mt900", "900"]:
-        return {
-            "bronze_table": "bronze_mt900",
-            "silver_table": "silver_mt900",
-            "gold_tables": ["gold_cdm_account", "gold_cdm_transaction"],
-            "payment_type": "DEBIT_CONFIRMATION",
-            "scheme": "SWIFT",
-        }
-    elif msg_type_lower in ["mt910", "910"]:
-        return {
-            "bronze_table": "bronze_mt910",
-            "silver_table": "silver_mt910",
-            "gold_tables": ["gold_cdm_account", "gold_cdm_transaction"],
-            "payment_type": "CREDIT_CONFIRMATION",
-            "scheme": "SWIFT",
-        }
-    elif msg_type_lower in ["mt940", "940"]:
-        return {
-            "bronze_table": "bronze_mt940",
-            "silver_table": "silver_mt940",
-            "gold_tables": ["gold_cdm_account", "gold_cdm_transaction"],
-            "payment_type": "STATEMENT",
-            "scheme": "SWIFT",
-        }
-    elif msg_type_lower in ["mt950", "950"]:
-        return {
-            "bronze_table": "bronze_mt950",
-            "silver_table": "silver_mt950",
-            "gold_tables": ["gold_cdm_account", "gold_cdm_transaction"],
-            "payment_type": "STATEMENT",
-            "scheme": "SWIFT",
-        }
+    # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
+    # MT940/MT950 → camt.053, MT103 → pacs.008, MT202 → pacs.009
 
     # Domestic Payment Schemes - SEPA
     elif msg_type_lower in ["sepa_sct", "sepa.sct", "sepa_credit_transfer"]:
@@ -570,8 +507,7 @@ def get_all_message_types() -> List[str]:
         "camt.054", "camt.055", "camt.056", "camt.057", "camt.086", "camt.087",
         # ISO 20022 ACMT
         "acmt.001", "acmt.002", "acmt.003", "acmt.005", "acmt.006", "acmt.007",
-        # SWIFT MT
-        "MT103", "MT200", "MT202", "MT202COV", "MT900", "MT910", "MT940", "MT950",
+        # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
         # Domestic - SEPA
         "SEPA_SCT", "SEPA_SDD",
         # Domestic - US
@@ -591,10 +527,11 @@ def get_message_format(message_type: str) -> str:
 
     Returns:
         - XML: ISO 20022 messages (pain.*, pacs.*, camt.*, acmt.*), SEPA, FedNow, RTP
-        - SWIFT_MT: SWIFT MT messages (MT103, MT202, MT940, etc.)
         - FIXED_WIDTH: NACHA ACH, BACS
         - JSON: Modern real-time systems (PIX, NPP, UPI, PayNow, etc.)
         - PROPRIETARY: CHIPS, CHAPS, RTGS systems
+
+    NOTE: SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
     """
     msg_type = message_type.lower().strip()
 
@@ -924,8 +861,7 @@ def process_bronze_partition(
                     'pain.002': 'PAYMENT_STATUS',
                     'pacs.008': 'CREDIT_TRANSFER',
                     'pacs.002': 'PAYMENT_STATUS',
-                    'MT103': 'CREDIT_TRANSFER',
-                    'MT202': 'COVER_PAYMENT',
+                    'camt.053': 'STATEMENT',  # ISO 20022 replacement for MT940/MT950
                     'FEDWIRE': 'WIRE_TRANSFER',
                     'ACH': 'ACH_TRANSFER',
                     'SEPA': 'SEPA_TRANSFER',

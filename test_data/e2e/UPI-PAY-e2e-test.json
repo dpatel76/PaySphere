@@ -1,0 +1,80 @@
+{
+  "Head": {
+    "msgId": "UPI-PAY-E2E-20260106-001",
+    "orgId": "NPCI",
+    "ts": "2026-01-06T14:30:00+05:30",
+    "ver": "2.0",
+    "txnType": "PAY"
+  },
+  "Txn": {
+    "id": "TXN-UPI-PAY-20260106-001",
+    "type": "PAY",
+    "subType": "PAY",
+    "ts": "2026-01-06T14:30:00+05:30",
+    "note": "Payment for Software License - Annual Subscription",
+    "refId": "INV-SL-2026-00123",
+    "refUrl": "https://payments.techsolutions.in/invoice/SL-2026-00123"
+  },
+  "Payer": {
+    "addr": "finance@okhdfc",
+    "name": "Delhi Enterprises Pvt Ltd",
+    "type": "ENTITY",
+    "vpa": "finance@okhdfc",
+    "Ac": {
+      "addrType": "ACCOUNT",
+      "Detail": [
+        {"name": "ACNUM", "value": "111222333444555"},
+        {"name": "ACTYPE", "value": "CURRENT"},
+        {"name": "IFSC", "value": "HDFC0001234"},
+        {"name": "NAME", "value": "Delhi Enterprises Pvt Ltd"}
+      ]
+    },
+    "Amount": {
+      "curr": "INR",
+      "value": "250000.00"
+    }
+  },
+  "Payee": {
+    "addr": "billing@okaxis",
+    "name": "Chennai Tech Solutions Pvt Ltd",
+    "type": "ENTITY",
+    "vpa": "billing@okaxis",
+    "Ac": {
+      "addrType": "ACCOUNT",
+      "Detail": [
+        {"name": "ACNUM", "value": "555666777888999"},
+        {"name": "ACTYPE", "value": "CURRENT"},
+        {"name": "IFSC", "value": "UTIB0002345"},
+        {"name": "NAME", "value": "Chennai Tech Solutions Pvt Ltd"}
+      ]
+    }
+  },
+  "headMsgId": "UPI-PAY-E2E-20260106-001",
+  "headOrgId": "NPCI",
+  "headTs": "2026-01-06T14:30:00+05:30",
+  "headVer": "2.0",
+  "txnId": "TXN-UPI-PAY-20260106-001",
+  "txnType": "PAY",
+  "txnSubType": "PAY",
+  "txnTs": "2026-01-06T14:30:00+05:30",
+  "txnNote": "Payment for Software License - Annual Subscription",
+  "payerAddr": "finance@okhdfc",
+  "payerName": "Delhi Enterprises Pvt Ltd",
+  "payerType": "ENTITY",
+  "payerAcAcnum": "111222333444555",
+  "payerAcActype": "CURRENT",
+  "payerAcIfsc": "HDFC0001234",
+  "payerAmountCurr": "INR",
+  "payerAmountValue": 250000.00,
+  "payeeAddr": "billing@okaxis",
+  "payeeName": "Chennai Tech Solutions Pvt Ltd",
+  "payeeType": "ENTITY",
+  "payeeAcAcnum": "555666777888999",
+  "payeeAcActype": "CURRENT",
+  "payeeAcIfsc": "UTIB0002345",
+  "transactionId": "UPI-PAY-E2E-20260106-001",
+  "amount": 250000.00,
+  "currency": "INR",
+  "purposeCode": "SUPP",
+  "settlementDate": "2026-01-06"
+}

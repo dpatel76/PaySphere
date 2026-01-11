@@ -1,0 +1,72 @@
+{
+  "messageHeader": {
+    "messageId": "CNAPS-HVPS-E2E-20260106-001",
+    "messageType": "HVPS",
+    "systemType": "HIGH_VALUE",
+    "creationDateTime": "2026-01-06T10:30:00+08:00",
+    "senderBIC": "BKCHCNBJ",
+    "receiverBIC": "ICBKCNBJ"
+  },
+  "paymentInfo": {
+    "transactionId": "TXN-HVPS-20260106-001",
+    "paymentType": "CREDIT_TRANSFER",
+    "priority": "HIGH",
+    "settlementMethod": "RTGS"
+  },
+  "debtor": {
+    "name": "Shanghai Industrial Corporation",
+    "account": {
+      "number": "6228480088881234567",
+      "type": "CURRENT",
+      "currency": "CNY"
+    },
+    "address": {
+      "line1": "888 Nanjing Road",
+      "city": "Shanghai",
+      "country": "CN",
+      "postalCode": "200001"
+    }
+  },
+  "debtorAgent": {
+    "bic": "BKCHCNBJ",
+    "name": "Bank of China Shanghai Branch",
+    "clearingCode": "104290000001"
+  },
+  "creditor": {
+    "name": "Beijing Technology Group",
+    "account": {
+      "number": "6222020088889876543",
+      "type": "CURRENT",
+      "currency": "CNY"
+    },
+    "address": {
+      "line1": "168 Chang'an Avenue",
+      "city": "Beijing",
+      "country": "CN",
+      "postalCode": "100006"
+    }
+  },
+  "creditorAgent": {
+    "bic": "ICBKCNBJ",
+    "name": "ICBC Beijing Branch",
+    "clearingCode": "102100000001"
+  },
+  "amount": {
+    "value": 5000000.00,
+    "currency": "CNY"
+  },
+  "remittanceInfo": {
+    "unstructured": "Contract Payment for Project BJ-2026-001"
+  },
+  "transactionId": "CNAPS-HVPS-E2E-20260106-001",
+  "message_type": "HVPS",
+  "system_type": "HIGH_VALUE",
+  "is_fi_payment": false,
+  "amount_value": 5000000.00,
+  "currency": "CNY",
+  "debtorName": "Shanghai Industrial Corporation",
+  "debtorAccount": "6228480088881234567",
+  "creditorName": "Beijing Technology Group",
+  "creditorAccount": "6222020088889876543",
+  "settlementDate": "2026-01-06"
+}

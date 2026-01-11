@@ -767,6 +767,8 @@ class FedwireExtractor(BaseExtractor):
     CLEARING_SYSTEM = "USABA"  # US ABA routing number system
 
     def __init__(self):
+        """Initialize extractor with routing support and parsers."""
+        super().__init__()  # Initialize base class with routing support
         self.iso20022_parser = FedwireISO20022Parser()
         self.legacy_parser = FedwireTagValueParser()
         # Default to ISO 20022 parser (current standard)

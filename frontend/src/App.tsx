@@ -25,6 +25,7 @@ const ReprocessPage = React.lazy(() => import('./pages/ReprocessPage'));
 const MonitoringDashboardPage = React.lazy(() => import('./pages/MonitoringDashboardPage'));
 const ErrorsDashboardPage = React.lazy(() => import('./pages/ErrorsDashboardPage'));
 const MappingsDocumentationPage = React.lazy(() => import('./pages/MappingsDocumentationPage'));
+const CDMCatalogPage = React.lazy(() => import('./pages/CDMCatalogPage'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -90,6 +91,11 @@ const App: React.FC = () => {
                   <Route path="mappings" element={
                     <React.Suspense fallback={<div>Loading...</div>}>
                       <MappingsDocumentationPage />
+                    </React.Suspense>
+                  } />
+                  <Route path="catalog" element={
+                    <React.Suspense fallback={<div>Loading...</div>}>
+                      <CDMCatalogPage />
                     </React.Suspense>
                   } />
                 </Route>

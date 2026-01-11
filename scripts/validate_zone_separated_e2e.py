@@ -3,18 +3,23 @@
 GPS CDM - Zone-Separated E2E Validation
 ========================================
 
-Validates the complete zone-separated pipeline for all 29 message types:
-1. Sends test messages through Bronze Kafka topic
-2. Verifies Bronze records are stored AS-IS
-3. Verifies Silver records are properly parsed
-4. Verifies Gold CDM entities are created
-5. Verifies lineage tracking
+Validates the complete zone-separated pipeline for all message types.
+
+This script understands the message routing framework:
+- NATIVE_ISO / FULLY_MIGRATED formats route to ISO 20022 Silver tables
+- INTEGRATION_ONLY / LEGACY formats use format-specific Silver tables
+
+Validates:
+1. Bronze records are stored AS-IS
+2. Silver records are properly parsed (in correct table based on routing)
+3. Gold CDM entities are created
+4. Lineage tracking
 
 Usage:
     python scripts/validate_zone_separated_e2e.py [--types TYPE1,TYPE2] [--verbose]
 
 Examples:
-    python scripts/validate_zone_separated_e2e.py --types CHAPS,MT103
+    python scripts/validate_zone_separated_e2e.py --types CHAPS,FEDWIRE
     python scripts/validate_zone_separated_e2e.py --all --verbose
 """
 
@@ -27,7 +32,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 
 # Add src to path
@@ -37,11 +42,99 @@ import psycopg2
 from kafka import KafkaProducer, KafkaConsumer
 from kafka.admin import KafkaAdminClient, NewTopic
 
+# Import message routing framework
+from gps_cdm.message_formats.base.message_routing import (
+    PAYMENT_STANDARDS,
+    AdoptionStatus,
+    detect_message_routing,
+    get_payment_standard,
+)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# SILVER TABLE ROUTING
+# =============================================================================
+
+# Mapping of actual Silver tables that exist in the database
+# This is derived from information_schema.tables output
+ACTUAL_SILVER_TABLES = {
+    # ISO 20022 core tables (used by ISO native/migrated formats)
+    'stg_iso20022_pacs008', 'stg_iso20022_pacs002', 'stg_iso20022_pacs004',
+    'stg_iso20022_pacs009', 'stg_iso20022_pain001', 'stg_iso20022_pain008',
+    'stg_iso20022_camt053', 'stg_iso20022_camt056',
+    # Versioned format-specific tables
+    'stg_chaps_v', 'stg_chips_v', 'stg_fedwire_v', 'stg_fednow_v',
+    'stg_fps_v', 'stg_npp_v', 'stg_rtp_v', 'stg_target2_v',
+    'stg_meps_plus_v', 'stg_rtgs_hk_v', 'stg_uaefts_v', 'stg_instapay_v',
+    'stg_sepa_v', 'stg_pacs008_v',
+    # Non-versioned format-specific tables
+    'stg_ach', 'stg_bacs', 'stg_bojnet', 'stg_camt053',
+    'stg_cnaps', 'stg_faster_payments', 'stg_kftc',
+    'stg_paynow', 'stg_pix', 'stg_promptpay',
+    'stg_sarie', 'stg_sepa', 'stg_upi',
+    'stg_pain001',
+}
+
+
+def get_silver_table_for_format(format_code: str, iso_message_type: str = None) -> List[str]:
+    """
+    Determine the correct Silver table(s) for a payment format.
+
+    Based on message routing framework:
+    - NATIVE_ISO / FULLY_MIGRATED formats → ISO 20022 tables (stg_iso20022_pacs008, etc.)
+    - INTEGRATION_ONLY / LEGACY / NOT_ISO20022 → format-specific tables
+
+    Returns list of possible table names to check (in priority order).
+    """
+    standard = get_payment_standard(format_code)
+    normalized = format_code.lower().replace('.', '').replace('-', '_')
+
+    tables_to_check = []
+
+    # If format is already an ISO type (pain.001, pacs.008, etc.)
+    if format_code.lower().startswith(('pain', 'pacs', 'camt')):
+        iso_type = format_code.lower().replace('.', '')
+        # Check both versioned and non-versioned ISO tables
+        tables_to_check.append(f'stg_iso20022_{iso_type}')
+        tables_to_check.append(f'stg_{iso_type}')
+        tables_to_check.append(f'stg_{iso_type}_v')
+        return tables_to_check
+
+    if standard:
+        # Get default ISO type for this format
+        default_iso = standard.default_iso_type.replace('.', '')
+
+        # For ISO-native or fully migrated formats, primary target is ISO table
+        if standard.adoption_status in (AdoptionStatus.NATIVE_ISO, AdoptionStatus.FULLY_MIGRATED):
+            # Primary: ISO 20022 table for the target message type
+            tables_to_check.append(f'stg_iso20022_{default_iso}')
+            # Fallback: versioned format-specific table
+            tables_to_check.append(f'stg_{normalized}_v')
+            # Fallback: non-versioned format-specific
+            tables_to_check.append(f'stg_{normalized}')
+        else:
+            # For legacy/integration formats, primary is format-specific
+            tables_to_check.append(f'stg_{normalized}')
+            tables_to_check.append(f'stg_{normalized}_v')
+            # Also check ISO table as fallback
+            tables_to_check.append(f'stg_iso20022_{default_iso}')
+    else:
+        # Unknown format - try all possible patterns
+        tables_to_check.append(f'stg_{normalized}')
+        tables_to_check.append(f'stg_{normalized}_v')
+        tables_to_check.append('stg_iso20022_pacs008')
+
+    # Handle special cases
+    if format_code.upper() == 'FPS':
+        tables_to_check.insert(0, 'stg_faster_payments')
+
+    return tables_to_check
 
 
 # =============================================================================
@@ -78,23 +171,27 @@ class TestDataGenerator:
 
     @staticmethod
     def generate(message_type: str, test_id: str) -> str:
-        """Generate test data for message type."""
+        """Generate test data for message type.
+
+        NOTE: SWIFT MT messages (MT103, MT202, MT940) were decommissioned by SWIFT in Nov 2025.
+        Use ISO 20022 equivalents: MT103→pacs.008, MT202→pacs.009, MT940/MT950→camt.053
+        """
         generators = {
             # ISO 20022
             'pain.001': TestDataGenerator._pain001,
             'pain.002': TestDataGenerator._pain002,
             'pacs.008': TestDataGenerator._pacs008,
+            'pacs.002': TestDataGenerator._pacs002,
+            'pacs.004': TestDataGenerator._pacs004,
+            'pacs.009': TestDataGenerator._pacs009,
             'camt.053': TestDataGenerator._camt053,
-
-            # SWIFT MT
-            'MT103': TestDataGenerator._mt103,
-            'MT202': TestDataGenerator._mt202,
-            'MT940': TestDataGenerator._mt940,
 
             # US
             'FEDWIRE': TestDataGenerator._fedwire,
             'ACH': TestDataGenerator._ach,
             'RTP': TestDataGenerator._rtp,
+            'FEDNOW': TestDataGenerator._fednow,
+            'CHIPS': TestDataGenerator._chips,
 
             # UK
             'CHAPS': TestDataGenerator._chaps,
@@ -103,6 +200,7 @@ class TestDataGenerator:
 
             # Europe
             'SEPA': TestDataGenerator._sepa,
+            'TARGET2': TestDataGenerator._target2,
 
             # APAC
             'NPP': TestDataGenerator._npp,
@@ -111,6 +209,15 @@ class TestDataGenerator:
             'INSTAPAY': TestDataGenerator._instapay,
             'PAYNOW': TestDataGenerator._paynow,
             'PROMPTPAY': TestDataGenerator._promptpay,
+            'MEPS_PLUS': TestDataGenerator._meps_plus,
+            'RTGS_HK': TestDataGenerator._rtgs_hk,
+            'BOJNET': TestDataGenerator._bojnet,
+            'KFTC': TestDataGenerator._kftc,
+            'CNAPS': TestDataGenerator._cnaps,
+
+            # Middle East
+            'SARIE': TestDataGenerator._sarie,
+            'UAEFTS': TestDataGenerator._uaefts,
         }
 
         generator = generators.get(message_type, TestDataGenerator._generic_json)
@@ -181,7 +288,53 @@ class TestDataGenerator:
 </Document>'''
 
     @staticmethod
-    def _mt103(test_id: str) -> str:
+    def _pacs002(test_id: str) -> str:
+        """pacs.002 - Payment Status Report"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10">
+  <FIToFIPmtStsRpt>
+    <GrpHdr><MsgId>PACS002-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm></GrpHdr>
+    <OrgnlGrpInfAndSts><OrgnlMsgId>ORIG-{test_id}</OrgnlMsgId><GrpSts>ACCP</GrpSts></OrgnlGrpInfAndSts>
+  </FIToFIPmtStsRpt>
+</Document>'''
+
+    @staticmethod
+    def _pacs004(test_id: str) -> str:
+        """pacs.004 - Payment Return"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.004.001.09">
+  <PmtRtr>
+    <GrpHdr><MsgId>PACS004-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <TxInf>
+      <RtrId>RTN-{test_id}</RtrId>
+      <OrgnlEndToEndId>ORIG-E2E-{test_id}</OrgnlEndToEndId>
+      <RtrdIntrBkSttlmAmt Ccy="EUR">1000.00</RtrdIntrBkSttlmAmt>
+      <RtrRsnInf><Rsn><Cd>AC04</Cd></Rsn></RtrRsnInf>
+    </TxInf>
+  </PmtRtr>
+</Document>'''
+
+    @staticmethod
+    def _pacs009(test_id: str) -> str:
+        """pacs.009 - Financial Institution Credit Transfer"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08">
+  <FICdtTrf>
+    <GrpHdr><MsgId>PACS009-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>FI-INSTR-{test_id}</InstrId><EndToEndId>FI-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="EUR">50000.00</IntrBkSttlmAmt>
+      <Dbtr><FinInstnId><BICFI>DEUTDEFFXXX</BICFI></FinInstnId></Dbtr>
+      <Cdtr><FinInstnId><BICFI>COBADEFFXXX</BICFI></FinInstnId></Cdtr>
+    </CdtTrfTxInf>
+  </FICdtTrf>
+</Document>'''
+
+    # NOTE: SWIFT MT messages (MT103, MT202, MT940) were decommissioned by SWIFT in Nov 2025
+    # The _mt103, _mt202, _mt940 methods are kept for reference but should not be used
+
+    @staticmethod
+    def _chaps(test_id: str) -> str:
         return f'''{{1:F01TESTUS33XXXX0000000001}}{{2:O1031200251229TESTGB2LXXXX00000000012512291200N}}{{3:{{108:MT103{test_id}}}}}{{4:
 :20:TXN-{test_id}
 :23B:CRED
@@ -418,6 +571,184 @@ BACS CREDITOR {test_id}
 </Document>'''
 
     @staticmethod
+    def _fednow(test_id: str) -> str:
+        """FedNow - ISO 20022 native instant payment (US)"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>FEDNOW-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>FEDNOW-{test_id}</InstrId><EndToEndId>FN-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="USD">500.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>FedNow Debtor {test_id}</Nm></Dbtr>
+      <Cdtr><Nm>FedNow Creditor {test_id}</Nm></Cdtr>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _chips(test_id: str) -> str:
+        """CHIPS - US large value payment (ISO 20022 migrated)"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>CHIPS-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>CHIPS-{test_id}</InstrId><EndToEndId>CH-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="USD">100000.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>CHIPS Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>0001</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>CHIPS Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>0002</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _target2(test_id: str) -> str:
+        """TARGET2 - Eurozone RTGS (ISO 20022 migrated)"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>TARGET2-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>T2-{test_id}</InstrId><EndToEndId>T2-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="EUR">50000.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>TARGET2 Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><BICFI>DEUTDEFFXXX</BICFI></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>TARGET2 Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><BICFI>COBADEFFXXX</BICFI></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _meps_plus(test_id: str) -> str:
+        """MEPS+ - Singapore RTGS (ISO 20022 migrated)"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>MEPS-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>MEPS-{test_id}</InstrId><EndToEndId>MEPS-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="SGD">25000.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>MEPS Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><BICFI>DBSSSGSGXXX</BICFI></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>MEPS Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><BICFI>OCBCSGSGXXX</BICFI></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _rtgs_hk(test_id: str) -> str:
+        """RTGS_HK (CHATS) - Hong Kong RTGS (ISO 20022 migrated)"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>RTGSHK-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>CHATS-{test_id}</InstrId><EndToEndId>HK-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="HKD">50000.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>CHATS Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><BICFI>HABORHKHXXX</BICFI></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>CHATS Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><BICFI>SCBLHKHHHKH</BICFI></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _bojnet(test_id: str) -> str:
+        """BOJ-NET - Japan Bank of Japan network (ISO 20022 migrated)"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>BOJNET-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>BOJ-{test_id}</InstrId><EndToEndId>BOJ-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="JPY">1000000</IntrBkSttlmAmt>
+      <Dbtr><Nm>BOJ-NET Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><BICFI>MABORJPJXXX</BICFI></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>BOJ-NET Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><BICFI>SMBORJPJXXX</BICFI></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _kftc(test_id: str) -> str:
+        """KFTC - Korea Financial Telecommunications & Clearings Institute"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>KFTC-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>KFTC-{test_id}</InstrId><EndToEndId>KR-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="KRW">100000</IntrBkSttlmAmt>
+      <Dbtr><Nm>KFTC Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><BICFI>KOABORKSXXX</BICFI></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>KFTC Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><BICFI>SHABORKSXXX</BICFI></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _cnaps(test_id: str) -> str:
+        """CNAPS - China National Advanced Payment System (ISO 20022 migrated)"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>CNAPS-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>CNAPS-{test_id}</InstrId><EndToEndId>CN-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="CNY">10000.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>CNAPS Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><BICFI>ICBKBCNBXXX</BICFI></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>CNAPS Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><BICFI>CCBCBCNBXXX</BICFI></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _sarie(test_id: str) -> str:
+        """SARIE - Saudi Arabian Riyal Interbank Express (ISO 20022 migrated)"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>SARIE-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>SARIE-{test_id}</InstrId><EndToEndId>SA-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="SAR">5000.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>SARIE Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><BICFI>NCBKSAJEXXX</BICFI></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>SARIE Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><BICFI>RJHISARIXXX</BICFI></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
+    def _uaefts(test_id: str) -> str:
+        """UAEFTS - UAE Funds Transfer System"""
+        return f'''<?xml version="1.0"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>UAEFTS-{test_id}</MsgId><CreDtTm>2025-12-29T12:00:00</CreDtTm><NbOfTxs>1</NbOfTxs></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>UAEFTS-{test_id}</InstrId><EndToEndId>AE-E2E-{test_id}</EndToEndId></PmtId>
+      <IntrBkSttlmAmt Ccy="AED">10000.00</IntrBkSttlmAmt>
+      <Dbtr><Nm>UAEFTS Debtor {test_id}</Nm></Dbtr>
+      <DbtrAgt><FinInstnId><BICFI>EMIRATEAEXXX</BICFI></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>UAEFTS Creditor {test_id}</Nm></Cdtr>
+      <CdtrAgt><FinInstnId><BICFI>NBABORAEXXX</BICFI></FinInstnId></CdtrAgt>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>'''
+
+    @staticmethod
     def _generic_json(test_id: str) -> str:
         return json.dumps({
             "messageId": f"GENERIC-{test_id}",
@@ -549,66 +880,90 @@ class ZoneSeparatedValidator:
                         logger.warning(f"[{message_type}] Raw content may be wrapped. Length: {len(raw_content)} vs {len(test_content)}")
 
             # Step 3: Verify Silver
-            # Table naming: pain.001 -> stg_pain001 (no extra underscore)
-            silver_table = f"stg_{message_type.lower().replace('.', '').replace('-', '_')}"
-            try:
-                cursor.execute(f"""
-                    SELECT stg_id, raw_id, processing_status
-                    FROM silver.{silver_table}
-                    WHERE _batch_id = %s
-                    ORDER BY _processed_at DESC
-                    LIMIT 1
-                """, (batch_id,))
+            # Use message routing framework to determine correct table(s)
+            possible_tables = get_silver_table_for_format(message_type)
+            silver_table = None
+            stg_id = None
 
-                silver_row = cursor.fetchone()
-                if silver_row:
-                    result.silver_parsed = True
-                    stg_id = silver_row[0]
-
-                    # Count populated fields
+            for table in possible_tables:
+                try:
                     cursor.execute(f"""
-                        SELECT COUNT(*)
-                        FROM information_schema.columns c
-                        WHERE c.table_schema = 'silver'
-                          AND c.table_name = %s
-                    """, (silver_table,))
-                    total_cols = cursor.fetchone()[0]
-                    result.silver_fields_populated = total_cols
+                        SELECT stg_id, raw_id, processing_status
+                        FROM silver.{table}
+                        WHERE _batch_id = %s
+                        ORDER BY _processed_at DESC
+                        LIMIT 1
+                    """, (batch_id,))
 
-                    if verbose:
-                        logger.info(f"[{message_type}] Silver: stg_id={stg_id}, table={silver_table}")
+                    silver_row = cursor.fetchone()
+                    if silver_row:
+                        result.silver_parsed = True
+                        stg_id = silver_row[0]
+                        silver_table = table
 
-            except Exception as e:
-                if verbose:
-                    logger.warning(f"[{message_type}] Silver table {silver_table} not found or error: {e}")
-                conn.rollback()  # Reset transaction state
+                        # Count populated fields
+                        cursor.execute(f"""
+                            SELECT COUNT(*)
+                            FROM information_schema.columns c
+                            WHERE c.table_schema = 'silver'
+                              AND c.table_name = %s
+                        """, (table,))
+                        total_cols = cursor.fetchone()[0]
+                        result.silver_fields_populated = total_cols
+
+                        if verbose:
+                            logger.info(f"[{message_type}] Silver: stg_id={stg_id}, table={table}")
+                        break
+
+                except psycopg2.Error as e:
+                    conn.rollback()  # Reset transaction state
+                    continue
+
+            if not result.silver_parsed and verbose:
+                logger.warning(f"[{message_type}] Silver record not found. Checked tables: {possible_tables}")
 
             # Step 4: Verify Gold
-            cursor.execute("""
-                SELECT instruction_id, source_message_type
-                FROM gold.cdm_payment_instruction
-                WHERE source_stg_id IN (
-                    SELECT stg_id FROM silver.stg_chaps WHERE _batch_id = %s
-                    UNION SELECT stg_id FROM silver.stg_mt103 WHERE _batch_id = %s
-                    UNION SELECT stg_id FROM silver.stg_pain001 WHERE _batch_id = %s
-                )
-                OR instruction_id LIKE %s
-                LIMIT 1
-            """, (batch_id, batch_id, batch_id, f"%{test_id}%"))
+            # Use stg_id if we found a Silver record, otherwise search by batch_id
+            instruction_id = None
+            if stg_id:
+                cursor.execute("""
+                    SELECT instruction_id, source_message_type
+                    FROM gold.cdm_payment_instruction
+                    WHERE source_stg_id = %s
+                    LIMIT 1
+                """, (stg_id,))
+                gold_row = cursor.fetchone()
+                if gold_row:
+                    instruction_id = gold_row[0]
 
-            gold_row = cursor.fetchone()
-            if gold_row:
+            # Fallback: search by batch_id across any Silver table that might have records
+            if not instruction_id:
+                cursor.execute("""
+                    SELECT instruction_id, source_message_type
+                    FROM gold.cdm_payment_instruction
+                    WHERE source_batch_id = %s
+                       OR instruction_id LIKE %s
+                    LIMIT 1
+                """, (batch_id, f"%{test_id}%"))
+                gold_row = cursor.fetchone()
+                if gold_row:
+                    instruction_id = gold_row[0]
+
+            if instruction_id:
                 result.gold_created = True
-                instruction_id = gold_row[0]
 
                 # Count entities
                 for entity in ['cdm_party', 'cdm_account', 'cdm_financial_institution']:
-                    cursor.execute(f"""
-                        SELECT COUNT(*) FROM gold.{entity}
-                        WHERE instruction_id = %s
-                    """, (instruction_id,))
-                    count = cursor.fetchone()[0]
-                    result.gold_entities[entity] = count
+                    try:
+                        cursor.execute(f"""
+                            SELECT COUNT(*) FROM gold.{entity}
+                            WHERE source_instruction_id = %s OR instruction_id = %s
+                        """, (instruction_id, instruction_id))
+                        count = cursor.fetchone()[0]
+                        result.gold_entities[entity] = count
+                    except psycopg2.Error:
+                        conn.rollback()
+                        result.gold_entities[entity] = 0
 
                 if verbose:
                     logger.info(f"[{message_type}] Gold: instruction_id={instruction_id}, entities={result.gold_entities}")
@@ -709,14 +1064,16 @@ def main():
     args = parser.parse_args()
 
     # All supported message types
+    # NOTE: SWIFT MT messages (MT103, MT202, MT940) were decommissioned by SWIFT in Nov 2025
     all_types = [
-        'pain.001', 'pacs.008', 'camt.053',
-        'MT103', 'MT202', 'MT940',
+        'pain.001', 'pacs.008', 'pacs.002', 'pacs.004', 'pacs.009', 'camt.053',
         'CHAPS', 'BACS', 'FPS',
-        'FEDWIRE', 'ACH', 'RTP',
-        'SEPA',
+        'FEDWIRE', 'ACH', 'RTP', 'FEDNOW', 'CHIPS',
+        'SEPA', 'TARGET2',
         'NPP', 'UPI', 'PIX',
         'INSTAPAY', 'PAYNOW', 'PROMPTPAY',
+        'MEPS_PLUS', 'RTGS_HK', 'BOJNET', 'KFTC', 'CNAPS',
+        'SARIE', 'UAEFTS',
     ]
 
     # Determine which types to test
@@ -726,7 +1083,7 @@ def main():
         message_types = all_types
     else:
         # Default to a subset
-        message_types = ['CHAPS', 'MT103', 'pain.001', 'FEDWIRE', 'SEPA']
+        message_types = ['CHAPS', 'pacs.008', 'pain.001', 'FEDWIRE', 'SEPA']
 
     # Create config
     config = Config(

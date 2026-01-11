@@ -341,6 +341,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party_identifier (
     source_message_format VARCHAR(50) NOT NULL,
     source_field_name VARCHAR(100),
     source_stg_id VARCHAR(36),
+    source_instruction_id VARCHAR(36),          -- References payment instruction that created this identifier
     entity_role VARCHAR(50),                    -- DEBTOR, CREDITOR, INITIATING_PARTY, etc.
 
     -- Flags
@@ -362,6 +363,7 @@ CREATE INDEX IF NOT EXISTS idx_cdm_party_id_value ON gold.cdm_party_identifier(i
 CREATE INDEX IF NOT EXISTS idx_cdm_party_id_lei ON gold.cdm_party_identifier(identifier_value) WHERE identifier_type = 'LEI';
 CREATE INDEX IF NOT EXISTS idx_cdm_party_id_tax ON gold.cdm_party_identifier(identifier_value) WHERE identifier_type IN ('TAX_ID', 'TIN_US', 'CPF', 'CNPJ');
 CREATE INDEX IF NOT EXISTS idx_cdm_party_id_role ON gold.cdm_party_identifier(entity_role);
+CREATE INDEX IF NOT EXISTS idx_cdm_party_id_src_instr ON gold.cdm_party_identifier(source_instruction_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cdm_party_id_unique ON gold.cdm_party_identifier(party_id, identifier_type, identifier_value);
 
 -- =====================================================
@@ -387,6 +389,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_account_identifier (
     source_message_format VARCHAR(50) NOT NULL,
     source_field_name VARCHAR(100),
     source_stg_id VARCHAR(36),
+    source_instruction_id VARCHAR(36),         -- References payment instruction that created this identifier
     entity_role VARCHAR(50),                   -- DEBTOR, CREDITOR, INTERMEDIARY, etc.
 
     -- Flags
@@ -407,6 +410,7 @@ CREATE INDEX IF NOT EXISTS idx_cdm_acct_id_type ON gold.cdm_account_identifier(i
 CREATE INDEX IF NOT EXISTS idx_cdm_acct_id_value ON gold.cdm_account_identifier(identifier_value);
 CREATE INDEX IF NOT EXISTS idx_cdm_acct_id_iban ON gold.cdm_account_identifier(identifier_value) WHERE identifier_type = 'IBAN';
 CREATE INDEX IF NOT EXISTS idx_cdm_acct_id_role ON gold.cdm_account_identifier(entity_role);
+CREATE INDEX IF NOT EXISTS idx_cdm_acct_id_src_instr ON gold.cdm_account_identifier(source_instruction_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cdm_acct_id_unique ON gold.cdm_account_identifier(account_id, identifier_type, identifier_value);
 
 -- =====================================================
@@ -432,6 +436,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_institution_identifier (
     source_message_format VARCHAR(50) NOT NULL,
     source_field_name VARCHAR(100),
     source_stg_id VARCHAR(36),
+    source_instruction_id VARCHAR(36),         -- References payment instruction that created this identifier
     entity_role VARCHAR(50),                   -- DEBTOR_AGENT, CREDITOR_AGENT, INTERMEDIARY_1, etc.
 
     -- Flags
@@ -454,6 +459,7 @@ CREATE INDEX IF NOT EXISTS idx_cdm_inst_id_bic ON gold.cdm_institution_identifie
 CREATE INDEX IF NOT EXISTS idx_cdm_inst_id_aba ON gold.cdm_institution_identifier(identifier_value) WHERE identifier_type = 'ABA_RTN';
 CREATE INDEX IF NOT EXISTS idx_cdm_inst_id_role ON gold.cdm_institution_identifier(entity_role);
 CREATE INDEX IF NOT EXISTS idx_cdm_inst_id_clearing ON gold.cdm_institution_identifier(clearing_system);
+CREATE INDEX IF NOT EXISTS idx_cdm_inst_id_src_instr ON gold.cdm_institution_identifier(source_instruction_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cdm_inst_id_unique ON gold.cdm_institution_identifier(financial_institution_id, identifier_type, identifier_value);
 
 -- =====================================================

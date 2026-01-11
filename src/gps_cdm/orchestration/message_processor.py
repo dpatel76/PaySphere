@@ -96,13 +96,8 @@ class MessageProcessor:
         elif msg_type_normalized in ['CAMT_053', 'CAMT053']:
             return cls._parse_generic_xml(raw_content, detected_format, 'camt.053')
 
-        # SWIFT MT Family
-        elif msg_type_normalized in ['MT103', '103']:
-            return cls._parse_mt103(raw_content, detected_format)
-        elif msg_type_normalized in ['MT202', 'MT202COV']:
-            return cls._parse_mt202(raw_content, detected_format)
-        elif msg_type_normalized in ['MT940']:
-            return cls._parse_mt940(raw_content, detected_format)
+        # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
+        # MT940/MT950 → camt.053
 
         # US Domestic
         elif msg_type_normalized in ['FEDWIRE']:
@@ -180,17 +175,7 @@ class MessageProcessor:
         else:
             raise ValueError(f"Cannot parse pain.001 from format: {detected_format}")
 
-    @classmethod
-    def _parse_mt103(cls, raw_content: str, detected_format: str) -> Dict[str, Any]:
-        """Parse MT103 message."""
-        if detected_format == 'swift_block':
-            from gps_cdm.message_formats.mt103 import MT103SwiftParser
-            parser = MT103SwiftParser()
-            return parser.parse(raw_content)
-        elif detected_format == 'json':
-            return json.loads(raw_content)
-        else:
-            raise ValueError(f"Cannot parse MT103 from format: {detected_format}")
+    # NOTE: _parse_mt103 removed - MT103 decommissioned by SWIFT Nov 2025
 
     @classmethod
     def _parse_fedwire(cls, raw_content: str, detected_format: str) -> Dict[str, Any]:
@@ -253,29 +238,8 @@ class MessageProcessor:
         else:
             raise ValueError(f"Cannot parse pacs.008 from format: {detected_format}")
 
-    @classmethod
-    def _parse_mt202(cls, raw_content: str, detected_format: str) -> Dict[str, Any]:
-        """Parse MT202 message using dedicated MT202 parser."""
-        if detected_format == 'swift_block':
-            from gps_cdm.message_formats.mt202 import Mt202BlockParser
-            parser = Mt202BlockParser()
-            return parser.parse(raw_content)
-        elif detected_format == 'json':
-            return json.loads(raw_content)
-        else:
-            raise ValueError(f"Cannot parse MT202 from format: {detected_format}")
-
-    @classmethod
-    def _parse_mt940(cls, raw_content: str, detected_format: str) -> Dict[str, Any]:
-        """Parse MT940 message using dedicated MT940 parser."""
-        if detected_format == 'swift_block':
-            from gps_cdm.message_formats.mt940 import Mt940BlockParser
-            parser = Mt940BlockParser()
-            return parser.parse(raw_content)
-        elif detected_format == 'json':
-            return json.loads(raw_content)
-        else:
-            raise ValueError(f"Cannot parse MT940 from format: {detected_format}")
+    # NOTE: All SWIFT MT parse methods removed - decommissioned by SWIFT Nov 2025
+    # Use ISO 20022 equivalents: MT940/MT950 → camt.053
 
     @classmethod
     def _parse_chips(cls, raw_content: str, detected_format: str) -> Dict[str, Any]:
@@ -515,12 +479,7 @@ def get_message_format(message_type: str) -> str:
         'PACS_002': 'ISO20022',
         'CAMT_053': 'ISO20022',
         'CAMT053': 'ISO20022',
-        # SWIFT MT
-        'MT103': 'SWIFT_MT',
-        '103': 'SWIFT_MT',
-        'MT202': 'SWIFT_MT',
-        'MT202COV': 'SWIFT_MT',
-        'MT940': 'SWIFT_MT',
+        # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
         # US Domestic
         'FEDWIRE': 'FEDWIRE',
         'ACH': 'NACHA',
@@ -575,8 +534,6 @@ def get_payment_type(message_type: str) -> str:
         'PAIN001': 'CREDIT_TRANSFER',
         'PACS_008': 'CREDIT_TRANSFER',
         'PACS008': 'CREDIT_TRANSFER',
-        'MT103': 'CREDIT_TRANSFER',
-        '103': 'CREDIT_TRANSFER',
         # Direct Debits
         'PAIN_008': 'DIRECT_DEBIT',
         'PACS_003': 'DIRECT_DEBIT',
@@ -586,11 +543,8 @@ def get_payment_type(message_type: str) -> str:
         # Returns
         'PACS_004': 'PAYMENT_RETURN',
         # Cover Payments
-        'MT202': 'COVER_PAYMENT',
-        'MT202COV': 'COVER_PAYMENT',
         'PACS_009': 'COVER_PAYMENT',
-        # Statement
-        'MT940': 'ACCOUNT_STATEMENT',
+        # Statement (NOTE: MT940/MT950 decommissioned Nov 2025 - use camt.053)
         'CAMT_053': 'ACCOUNT_STATEMENT',
         'CAMT053': 'ACCOUNT_STATEMENT',
         # US Domestic

@@ -496,14 +496,26 @@ async def get_batch(batch_id: str):
         columns = [desc[0] for desc in cursor.description]
         result = dict(zip(columns, row))
 
-        # Get silver and gold counts
-        cursor.execute("""
-            SELECT COUNT(*) as silver_count
-            FROM silver.stg_pain001
-            WHERE _batch_id = %s
-        """, (batch_id,))
-        silver_row = cursor.fetchone()
-        result["silver_count"] = silver_row[0] if silver_row else 0
+        # Get silver count - dynamically determine table from message_type
+        message_type = result.get("message_type", "")
+        silver_table = "stg_" + message_type.replace(".", "").replace("-", "_").lower()
+
+        # Validate table name to prevent SQL injection (only allow alphanumeric and underscore)
+        import re
+        if not re.match(r'^[a-z0-9_]+$', silver_table):
+            silver_table = "stg_pain001"  # Fallback to safe default
+
+        try:
+            cursor.execute(f"""
+                SELECT COUNT(*) as silver_count
+                FROM silver.{silver_table}
+                WHERE _batch_id = %s
+            """, (batch_id,))
+            silver_row = cursor.fetchone()
+            result["silver_count"] = silver_row[0] if silver_row else 0
+        except Exception as e:
+            logger.warning(f"Silver table query failed for {silver_table}: {e}")
+            result["silver_count"] = 0
 
         cursor.execute("""
             SELECT COUNT(*) as gold_count
@@ -644,8 +656,11 @@ async def get_batch_records(
     layer: str,
     limit: int = Query(25, le=100),
     offset: int = Query(0, ge=0),
+    message_type: Optional[str] = Query(None, description="Message type for Silver table lookup"),
 ):
     """Get records for a batch by layer."""
+    import re
+
     # Try Databricks first
     if should_use_databricks():
         try:
@@ -685,15 +700,52 @@ async def get_batch_records(
                 LIMIT %s OFFSET %s
             """, (batch_id, limit, offset))
         elif layer == "silver":
-            cursor.execute("""
-                SELECT stg_id, _batch_id as batch_id, msg_id, instructed_amount,
-                       instructed_currency, debtor_name, creditor_name,
-                       processing_status
-                FROM silver.stg_pain001
-                WHERE _batch_id = %s
-                ORDER BY _processed_at DESC
-                LIMIT %s OFFSET %s
-            """, (batch_id, limit, offset))
+            # If message_type not provided, look it up from Bronze
+            if not message_type:
+                cursor.execute("""
+                    SELECT DISTINCT message_type FROM bronze.raw_payment_messages
+                    WHERE _batch_id = %s LIMIT 1
+                """, (batch_id,))
+                mt_row = cursor.fetchone()
+                message_type = mt_row[0] if mt_row else "pain.001"
+
+            # Derive Silver table name from message_type
+            silver_table = "stg_" + message_type.replace(".", "").replace("-", "_").lower()
+
+            # Validate table name to prevent SQL injection
+            if not re.match(r'^[a-z0-9_]+$', silver_table):
+                silver_table = "stg_pain001"
+
+            # Get columns dynamically from Silver table
+            try:
+                cursor.execute(f"""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = 'silver' AND table_name = %s
+                    ORDER BY ordinal_position
+                """, (silver_table,))
+                columns = [row[0] for row in cursor.fetchall()]
+
+                if not columns:
+                    return []
+
+                # Select common/important columns first, then others
+                priority_cols = ['stg_id', '_batch_id', 'msg_id', 'message_id', 'end_to_end_id',
+                                 'instructed_amount', 'instructed_currency', 'debtor_name',
+                                 'creditor_name', 'processing_status']
+                select_cols = [c for c in priority_cols if c in columns]
+                select_cols += [c for c in columns if c not in select_cols][:20]  # Limit columns
+
+                col_list = ", ".join(select_cols)
+                cursor.execute(f"""
+                    SELECT {col_list}
+                    FROM silver.{silver_table}
+                    WHERE _batch_id = %s
+                    ORDER BY stg_id DESC
+                    LIMIT %s OFFSET %s
+                """, (batch_id, limit, offset))
+            except Exception as e:
+                logger.warning(f"Silver table query failed for {silver_table}: {e}")
+                return []
         elif layer == "gold":
             cursor.execute("""
                 SELECT instruction_id, payment_id, source_message_type,
@@ -708,11 +760,14 @@ async def get_batch_records(
             raise HTTPException(status_code=400, detail=f"Invalid layer: {layer}")
 
         columns = [desc[0] for desc in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        records = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        for r in records:
+            r["data_source"] = "postgresql"
+        return records
     except HTTPException:
         raise
     except Exception as e:
-        # Return empty list if table doesn't exist
+        logger.error(f"Error getting batch records: {e}")
         return []
     finally:
         db.close()
@@ -1202,6 +1257,72 @@ async def get_record_lineage(layer: str, record_id: str):
                         result["gold_entities"]["ultimate_creditor"] = dict(zip(cols, row))
                 except Exception:
                     pass
+
+            # Fetch Party Identifiers from cdm_party_identifiers
+            for party_key, party_id_field in [
+                ("debtor_party_identifiers", "debtor_id"),
+                ("creditor_party_identifiers", "creditor_id"),
+                ("ultimate_debtor_identifiers", "ultimate_debtor_id"),
+                ("ultimate_creditor_identifiers", "ultimate_creditor_id"),
+            ]:
+                party_id = gold.get(party_id_field)
+                if party_id:
+                    try:
+                        cursor.execute("""
+                            SELECT id, party_id, identifier_type, identifier_value,
+                                   issuing_authority, is_primary, created_at
+                            FROM gold.cdm_party_identifiers WHERE party_id = %s
+                        """, (party_id,))
+                        rows = cursor.fetchall()
+                        if rows:
+                            cols = [desc[0] for desc in cursor.description]
+                            result["gold_entities"][party_key] = [dict(zip(cols, r)) for r in rows]
+                    except Exception:
+                        pass
+
+            # Fetch Account Identifiers from cdm_account_identifiers
+            for acct_key, acct_id_field in [
+                ("debtor_account_identifiers", "debtor_account_id"),
+                ("creditor_account_identifiers", "creditor_account_id"),
+            ]:
+                acct_id = gold.get(acct_id_field) or gold.get(f"original_{acct_id_field}")
+                if acct_id:
+                    try:
+                        cursor.execute("""
+                            SELECT id, account_id, identifier_type, identifier_value,
+                                   issuing_authority, is_primary, created_at
+                            FROM gold.cdm_account_identifiers WHERE account_id = %s
+                        """, (acct_id,))
+                        rows = cursor.fetchall()
+                        if rows:
+                            cols = [desc[0] for desc in cursor.description]
+                            result["gold_entities"][acct_key] = [dict(zip(cols, r)) for r in rows]
+                    except Exception:
+                        pass
+
+            # Fetch Institution Identifiers from cdm_institution_identifiers
+            for fi_key, fi_id_field in [
+                ("debtor_agent_identifiers", "debtor_agent_id"),
+                ("creditor_agent_identifiers", "creditor_agent_id"),
+                ("intermediary1_identifiers", "intermediary_agent1_id"),
+                ("intermediary2_identifiers", "intermediary_agent2_id"),
+                ("instructing_agent_identifiers", "instructing_agent_fi_id"),
+                ("instructed_agent_identifiers", "instructed_agent_fi_id"),
+            ]:
+                fi_id = gold.get(fi_id_field) or gold.get(f"original_{fi_id_field}")
+                if fi_id:
+                    try:
+                        cursor.execute("""
+                            SELECT id, financial_institution_id, identifier_type, identifier_value,
+                                   issuing_authority, is_primary, created_at
+                            FROM gold.cdm_institution_identifiers WHERE financial_institution_id = %s
+                        """, (fi_id,))
+                        rows = cursor.fetchall()
+                        if rows:
+                            cols = [desc[0] for desc in cursor.description]
+                            result["gold_entities"][fi_key] = [dict(zip(cols, r)) for r in rows]
+                    except Exception:
+                        pass
 
         # Get field mappings from Neo4j if available
         try:

@@ -343,10 +343,7 @@ async def list_supported_message_types():
         {"id": "pacs.009", "display_name": "pacs.009 - FI Credit Transfer (Cover)", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
         {"id": "pacs.002", "display_name": "pacs.002 - FI Payment Status Report", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
         {"id": "camt.053", "display_name": "camt.053 - Bank Statement", "format": "XML", "version": "1.0", "format_family": "ISO 20022"},
-        # SWIFT MT
-        {"id": "MT103", "display_name": "MT103 - Single Customer Credit Transfer", "format": "FIN", "version": "SRG 2023", "format_family": "SWIFT MT"},
-        {"id": "MT202", "display_name": "MT202 - General Financial Institution Transfer", "format": "FIN", "version": "SRG 2023", "format_family": "SWIFT MT"},
-        {"id": "MT940", "display_name": "MT940 - Customer Statement Message", "format": "FIN", "version": "SRG 2023", "format_family": "SWIFT MT"},
+        # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents (camt.053 for statements)
         # US Regional
         {"id": "FEDWIRE", "display_name": "FEDWIRE - Federal Reserve Wire Transfer", "format": "ISO20022", "version": "2023", "format_family": "US Regional"},
         {"id": "ACH", "display_name": "ACH - Automated Clearing House", "format": "NACHA", "version": "2023", "format_family": "US Regional"},

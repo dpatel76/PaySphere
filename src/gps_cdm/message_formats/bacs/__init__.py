@@ -179,13 +179,19 @@ class BacsFixedWidthParser:
 
 
 class BacsExtractor(BaseExtractor):
-    """Extractor for UK BACS payment messages."""
+    """Extractor for UK BACS payment messages.
+
+    BACS requires subtype detection to route to appropriate ISO 20022 types:
+    - Transaction type 99 (Credit) → pacs.008
+    - Transaction type 01 (Direct Debit) → pain.008
+    """
 
     MESSAGE_TYPE = "BACS"
     SILVER_TABLE = "stg_bacs"
 
     def __init__(self):
-        """Initialize BACS extractor with parser."""
+        """Initialize BACS extractor with parser and routing support."""
+        super().__init__()  # Initialize base class with routing support
         self.parser = BacsFixedWidthParser()
 
     # =========================================================================

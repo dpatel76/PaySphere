@@ -1,0 +1,101 @@
+{
+  "messageHeader": {
+    "messageId": "CNAPS-BEPS-E2E-20260106-001",
+    "messageType": "BEPS",
+    "systemType": "BULK",
+    "creationDateTime": "2026-01-06T08:00:00+08:00",
+    "senderBIC": "COMMCNSH",
+    "receiverBIC": "PCBCCNBJ"
+  },
+  "batchInfo": {
+    "batchId": "BATCH-BEPS-20260106-001",
+    "numberOfTransactions": 3,
+    "controlSum": 75000.00,
+    "paymentMethod": "BATCH"
+  },
+  "initiatingParty": {
+    "name": "Guangzhou Manufacturing Ltd",
+    "organizationId": "91440101MA5CXXXX"
+  },
+  "paymentInstructions": [
+    {
+      "paymentId": "PMT-BEPS-001",
+      "debtor": {
+        "name": "Guangzhou Manufacturing Ltd",
+        "account": {
+          "number": "6228480066661111111",
+          "type": "CURRENT",
+          "currency": "CNY"
+        }
+      },
+      "creditor": {
+        "name": "Supplier Parts Co Ltd",
+        "account": {
+          "number": "6222020055552222222",
+          "type": "CURRENT"
+        }
+      },
+      "amount": {
+        "value": 25000.00,
+        "currency": "CNY"
+      },
+      "remittanceInfo": "Invoice INV-2026-001"
+    },
+    {
+      "paymentId": "PMT-BEPS-002",
+      "debtor": {
+        "name": "Guangzhou Manufacturing Ltd",
+        "account": {
+          "number": "6228480066661111111",
+          "type": "CURRENT",
+          "currency": "CNY"
+        }
+      },
+      "creditor": {
+        "name": "Logistics Services Ltd",
+        "account": {
+          "number": "6222020044443333333",
+          "type": "CURRENT"
+        }
+      },
+      "amount": {
+        "value": 30000.00,
+        "currency": "CNY"
+      },
+      "remittanceInfo": "Invoice INV-2026-002"
+    },
+    {
+      "paymentId": "PMT-BEPS-003",
+      "debtor": {
+        "name": "Guangzhou Manufacturing Ltd",
+        "account": {
+          "number": "6228480066661111111",
+          "type": "CURRENT",
+          "currency": "CNY"
+        }
+      },
+      "creditor": {
+        "name": "Equipment Maintenance Corp",
+        "account": {
+          "number": "6222020033334444444",
+          "type": "CURRENT"
+        }
+      },
+      "amount": {
+        "value": 20000.00,
+        "currency": "CNY"
+      },
+      "remittanceInfo": "Invoice INV-2026-003"
+    }
+  ],
+  "transactionId": "CNAPS-BEPS-E2E-20260106-001",
+  "message_type": "BEPS",
+  "system_type": "BULK",
+  "numberOfTransactions": 3,
+  "controlSum": 75000.00,
+  "amount_value": 75000.00,
+  "currency": "CNY",
+  "debtorName": "Guangzhou Manufacturing Ltd",
+  "debtorAccount": "6228480066661111111",
+  "settlementDate": "2026-01-06"
+}

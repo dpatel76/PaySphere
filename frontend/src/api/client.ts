@@ -363,12 +363,16 @@ export const pipelineApi = {
     batchId: string,
     layer: 'bronze' | 'silver' | 'gold',
     limit: number = 25,
-    offset: number = 0
+    offset: number = 0,
+    messageType?: string
   ): Promise<any[]> => {
     const params = new URLSearchParams({
       limit: limit.toString(),
       offset: offset.toString(),
     });
+    if (messageType) {
+      params.append('message_type', messageType);
+    }
     const { data } = await api.get(`/pipeline/batches/${batchId}/records/${layer}?${params}`);
     return data;
   },
@@ -1059,6 +1063,143 @@ export const mappingsApi = {
     row_count: number;
   }> => {
     const { data } = await api.get(`/mappings/export/${formatId}?format_type=${formatType}`);
+    return data;
+  },
+};
+
+// =====================
+// CDM Catalog Types
+// =====================
+export interface AllowedValue {
+  value: string;
+  description?: string;
+}
+
+export interface LegacyMapping {
+  format_id: string;
+  source_expression?: string;
+  transform_expression?: string;
+  entity_role?: string;
+}
+
+export interface CatalogElement {
+  catalog_id: number;
+  pde_table_name: string;
+  pde_column_name: string;
+  pde_data_type?: string;
+  pde_is_nullable: boolean;
+  business_name?: string;
+  business_description?: string;
+  data_format?: string;
+  allowed_values?: AllowedValue[];
+  iso_element_name?: string;
+  iso_element_description?: string;
+  iso_element_path?: string;
+  iso_data_type?: string;
+  legacy_mappings: LegacyMapping[];
+  legacy_mapping_count: number;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface CatalogElementUpdate {
+  business_name?: string;
+  business_description?: string;
+  data_format?: string;
+  allowed_values?: AllowedValue[];
+  iso_element_name?: string;
+  iso_element_description?: string;
+  iso_element_path?: string;
+  iso_data_type?: string;
+}
+
+export interface CatalogTableSummary {
+  table_name: string;
+  display_name: string;
+  element_count: number;
+  documented_count: number;
+  iso_mapped_count: number;
+  documentation_pct: number;
+  sort_order: number;
+}
+
+export interface CatalogStats {
+  total_elements: number;
+  documented_elements: number;
+  iso_mapped_elements: number;
+  total_tables: number;
+  documentation_pct: number;
+  iso_mapping_pct: number;
+}
+
+export interface CatalogSearchResponse {
+  elements: CatalogElement[];
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
+// =====================
+// CDM Catalog API
+// =====================
+export const catalogApi = {
+  getStats: async (): Promise<CatalogStats> => {
+    const { data } = await api.get('/catalog/stats');
+    return data;
+  },
+
+  getTables: async (): Promise<CatalogTableSummary[]> => {
+    const { data } = await api.get('/catalog/tables');
+    return data;
+  },
+
+  searchElements: async (params: {
+    query?: string;
+    table_name?: string;
+    documented_only?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<CatalogSearchResponse> => {
+    const urlParams = new URLSearchParams();
+    if (params.query) urlParams.append('query', params.query);
+    if (params.table_name) urlParams.append('table_name', params.table_name);
+    if (params.documented_only) urlParams.append('documented_only', 'true');
+    if (params.limit) urlParams.append('limit', params.limit.toString());
+    if (params.offset) urlParams.append('offset', params.offset.toString());
+    const { data } = await api.get(`/catalog/elements?${urlParams}`);
+    return data;
+  },
+
+  getElement: async (catalogId: number): Promise<CatalogElement> => {
+    const { data } = await api.get(`/catalog/elements/${catalogId}`);
+    return data;
+  },
+
+  updateElement: async (catalogId: number, updates: CatalogElementUpdate): Promise<CatalogElement> => {
+    const { data } = await api.put(`/catalog/elements/${catalogId}`, updates);
+    return data;
+  },
+
+  refreshFromSchema: async (): Promise<{ status: string; inserted: number; updated: number }> => {
+    const { data } = await api.post('/catalog/refresh');
+    return data;
+  },
+
+  exportCatalog: async (params: {
+    table_names?: string;
+    include_legacy_mappings?: boolean;
+    format?: 'csv' | 'xlsx';
+  }): Promise<Blob> => {
+    const urlParams = new URLSearchParams();
+    if (params.table_names) urlParams.append('table_names', params.table_names);
+    if (params.include_legacy_mappings !== undefined) {
+      urlParams.append('include_legacy_mappings', params.include_legacy_mappings.toString());
+    }
+    if (params.format) urlParams.append('format', params.format);
+
+    const { data } = await api.get(`/catalog/export?${urlParams}`, {
+      responseType: 'blob',
+    });
     return data;
   },
 };

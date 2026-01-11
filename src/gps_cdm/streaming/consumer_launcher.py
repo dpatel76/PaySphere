@@ -45,10 +45,7 @@ MESSAGE_TYPES: Dict[str, int] = {
     'pacs.008': 3,
     'camt.053': 1,
 
-    # SWIFT MT
-    'MT103': 3,
-    'MT202': 2,
-    'MT940': 1,
+    # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
 
     # US Domestic
     'FEDWIRE': 3,

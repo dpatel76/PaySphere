@@ -1,0 +1,41 @@
+{
+  "messageId": "BOJNET-FI-E2E-20260106-001",
+  "transactionType": "INTERBANK",
+  "is_fi_payment": true,
+  "creationDateTime": "2026-01-06T09:30:00+09:00",
+  "settlementDate": "2026-01-06",
+  "amount": {
+    "value": 1000000000,
+    "currency": "JPY"
+  },
+  "debtor": {
+    "name": "MUFG Bank Ltd",
+    "bic": "BOLOFRPP",
+    "account": {
+      "number": "BOJ001234",
+      "type": "BOJ_ACCOUNT"
+    }
+  },
+  "debtorAgent": {
+    "bic": "BOJPJPJT",
+    "name": "Bank of Japan",
+    "zenginCode": "0000"
+  },
+  "creditor": {
+    "name": "Mizuho Bank Ltd",
+    "bic": "MHCBJPJT",
+    "account": {
+      "number": "BOJ005678",
+      "type": "BOJ_ACCOUNT"
+    }
+  },
+  "creditorAgent": {
+    "bic": "BOJPJPJT",
+    "name": "Bank of Japan",
+    "zenginCode": "0000"
+  },
+  "remittanceInfo": "Interbank liquidity transfer",
+  "debtorName": "MUFG Bank Ltd",
+  "creditorName": "Mizuho Bank Ltd",
+  "currency": "JPY"
+}

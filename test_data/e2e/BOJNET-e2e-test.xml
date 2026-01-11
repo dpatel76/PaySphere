@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.009.001.08">
+  <FICdtTrf>
+    <GrpHdr>
+      <MsgId>BOJNET-E2E-20260106-001</MsgId>
+      <CreDtTm>2026-01-06T09:30:00+09:00</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <SttlmInf>
+        <SttlmMtd>CLRG</SttlmMtd>
+        <ClrSys>
+          <Prtry>BOJNET</Prtry>
+        </ClrSys>
+      </SttlmInf>
+      <InstgAgt>
+        <FinInstnId>
+          <BICFI>MUFGJPJTXXX</BICFI>
+          <ClrSysMmbId>
+            <MmbId>MUFGJPJT</MmbId>
+          </ClrSysMmbId>
+          <Nm>MUFG Bank Ltd</Nm>
+        </FinInstnId>
+      </InstgAgt>
+      <InstdAgt>
+        <FinInstnId>
+          <BICFI>SMBCJPJTXXX</BICFI>
+          <ClrSysMmbId>
+            <MmbId>SMBCJPJT</MmbId>
+          </ClrSysMmbId>
+          <Nm>Sumitomo Mitsui Banking Corporation</Nm>
+        </FinInstnId>
+      </InstdAgt>
+    </GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId>
+        <InstrId>INSTR-BOJNET-20260106-001</InstrId>
+        <EndToEndId>E2E-BOJNET-20260106-001</EndToEndId>
+        <TxId>TXN-JP-20260106-001</TxId>
+        <UETR>550e8400-e29b-41d4-a716-446655440000</UETR>
+      </PmtId>
+      <PmtTpInf>
+        <InstrPrty>HIGH</InstrPrty>
+        <SvcLvl>
+          <Cd>RTGS</Cd>
+        </SvcLvl>
+        <CtgyPurp>
+          <Cd>GDDS</Cd>
+        </CtgyPurp>
+      </PmtTpInf>
+      <IntrBkSttlmAmt Ccy="JPY">125000000.00</IntrBkSttlmAmt>
+      <IntrBkSttlmDt>2026-01-06</IntrBkSttlmDt>
+      <InstdAmt Ccy="JPY">125000000.00</InstdAmt>
+      <ChrgBr>SHAR</ChrgBr>
+      <Dbtr>
+        <FinInstnId>
+          <BICFI>MUFGJPJTXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Cd>JPBOJ</Cd>
+            </ClrSysId>
+            <MmbId>MUFGJPJT</MmbId>
+          </ClrSysMmbId>
+          <Nm>MUFG Bank Ltd</Nm>
+          <PstlAdr>
+            <Ctry>JP</Ctry>
+            <TwnNm>Tokyo</TwnNm>
+          </PstlAdr>
+        </FinInstnId>
+      </Dbtr>
+      <DbtrAcct>
+        <Id>
+          <Othr>
+            <Id>1234567890123</Id>
+          </Othr>
+        </Id>
+        <Tp>
+          <Cd>CACC</Cd>
+        </Tp>
+        <Ccy>JPY</Ccy>
+      </DbtrAcct>
+      <DbtrAgt>
+        <FinInstnId>
+          <BICFI>BOJPJPJTXXX</BICFI>
+          <ClrSysMmbId>
+            <MmbId>BOJPJPJT</MmbId>
+          </ClrSysMmbId>
+          <Nm>Bank of Japan</Nm>
+        </FinInstnId>
+      </DbtrAgt>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>BOJPJPJTXXX</BICFI>
+          <ClrSysMmbId>
+            <MmbId>BOJPJPJT</MmbId>
+          </ClrSysMmbId>
+          <Nm>Bank of Japan</Nm>
+        </FinInstnId>
+      </CdtrAgt>
+      <Cdtr>
+        <FinInstnId>
+          <BICFI>SMBCJPJTXXX</BICFI>
+          <ClrSysMmbId>
+            <ClrSysId>
+              <Cd>JPBOJ</Cd>
+            </ClrSysId>
+            <MmbId>SMBCJPJT</MmbId>
+          </ClrSysMmbId>
+          <Nm>Sumitomo Mitsui Banking Corporation</Nm>
+          <PstlAdr>
+            <Ctry>JP</Ctry>
+            <TwnNm>Osaka</TwnNm>
+          </PstlAdr>
+        </FinInstnId>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <Othr>
+            <Id>9876543210987</Id>
+          </Othr>
+        </Id>
+        <Tp>
+          <Cd>CACC</Cd>
+        </Tp>
+        <Ccy>JPY</Ccy>
+      </CdtrAcct>
+      <InstrForNxtAgt>
+        <InstrInf>BOJ-NET RTGS Payment</InstrInf>
+      </InstrForNxtAgt>
+      <InstrForCdtrAgt>
+        <InstrInf>Credit immediately on receipt</InstrInf>
+      </InstrForCdtrAgt>
+      <Purp>
+        <Cd>GDDS</Cd>
+      </Purp>
+      <RmtInf>
+        <Ustrd>BOJ-NET Payment for Industrial Equipment Order Q1 2026 - Invoice INV-OMI-2026-00789</Ustrd>
+      </RmtInf>
+    </CdtTrfTxInf>
+  </FICdtTrf>
+</Document>

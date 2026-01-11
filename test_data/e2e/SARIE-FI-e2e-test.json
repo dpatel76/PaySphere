@@ -1,0 +1,41 @@
+{
+  "messageId": "SARIE-FI-E2E-20260106-001",
+  "transactionType": "FI_TRANSFER",
+  "is_fi_payment": true,
+  "creationDateTime": "2026-01-06T09:00:00+03:00",
+  "settlementDate": "2026-01-06",
+  "amount": {
+    "value": 10000000.00,
+    "currency": "SAR"
+  },
+  "debtor": {
+    "name": "Al Rajhi Bank",
+    "bic": "RABORSA0",
+    "account": {
+      "iban": "SA0380000000000000000001",
+      "type": "SAMA_ACCOUNT"
+    }
+  },
+  "debtorAgent": {
+    "bic": "SAABORSA",
+    "name": "Saudi Central Bank (SAMA)",
+    "bankCode": "00"
+  },
+  "creditor": {
+    "name": "National Commercial Bank",
+    "bic": "NCBKSAJE",
+    "account": {
+      "iban": "SA5510000000000000000001",
+      "type": "SAMA_ACCOUNT"
+    }
+  },
+  "creditorAgent": {
+    "bic": "SAABORSA",
+    "name": "Saudi Central Bank (SAMA)",
+    "bankCode": "00"
+  },
+  "remittanceInfo": "Interbank liquidity transfer",
+  "debtorName": "Al Rajhi Bank",
+  "creditorName": "National Commercial Bank",
+  "currency": "SAR"
+}

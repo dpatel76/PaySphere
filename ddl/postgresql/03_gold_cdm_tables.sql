@@ -160,10 +160,8 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party (
     bic VARCHAR(11),                      -- CDM Enhancement v0.5: Party BIC (for organizations)
     lei VARCHAR(20),                      -- CDM Enhancement v0.5: Legal Entity Identifier
 
-    -- Tax
-    tax_id VARCHAR(50),
-    tax_id_type VARCHAR(30),
-    tax_id_country VARCHAR(3),
+    -- Tax (identifiers in cdm_party_identifiers; keep country context here)
+    tax_id_country VARCHAR(3),            -- Country context for tax lookups
 
     -- FATCA
     us_tax_status VARCHAR(30),
@@ -175,15 +173,9 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party (
     crs_entity_type VARCHAR(50),
     tax_residencies JSONB,
 
-    -- Identification
-    identification_type VARCHAR(50),
-    identification_number VARCHAR(50),
-    identification_country VARCHAR(3),
-    identification_expiry DATE,
-
-    -- National IDs (APAC)
-    national_id_type VARCHAR(30),
-    national_id_number VARCHAR(50),
+    -- Identification (identifiers in cdm_party_identifiers; keep context fields here)
+    identification_country VARCHAR(3),    -- Country context for any ID
+    identification_expiry DATE,           -- Expiry context for any ID
 
     -- Address
     address_line1 VARCHAR(200),
@@ -215,6 +207,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party (
     source_system VARCHAR(100) NOT NULL,
     source_message_type VARCHAR(50),
     source_stg_id VARCHAR(36),
+    source_instruction_id VARCHAR(36),  -- References payment instruction that created this entity
 
     -- Bi-temporal
     valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -232,8 +225,9 @@ CREATE TABLE IF NOT EXISTS gold.cdm_party (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cdm_party_name ON gold.cdm_party(name);
+CREATE INDEX IF NOT EXISTS idx_cdm_party_src_instr ON gold.cdm_party(source_instruction_id);
 CREATE INDEX IF NOT EXISTS idx_cdm_party_type ON gold.cdm_party(party_type);
-CREATE INDEX IF NOT EXISTS idx_cdm_party_tax ON gold.cdm_party(tax_id, tax_id_type);
+CREATE INDEX IF NOT EXISTS idx_cdm_party_tax_country ON gold.cdm_party(tax_id_country);
 CREATE INDEX IF NOT EXISTS idx_cdm_party_country ON gold.cdm_party(country);
 CREATE INDEX IF NOT EXISTS idx_cdm_party_pep ON gold.cdm_party(pep_flag) WHERE pep_flag = TRUE;
 CREATE INDEX IF NOT EXISTS idx_cdm_party_fatca ON gold.cdm_party(fatca_classification);
@@ -274,6 +268,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_account (
     source_system VARCHAR(100) NOT NULL,
     source_message_type VARCHAR(50),
     source_stg_id VARCHAR(36),
+    source_instruction_id VARCHAR(36),  -- References payment instruction that created this entity
 
     -- Bi-temporal
     valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -288,6 +283,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_account (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cdm_account_number ON gold.cdm_account(account_number);
+CREATE INDEX IF NOT EXISTS idx_cdm_account_src_instr ON gold.cdm_account(source_instruction_id);
 CREATE INDEX IF NOT EXISTS idx_cdm_account_iban ON gold.cdm_account(iban);
 CREATE INDEX IF NOT EXISTS idx_cdm_account_owner ON gold.cdm_account(owner_id);
 CREATE INDEX IF NOT EXISTS idx_cdm_account_fi ON gold.cdm_account(financial_institution_id);
@@ -327,6 +323,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_financial_institution (
 
     -- Source
     source_system VARCHAR(100) NOT NULL,
+    source_instruction_id VARCHAR(36),  -- References payment instruction that created this entity
 
     -- Bi-temporal
     valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -341,6 +338,7 @@ CREATE TABLE IF NOT EXISTS gold.cdm_financial_institution (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cdm_fi_bic ON gold.cdm_financial_institution(bic);
+CREATE INDEX IF NOT EXISTS idx_cdm_fi_src_instr ON gold.cdm_financial_institution(source_instruction_id);
 CREATE INDEX IF NOT EXISTS idx_cdm_fi_lei ON gold.cdm_financial_institution(lei);
 CREATE INDEX IF NOT EXISTS idx_cdm_fi_clearing ON gold.cdm_financial_institution(national_clearing_code, national_clearing_system);
 CREATE INDEX IF NOT EXISTS idx_cdm_fi_country ON gold.cdm_financial_institution(country);

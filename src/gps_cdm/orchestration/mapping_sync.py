@@ -100,10 +100,7 @@ class MappingSync:
             "pain001": "pain001.yaml",
             "pacs.008": "pacs008.yaml",
             "pacs008": "pacs008.yaml",
-            "MT103": "mt103.yaml",
-            "mt103": "mt103.yaml",
-            "MT202": "mt202.yaml",
-            "mt202": "mt202.yaml",
+            # NOTE: All SWIFT MT messages decommissioned Nov 2025 - use ISO 20022 equivalents
             "FEDWIRE": "fedwire.yaml",
             "fedwire": "fedwire.yaml",
             "ACH": "ach.yaml",

@@ -248,6 +248,92 @@ class DynamicMapper:
 
         return None
 
+    def _parse_raw_content(self, format_id: str, raw_content: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Parse embedded raw content using format-specific parser.
+
+        For fixed-width formats (BACS, ACH, etc.), the raw transaction line
+        is stored in the 'raw' field. This method invokes the appropriate
+        parser to extract structured fields.
+
+        Args:
+            format_id: Message format identifier
+            raw_content: Dict containing 'raw' field with embedded content
+
+        Returns:
+            Merged dict with parsed fields, or None if parsing not supported
+        """
+        raw_line = raw_content.get('raw', '')
+        if not raw_line:
+            return None
+
+        format_upper = format_id.upper()
+        parsed = {}
+
+        try:
+            if format_upper == 'BACS':
+                # Parse BACS fixed-width transaction record
+                from gps_cdm.message_formats.bacs import BacsFixedWidthParser
+                parser = BacsFixedWidthParser()
+                tx = parser._parse_data_record(raw_line)
+                if tx:
+                    parsed = tx
+
+            elif format_upper == 'ACH':
+                # Parse ACH records
+                # ACH content may have pre-extracted file_header/batch_header, plus raw multiline
+                from gps_cdm.message_formats.ach import AchFixedWidthParser
+                parser = AchFixedWidthParser()
+
+                # Use pre-extracted headers if available
+                if 'file_header' in raw_content and raw_content['file_header']:
+                    fh = parser._parse_file_header(raw_content['file_header'].ljust(94))
+                    if fh:
+                        parsed.update(fh)
+                if 'batch_header' in raw_content and raw_content['batch_header']:
+                    bh = parser._parse_batch_header(raw_content['batch_header'].ljust(94))
+                    if bh:
+                        parsed.update(bh)
+
+                # Parse raw content for entry details
+                lines = raw_line.strip().split('\n')
+                for line in lines:
+                    line = line.ljust(94)
+                    record_type = line[0] if line else ''
+                    if record_type == '6':
+                        tx = parser._parse_entry_detail(line)
+                        if tx:
+                            parsed.update(tx)
+
+            elif format_upper == 'KFTC':
+                from gps_cdm.message_formats.kftc import KftcParser
+                parser = KftcParser()
+                # Parse if it's a data record
+                if len(raw_line) >= 100:
+                    tx = parser._parse_transaction_record(raw_line)
+                    if tx:
+                        parsed = tx
+
+            elif format_upper == 'CNAPS':
+                from gps_cdm.message_formats.cnaps import CnapsParser
+                parser = CnapsParser()
+                if len(raw_line) >= 100:
+                    tx = parser._parse_transaction_record(raw_line)
+                    if tx:
+                        parsed = tx
+
+        except Exception as e:
+            logger.warning(f"Failed to parse raw content for {format_id}: {e}")
+            return None
+
+        # Merge parsed fields with parent context fields
+        # Parent context (serviceUserNumber, processingDate, etc.) takes precedence
+        if parsed:
+            merged = {**parsed, **{k: v for k, v in raw_content.items() if k != 'raw' and v is not None}}
+            return merged
+
+        return None
+
     def _get_nested(self, data: Dict[str, Any], path: str) -> Any:
         """Get value from nested dict using dot notation."""
         if not path or not data:
@@ -292,6 +378,12 @@ class DynamicMapper:
                 value = str(value).strip() if value else None
             elif transform_function == 'JSON_DUMPS':
                 value = json.dumps(value) if value else None
+            elif transform_function == 'TO_ARRAY':
+                # Convert single value to array format for PostgreSQL
+                if isinstance(value, list):
+                    pass  # Already a list, let array type handling deal with it
+                elif value is not None:
+                    value = [value]  # Wrap in list for array handling below
 
         # Type conversions
         if data_type == 'JSONB':
@@ -371,6 +463,14 @@ class DynamicMapper:
         Returns:
             Dictionary of column -> value mappings for Silver table
         """
+        # Parse embedded raw content for fixed-width formats
+        # These formats store the raw transaction line in the 'raw' field
+        # and need a parser to extract structured fields
+        if 'raw' in raw_content and isinstance(raw_content.get('raw'), str):
+            parsed_data = self._parse_raw_content(format_id, raw_content)
+            if parsed_data:
+                raw_content = parsed_data
+
         mappings = self._get_silver_mappings(format_id)
         record = {}
 

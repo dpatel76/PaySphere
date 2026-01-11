@@ -1,4 +1,40 @@
-"""Korea KFTC (Korea Financial Telecommunications & Clearings Institute) Extractor - JSON based."""
+"""Korea KFTC (Korea Financial Telecommunications & Clearings Institute) Extractor.
+
+ISO 20022 INHERITANCE HIERARCHY:
+    KFTC/BOK-Wire+ uses ISO 20022 for RTGS payments.
+    Cross-border flows (CPBR+) migrated from SWIFT MT to ISO 20022.
+
+    BaseISO20022Parser
+        ├── Pacs008Parser (FI to FI Customer Credit Transfer)
+        │   └── KftcPacs008Parser
+        ├── Pacs009Parser (FI Credit Transfer)
+        │   └── KftcPacs009Parser
+        ├── Pacs002Parser (Payment Status Report)
+        │   └── KftcPacs002Parser
+        └── Pacs004Parser (Payment Return)
+            └── KftcPacs004Parser
+
+SUPPORTED MESSAGE TYPES:
+    - pacs.008: Customer Credit Transfer (MT103 equivalent)
+    - pacs.009: FI Credit Transfer (MT202 equivalent)
+    - pacs.002: Payment Status Report
+    - pacs.004: Payment Return (MT103R equivalent)
+
+KFTC-SPECIFIC ELEMENTS:
+    - Korean bank codes (3-digit)
+    - KRW currency (Korean Won)
+    - Business registration numbers (사업자등록번호)
+    - Korean naming conventions (Hangul support)
+
+CLEARING SYSTEM:
+    - KRKFTC (Korea Financial Telecommunications & Clearings)
+    - BOK-Wire+ (Bank of Korea Real-Time Gross Settlement)
+
+DATABASE TABLES:
+    - Bronze: bronze.raw_payment_messages
+    - Silver: silver.stg_kftc
+    - Gold: Semantic tables via DynamicGoldMapper
+"""
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -16,9 +52,155 @@ from ..base import (
 
 logger = logging.getLogger(__name__)
 
+# Import ISO 20022 base classes for inheritance
+try:
+    from ..iso20022 import (
+        Pacs008Parser, Pacs008Extractor,
+        Pacs009Parser, Pacs009Extractor,
+        Pacs002Parser, Pacs002Extractor,
+        Pacs004Parser, Pacs004Extractor,
+    )
+    ISO20022_BASE_AVAILABLE = True
+except ImportError:
+    ISO20022_BASE_AVAILABLE = False
+    logger.warning("ISO 20022 base classes not available - KFTC will use standalone implementation")
 
-class KftcParser:
-    """Parser for KFTC JSON format messages.
+
+# =============================================================================
+# KFTC CONSTANTS
+# =============================================================================
+
+CLEARING_SYSTEM = "KRKFTC"
+DEFAULT_CURRENCY = "KRW"
+DEFAULT_COUNTRY = "KR"
+
+
+# =============================================================================
+# KFTC ISO 20022 PARSERS (inherit from base ISO 20022 parsers)
+# =============================================================================
+
+_Pacs008Base = Pacs008Parser if ISO20022_BASE_AVAILABLE else object
+_Pacs009Base = Pacs009Parser if ISO20022_BASE_AVAILABLE else object
+_Pacs002Base = Pacs002Parser if ISO20022_BASE_AVAILABLE else object
+_Pacs004Base = Pacs004Parser if ISO20022_BASE_AVAILABLE else object
+
+
+class KftcPacs008Parser(_Pacs008Base):
+    """KFTC pacs.008 parser - FI to FI Customer Credit Transfer."""
+
+    CLEARING_SYSTEM = CLEARING_SYSTEM
+    DEFAULT_CURRENCY = DEFAULT_CURRENCY
+    MESSAGE_TYPE = "KFTC_pacs008"
+
+    def __init__(self):
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        # Handle dict input (pre-parsed)
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        # Handle JSON input
+        if isinstance(raw_content, str) and raw_content.strip().startswith('{'):
+            try:
+                return json.loads(raw_content)
+            except json.JSONDecodeError:
+                pass
+
+        # Parse as ISO 20022 XML
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = {'messageType': 'KFTC_pacs008'}
+
+        result['isKftc'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+        result['defaultCurrency'] = self.DEFAULT_CURRENCY
+        return result
+
+
+class KftcPacs009Parser(_Pacs009Base):
+    """KFTC pacs.009 parser - FI Credit Transfer (BOK-Wire+ interbank)."""
+
+    CLEARING_SYSTEM = CLEARING_SYSTEM
+    DEFAULT_CURRENCY = DEFAULT_CURRENCY
+    MESSAGE_TYPE = "KFTC_pacs009"
+
+    def __init__(self):
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = {'messageType': 'KFTC_pacs009'}
+
+        result['isKftc'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+        return result
+
+
+class KftcPacs002Parser(_Pacs002Base):
+    """KFTC pacs.002 parser - Payment Status Report."""
+
+    CLEARING_SYSTEM = CLEARING_SYSTEM
+    DEFAULT_CURRENCY = DEFAULT_CURRENCY
+    MESSAGE_TYPE = "KFTC_pacs002"
+
+    def __init__(self):
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = {'messageType': 'KFTC_pacs002'}
+
+        result['isKftc'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+        return result
+
+
+class KftcPacs004Parser(_Pacs004Base):
+    """KFTC pacs.004 parser - Payment Return."""
+
+    CLEARING_SYSTEM = CLEARING_SYSTEM
+    DEFAULT_CURRENCY = DEFAULT_CURRENCY
+    MESSAGE_TYPE = "KFTC_pacs004"
+
+    def __init__(self):
+        if ISO20022_BASE_AVAILABLE:
+            super().__init__()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        if isinstance(raw_content, dict):
+            return raw_content
+
+        if ISO20022_BASE_AVAILABLE:
+            result = super().parse(raw_content)
+        else:
+            result = {'messageType': 'KFTC_pacs004'}
+
+        result['isKftc'] = True
+        result['clearingSystem'] = self.CLEARING_SYSTEM
+        return result
+
+
+# =============================================================================
+# LEGACY JSON PARSER (for backward compatibility)
+# =============================================================================
+
+class KftcJsonParser:
+    """Parser for KFTC JSON format messages (legacy format).
 
     Handles the flat JSON structure:
     {
@@ -71,20 +253,20 @@ class KftcParser:
 
         # Amount
         result['amount'] = data.get('amount')
-        result['currency'] = data.get('currency') or 'KRW'
+        result['currency'] = data.get('currency') or DEFAULT_CURRENCY
         result['chargeBearer'] = data.get('chargeBearer')
 
-        # Bank codes
-        result['sendingBankCode'] = data.get('sendingBankCode')
-        result['sendingBankName'] = data.get('sendingBankName')
-        result['sendingBankBic'] = data.get('sendingBankBic')
-        result['receivingBankCode'] = data.get('receivingBankCode')
-        result['receivingBankName'] = data.get('receivingBankName')
-        result['receivingBankBic'] = data.get('receivingBankBic')
+        # Bank codes (multiple naming conventions)
+        result['sendingBankCode'] = data.get('sendingBankCode') or data.get('senderBankCode')
+        result['sendingBankName'] = data.get('sendingBankName') or data.get('senderBankName')
+        result['sendingBankBic'] = data.get('sendingBankBic') or data.get('senderBankBic')
+        result['receivingBankCode'] = data.get('receivingBankCode') or data.get('receiverBankCode')
+        result['receivingBankName'] = data.get('receivingBankName') or data.get('receiverBankName')
+        result['receivingBankBic'] = data.get('receivingBankBic') or data.get('receiverBankBic')
 
-        # Payer information
-        result['payerName'] = data.get('payerName')
-        result['payerAccount'] = data.get('payerAccount')
+        # Payer information (multiple naming conventions)
+        result['payerName'] = data.get('payerName') or data.get('senderName')
+        result['payerAccount'] = data.get('payerAccount') or data.get('senderAccount')
         result['payerAccountType'] = data.get('payerAccountType')
         result['payerBusinessNumber'] = data.get('payerBusinessNumber')
 
@@ -96,16 +278,16 @@ class KftcParser:
         result['payerPostalCode'] = payer_addr.get('postalCode')
         result['payerCity'] = payer_addr.get('city')
         result['payerDistrict'] = payer_addr.get('district')
-        result['payerCountry'] = payer_addr.get('country') or 'KR'
+        result['payerCountry'] = payer_addr.get('country') or DEFAULT_COUNTRY
 
         payer_contact = data.get('payerContact', {})
         result['payerContactName'] = payer_contact.get('name')
         result['payerContactPhone'] = payer_contact.get('phone')
         result['payerContactEmail'] = payer_contact.get('email')
 
-        # Payee information
-        result['payeeName'] = data.get('payeeName')
-        result['payeeAccount'] = data.get('payeeAccount')
+        # Payee information (multiple naming conventions)
+        result['payeeName'] = data.get('payeeName') or data.get('receiverName')
+        result['payeeAccount'] = data.get('payeeAccount') or data.get('receiverAccount')
         result['payeeAccountType'] = data.get('payeeAccountType')
         result['payeeBusinessNumber'] = data.get('payeeBusinessNumber')
 
@@ -117,7 +299,7 @@ class KftcParser:
         result['payeePostalCode'] = payee_addr.get('postalCode')
         result['payeeCity'] = payee_addr.get('city')
         result['payeeDistrict'] = payee_addr.get('district')
-        result['payeeCountry'] = payee_addr.get('country') or 'KR'
+        result['payeeCountry'] = payee_addr.get('country') or DEFAULT_COUNTRY
 
         payee_contact = data.get('payeeContact', {})
         result['payeeContactName'] = payee_contact.get('name')
@@ -135,19 +317,88 @@ class KftcParser:
         result['purchaseOrderNumber'] = remit.get('purchaseOrderNumber')
         result['description'] = remit.get('description')
 
+        # Flags
+        result['isKftc'] = True
+        result['clearingSystem'] = CLEARING_SYSTEM
+
         return result
 
 
+# =============================================================================
+# UNIFIED KFTC PARSER (auto-detects message type)
+# =============================================================================
+
+class KftcISO20022Parser:
+    """Unified KFTC ISO 20022 parser that auto-detects message type."""
+
+    ROOT_TO_PARSER = {
+        'FIToFICstmrCdtTrf': 'pacs008',
+        'FICdtTrf': 'pacs009',
+        'FIToFIPmtStsRpt': 'pacs002',
+        'PmtRtr': 'pacs004',
+    }
+
+    def __init__(self):
+        self.pacs008_parser = KftcPacs008Parser()
+        self.pacs009_parser = KftcPacs009Parser()
+        self.pacs002_parser = KftcPacs002Parser()
+        self.pacs004_parser = KftcPacs004Parser()
+        self.json_parser = KftcJsonParser()
+
+    def parse(self, raw_content: str) -> Dict[str, Any]:
+        """Parse KFTC message, auto-detecting format (JSON vs XML) and message type."""
+        # Handle dict input
+        if isinstance(raw_content, dict):
+            return self.json_parser.parse(raw_content)
+
+        content = raw_content.strip() if isinstance(raw_content, str) else ''
+
+        # JSON format
+        if content.startswith('{'):
+            return self.json_parser.parse(content)
+
+        # XML format - detect message type
+        msg_type = self._detect_message_type(content)
+
+        parser_map = {
+            'pacs008': self.pacs008_parser,
+            'pacs009': self.pacs009_parser,
+            'pacs002': self.pacs002_parser,
+            'pacs004': self.pacs004_parser,
+        }
+
+        parser = parser_map.get(msg_type, self.pacs008_parser)
+        return parser.parse(content)
+
+    def _detect_message_type(self, xml_content: str) -> str:
+        """Detect ISO 20022 message type from XML root element."""
+        for root_elem, msg_type in self.ROOT_TO_PARSER.items():
+            if root_elem in xml_content:
+                return msg_type
+        return 'pacs008'  # Default
+
+
+# =============================================================================
+# KFTC EXTRACTOR
+# =============================================================================
+
 class KftcExtractor(BaseExtractor):
-    """Extractor for Korea KFTC payment messages."""
+    """Extractor for Korea KFTC payment messages.
+
+    Supports both ISO 20022 XML format (pacs.008, pacs.009, pacs.002, pacs.004)
+    and legacy JSON format for backward compatibility.
+    """
 
     MESSAGE_TYPE = "KFTC"
     SILVER_TABLE = "stg_kftc"
+    DEFAULT_CURRENCY = DEFAULT_CURRENCY
+    CLEARING_SYSTEM = CLEARING_SYSTEM
 
     def __init__(self):
-        """Initialize extractor with parser."""
+        """Initialize extractor with unified parser."""
         super().__init__()
-        self.parser = KftcParser()
+        self.iso20022_parser = KftcISO20022Parser()
+        self.parser = self.iso20022_parser
 
     # =========================================================================
     # BRONZE EXTRACTION
@@ -183,25 +434,55 @@ class KftcExtractor(BaseExtractor):
         """Extract all Silver layer fields from KFTC message.
 
         Supports multiple field naming conventions:
-        - payerName/payerAccount or senderName/senderAccount
-        - payeeName/payeeAccount or receiverName/receiverAccount
-        - sendingBankCode/senderBankCode, receivingBankCode/receiverBankCode
+        - ISO 20022 fields (debtorName, creditorName, etc.)
+        - Legacy JSON fields (payerName/senderName, payeeName/receiverName)
+        - Bank codes (sendingBankCode/senderBankCode, receivingBankCode/receiverBankCode)
         """
         trunc = self.trunc
 
         # Parse if needed
         if isinstance(msg_content, str):
             parsed = self.parser.parse(msg_content)
-        else:
+        elif not msg_content.get('isKftc') and not msg_content.get('isISO20022'):
             parsed = self.parser.parse(msg_content)
+        else:
+            parsed = msg_content
 
-        # Handle field name variations (payer/sender, payee/receiver)
-        payer_name = parsed.get('payerName') or parsed.get('senderName')
-        payer_account = parsed.get('payerAccount') or parsed.get('senderAccount')
-        payee_name = parsed.get('payeeName') or parsed.get('receiverName')
-        payee_account = parsed.get('payeeAccount') or parsed.get('receiverAccount')
-        sending_bank = parsed.get('sendingBankCode') or parsed.get('senderBankCode')
-        receiving_bank = parsed.get('receivingBankCode') or parsed.get('receiverBankCode')
+        # Handle field name variations - ISO 20022 vs Legacy JSON
+        payer_name = (
+            parsed.get('payerName') or
+            parsed.get('senderName') or
+            parsed.get('debtorName')
+        )
+        payer_account = (
+            parsed.get('payerAccount') or
+            parsed.get('senderAccount') or
+            parsed.get('debtorAccountOther') or
+            parsed.get('debtorAccountIban')
+        )
+        payee_name = (
+            parsed.get('payeeName') or
+            parsed.get('receiverName') or
+            parsed.get('creditorName')
+        )
+        payee_account = (
+            parsed.get('payeeAccount') or
+            parsed.get('receiverAccount') or
+            parsed.get('creditorAccountOther') or
+            parsed.get('creditorAccountIban')
+        )
+        sending_bank = (
+            parsed.get('sendingBankCode') or
+            parsed.get('senderBankCode') or
+            parsed.get('debtorAgentMemberId') or
+            parsed.get('instructingAgentMemberId')
+        )
+        receiving_bank = (
+            parsed.get('receivingBankCode') or
+            parsed.get('receiverBankCode') or
+            parsed.get('creditorAgentMemberId') or
+            parsed.get('instructedAgentMemberId')
+        )
 
         return {
             'stg_id': stg_id,
@@ -212,19 +493,27 @@ class KftcExtractor(BaseExtractor):
             'message_type': parsed.get('messageType') or 'KFTC',
             'message_id': trunc(parsed.get('messageId'), 35),
             'creation_date_time': parsed.get('creationDateTime'),
-            'settlement_date': parsed.get('settlementDate'),
+            'settlement_date': parsed.get('settlementDate') or parsed.get('interbankSettlementDate'),
 
             # Amount
             'amount': parsed.get('amount'),
-            'currency': parsed.get('currency') or 'KRW',
+            'currency': parsed.get('currency') or DEFAULT_CURRENCY,
 
             # Bank Codes (both naming conventions)
             'sending_bank_code': trunc(sending_bank, 11),
             'receiving_bank_code': trunc(receiving_bank, 11),
 
             # Transaction Details
-            'transaction_reference': trunc(parsed.get('transactionReference'), 35),
-            'transaction_id': trunc(parsed.get('transactionId'), 35),
+            'transaction_reference': trunc(
+                parsed.get('transactionReference') or
+                parsed.get('endToEndId'),
+                35
+            ),
+            'transaction_id': trunc(
+                parsed.get('transactionId') or
+                parsed.get('transactionId'),
+                35
+            ),
 
             # Payer/Sender (primary fields)
             'payer_name': trunc(payer_name, 140),
@@ -234,25 +523,45 @@ class KftcExtractor(BaseExtractor):
             'payee_name': trunc(payee_name, 140),
             'payee_account': trunc(payee_account, 34),
 
-            # Sender fields (alternate naming)
+            # Sender fields (alternate naming for backward compatibility)
             'sender_name': trunc(parsed.get('senderName'), 140),
             'sender_account': trunc(parsed.get('senderAccount'), 34),
             'sender_bank_code': trunc(parsed.get('senderBankCode'), 11),
 
-            # Receiver fields (alternate naming)
+            # Receiver fields (alternate naming for backward compatibility)
             'receiver_name': trunc(parsed.get('receiverName'), 140),
             'receiver_account': trunc(parsed.get('receiverAccount'), 34),
             'receiver_bank_code': trunc(parsed.get('receiverBankCode'), 11),
 
             # Purpose
-            'purpose': parsed.get('purpose'),
+            'purpose': parsed.get('purpose') or parsed.get('categoryPurposeCode'),
 
             # Additional parsed fields
-            'sending_bank_name': trunc(parsed.get('sendingBankName'), 140),
-            'receiving_bank_name': trunc(parsed.get('receivingBankName'), 140),
-            'sending_bank_bic': trunc(parsed.get('sendingBankBic'), 11),
-            'receiving_bank_bic': trunc(parsed.get('receivingBankBic'), 11),
-            'payment_type': trunc(parsed.get('paymentType'), 10),
+            'sending_bank_name': trunc(
+                parsed.get('sendingBankName') or
+                parsed.get('debtorAgentName'),
+                140
+            ),
+            'receiving_bank_name': trunc(
+                parsed.get('receivingBankName') or
+                parsed.get('creditorAgentName'),
+                140
+            ),
+            'sending_bank_bic': trunc(
+                parsed.get('sendingBankBic') or
+                parsed.get('debtorAgentBic'),
+                11
+            ),
+            'receiving_bank_bic': trunc(
+                parsed.get('receivingBankBic') or
+                parsed.get('creditorAgentBic'),
+                11
+            ),
+            'payment_type': trunc(
+                parsed.get('paymentType') or
+                parsed.get('localInstrumentCode'),
+                10
+            ),
             'charge_bearer': trunc(parsed.get('chargeBearer'), 10),
             'payer_business_number': trunc(parsed.get('payerBusinessNumber'), 20),
             'payee_business_number': trunc(parsed.get('payeeBusinessNumber'), 20),
@@ -261,7 +570,7 @@ class KftcExtractor(BaseExtractor):
     def get_silver_columns(self) -> List[str]:
         """Return ordered list of Silver table columns for INSERT.
 
-        Matches the silver.stg_kftc table schema exactly.
+        NOTE: Column names MUST match silver.stg_kftc table exactly.
         """
         return [
             'stg_id', 'raw_id', '_batch_id',
@@ -274,10 +583,6 @@ class KftcExtractor(BaseExtractor):
             'sender_name', 'sender_account', 'sender_bank_code',
             'receiver_name', 'receiver_account', 'receiver_bank_code',
             'purpose',
-            'sending_bank_name', 'receiving_bank_name',
-            'sending_bank_bic', 'receiving_bank_bic',
-            'payment_type', 'charge_bearer',
-            'payer_business_number', 'payee_business_number',
         ]
 
     def get_silver_values(self, silver_record: Dict[str, Any]) -> tuple:
@@ -312,7 +617,7 @@ class KftcExtractor(BaseExtractor):
                 party_type='ORGANIZATION',
                 identification_type='BRN',
                 identification_number=silver_data.get('payer_business_number'),
-                country='KR',
+                country=DEFAULT_COUNTRY,
             ))
 
         # Payee Party
@@ -323,7 +628,7 @@ class KftcExtractor(BaseExtractor):
                 party_type='ORGANIZATION',
                 identification_type='BRN',
                 identification_number=silver_data.get('payee_business_number'),
-                country='KR',
+                country=DEFAULT_COUNTRY,
             ))
 
         # Payer Account
@@ -332,7 +637,7 @@ class KftcExtractor(BaseExtractor):
                 account_number=silver_data.get('payer_account'),
                 role="DEBTOR",
                 account_type='CACC',
-                currency=silver_data.get('currency') or 'KRW',
+                currency=silver_data.get('currency') or DEFAULT_CURRENCY,
             ))
 
         # Payee Account
@@ -341,7 +646,7 @@ class KftcExtractor(BaseExtractor):
                 account_number=silver_data.get('payee_account'),
                 role="CREDITOR",
                 account_type='CACC',
-                currency=silver_data.get('currency') or 'KRW',
+                currency=silver_data.get('currency') or DEFAULT_CURRENCY,
             ))
 
         # Sending Bank
@@ -351,8 +656,8 @@ class KftcExtractor(BaseExtractor):
                 name=silver_data.get('sending_bank_name'),
                 bic=silver_data.get('sending_bank_bic'),
                 clearing_code=silver_data.get('sending_bank_code'),
-                clearing_system='KRKFTC',  # Korea KFTC
-                country='KR',
+                clearing_system=CLEARING_SYSTEM,
+                country=DEFAULT_COUNTRY,
             ))
 
         # Receiving Bank
@@ -362,13 +667,24 @@ class KftcExtractor(BaseExtractor):
                 name=silver_data.get('receiving_bank_name'),
                 bic=silver_data.get('receiving_bank_bic'),
                 clearing_code=silver_data.get('receiving_bank_code'),
-                clearing_system='KRKFTC',
-                country='KR',
+                clearing_system=CLEARING_SYSTEM,
+                country=DEFAULT_COUNTRY,
             ))
 
         return entities
 
 
-# Register the extractor
+# =============================================================================
+# REGISTER EXTRACTORS
+# =============================================================================
+
 ExtractorRegistry.register('KFTC', KftcExtractor())
 ExtractorRegistry.register('kftc', KftcExtractor())
+ExtractorRegistry.register('BOK-Wire+', KftcExtractor())
+ExtractorRegistry.register('BOK_WIRE', KftcExtractor())
+
+# Message type specific aliases
+ExtractorRegistry.register('KFTC_pacs008', KftcExtractor())
+ExtractorRegistry.register('KFTC_pacs009', KftcExtractor())
+ExtractorRegistry.register('KFTC_pacs002', KftcExtractor())
+ExtractorRegistry.register('KFTC_pacs004', KftcExtractor())

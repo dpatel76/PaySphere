@@ -1,0 +1,52 @@
+{
+  "messageId": "SARIE-CUST-E2E-20260106-001",
+  "transactionType": "CUSTOMER",
+  "is_fi_payment": false,
+  "creationDateTime": "2026-01-06T10:00:00+03:00",
+  "settlementDate": "2026-01-06",
+  "amount": {
+    "value": 50000.00,
+    "currency": "SAR"
+  },
+  "debtor": {
+    "name": "Riyadh Trading Company",
+    "nameArabic": "شركة الرياض للتجارة",
+    "crNumber": "1010123456",
+    "account": {
+      "iban": "SA0380000000608010167519",
+      "accountNumber": "608010167519"
+    },
+    "address": {
+      "line1": "King Fahd Road",
+      "city": "Riyadh",
+      "postalCode": "11564",
+      "country": "SA"
+    }
+  },
+  "debtorAgent": {
+    "bic": "RABORSA0",
+    "name": "Al Rajhi Bank",
+    "bankCode": "80"
+  },
+  "creditor": {
+    "name": "Jeddah Supplies LLC",
+    "nameArabic": "شركة جدة للتوريدات",
+    "crNumber": "4030567890",
+    "account": {
+      "iban": "SA5510000010234567890123",
+      "accountNumber": "10234567890123"
+    }
+  },
+  "creditorAgent": {
+    "bic": "NCBKSAJE",
+    "name": "National Commercial Bank",
+    "bankCode": "10"
+  },
+  "remittanceInfo": "Payment for invoice #SA-2026-00789",
+  "purposeCode": "SUPP",
+  "debtorName": "Riyadh Trading Company",
+  "debtorAccount": "608010167519",
+  "creditorName": "Jeddah Supplies LLC",
+  "creditorAccount": "10234567890123",
+  "currency": "SAR"
+}

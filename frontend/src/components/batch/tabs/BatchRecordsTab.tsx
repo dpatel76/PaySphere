@@ -251,11 +251,29 @@ const RecordComparisonDialog: React.FC<{
         if (silverColumn && bronzeExtracted[silverColumn] !== undefined && bronzeExtracted[silverColumn] !== null) {
           bronzeValue = fmt(bronzeExtracted[silverColumn]);
         }
-        // 2. Try camelCase version of last path segment
+        // 2. Try dot-notation path (ISO 20022 extractors use this, e.g., "CdtTrfTxInf.PmtId.EndToEndId")
         else if (bronzePath) {
-          const lastPart = bronzePath.split('/').pop() || '';
-          const camelKey = lastPart.charAt(0).toLowerCase() + lastPart.slice(1);
-          bronzeValue = fmt(bronzeExtracted[camelKey] || bronzeExtracted[lastPart] || getNestedValue(bronzeExtracted, bronzePath));
+          const dotPath = bronzePath.replace(/\//g, '.');
+          if (bronzeExtracted[dotPath] !== undefined && bronzeExtracted[dotPath] !== null) {
+            bronzeValue = fmt(bronzeExtracted[dotPath]);
+          } else {
+            // 3. Try variations: add CdtTrfTxInf prefix for transaction-level fields, or GrpHdr for header fields
+            const pathParts = bronzePath.split('/');
+            const firstPart = pathParts[0];
+            // Try with CdtTrf prefix (BOJNET uses CdtTrfTxInf internally)
+            const cdtTrfPath = `CdtTrfTxInf.${pathParts.slice(1).join('.')}`;
+            const cdtTrfPath2 = `CdtTrf.${pathParts.slice(1).join('.')}`;
+            if (bronzeExtracted[cdtTrfPath] !== undefined && bronzeExtracted[cdtTrfPath] !== null) {
+              bronzeValue = fmt(bronzeExtracted[cdtTrfPath]);
+            } else if (bronzeExtracted[cdtTrfPath2] !== undefined && bronzeExtracted[cdtTrfPath2] !== null) {
+              bronzeValue = fmt(bronzeExtracted[cdtTrfPath2]);
+            } else {
+              // 4. Try camelCase version of last path segment
+              const lastPart = bronzePath.split('/').pop() || '';
+              const camelKey = lastPart.charAt(0).toLowerCase() + lastPart.slice(1);
+              bronzeValue = fmt(bronzeExtracted[camelKey] || bronzeExtracted[lastPart] || getNestedValue(bronzeExtracted, bronzePath));
+            }
+          }
         }
       } else {
         // Fall back to Silver value when bronze_extracted is empty
@@ -862,9 +880,15 @@ const BatchRecordsTab: React.FC<BatchRecordsTabProps> = ({ batchId, messageType 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['batchRecords', batchId, selectedLayer, paginationModel],
+    queryKey: ['batchRecords', batchId, selectedLayer, paginationModel, messageType],
     queryFn: async () => {
-      const records = await pipelineApi.getBatchRecords(batchId, selectedLayer, paginationModel.pageSize, paginationModel.page * paginationModel.pageSize);
+      const records = await pipelineApi.getBatchRecords(
+        batchId,
+        selectedLayer,
+        paginationModel.pageSize,
+        paginationModel.page * paginationModel.pageSize,
+        messageType
+      );
       return { items: records, total: records.length };
     },
     enabled: !!batchId,

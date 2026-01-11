@@ -13,9 +13,6 @@ Folder Structure:
     ├── pain001/        # ISO 20022 pain.001 (Customer Credit Transfer Initiation)
     ├── pacs008/        # ISO 20022 pacs.008 (FI to FI Credit Transfer)
     ├── camt053/        # ISO 20022 camt.053 (Bank to Customer Statement)
-    ├── mt103/          # SWIFT MT103 (Single Customer Credit Transfer)
-    ├── mt202/          # SWIFT MT202 (General FI Transfer)
-    ├── mt940/          # SWIFT MT940 (Customer Statement Message)
     ├── fedwire/        # Fedwire (US RTGS)
     ├── fednow/         # FedNow (US Instant)
     ├── ach/            # NACHA ACH
@@ -59,12 +56,8 @@ from . import pacs008
 # ISO 20022 Statement Messages
 from . import camt053
 
-# SWIFT MT Payment Messages
-from . import mt103
-from . import mt202
-
-# SWIFT MT Statement Messages
-from . import mt940
+# NOTE: All SWIFT MT messages decommissioned by SWIFT in November 2025
+# Use ISO 20022 equivalents: MT103→pacs.008, MT202→pacs.009, MT940/MT950→camt.053
 
 # US Payment Schemes
 from . import fedwire

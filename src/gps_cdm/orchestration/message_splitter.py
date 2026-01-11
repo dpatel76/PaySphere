@@ -3,12 +3,19 @@ GPS CDM - Message Splitter
 ==========================
 
 Splits multi-record files/messages into individual payment records.
-This is critical for files that contain multiple transactions (e.g., batch files).
+This module is responsible for SPLITTING ONLY - NO EXTRACTION.
+
+Extraction is handled by format-specific parsers in the message_formats package.
+
+Each split record contains:
+- content: Raw record content (XML string, text, or dict for JSON)
+- index: Position in original file (0-based)
+- parent_context: Minimal shared context (IDs only, not extracted data)
 
 Supported formats:
 - ISO 20022 XML (pain.001, pacs.008, SEPA, RTP, FedNow, CHAPS, FPS, NPP, MEPS+,
   TARGET2, RTGS_HK, UAEFTS, PromptPay, PayNow, InstaPay, camt.053):
-  Multiple CdtTrfTxInf/Ntry elements
+  Multiple CdtTrfTxInf/Ntry elements - returns RAW XML
 - SWIFT MT (MT103, MT202, MT940): Multiple messages separated by {1:...} blocks
 - ACH/NACHA: Fixed-width with multiple entry detail records (type 6)
 - BACS: UK fixed-width batch payments
@@ -32,10 +39,13 @@ class MessageSplitter:
     """
     Splits multi-record content into individual payment records.
 
+    IMPORTANT: This class handles SPLITTING only - NO extraction logic.
+    Parsers in message_formats package handle all field extraction.
+
     Each split record contains:
-    - content: The individual record content (dict or string)
+    - content: Raw record content (XML string, text, or dict for JSON)
     - index: Position in original file (0-based)
-    - parent_context: Shared context from parent (e.g., GrpHdr for ISO 20022)
+    - parent_context: Minimal shared context (message IDs only, NOT extracted party/account data)
     """
 
     # ISO 20022 message types that use CdtTrfTxInf splitting
@@ -133,11 +143,16 @@ class MessageSplitter:
         """
         Split ISO 20022 XML into individual transactions.
 
+        IMPORTANT: Returns RAW XML content - NO extraction.
+        Parsers in message_formats package handle all field extraction.
+
+        Each record's 'content' field contains:
+        - The complete XML for a single transaction (with parent context embedded)
+        - Parent context contains only minimal IDs (messageId, paymentInfoId) for tracing
+
         ISO 20022 payment initiation messages can contain multiple:
         - PmtInf (Payment Information blocks)
         - CdtTrfTxInf (Credit Transfer Transaction Info) within each PmtInf
-
-        Each CdtTrfTxInf becomes a separate record for processing.
         """
         records = []
 
@@ -156,25 +171,18 @@ class MessageSplitter:
                 # Also clean attributes
                 elem.attrib = {k.split('}')[1] if '}' in k else k: v for k, v in elem.attrib.items()}
 
-            # Extract Group Header (shared context)
+            # Extract minimal Group Header context (IDs only - NO extracted party/account data)
             grp_hdr = root.find('.//GrpHdr')
             if grp_hdr is None:
                 grp_hdr = root.find('GrpHdr')
-            parent_context = {}
 
+            # Minimal parent context - IDs only for tracing
+            parent_context = {}
+            grp_hdr_xml = None
             if grp_hdr is not None:
-                parent_context = {
-                    'messageId': cls._find_text_simple(grp_hdr, 'MsgId'),
-                    'creationDateTime': cls._find_text_simple(grp_hdr, 'CreDtTm'),
-                    'numberOfTransactions': cls._find_text_simple(grp_hdr, 'NbOfTxs'),
-                    'controlSum': cls._find_text_simple(grp_hdr, 'CtrlSum'),
-                }
-                # Initiating Party
-                initg_pty = grp_hdr.find('InitgPty')
-                if initg_pty is not None:
-                    parent_context['initiatingParty'] = {
-                        'name': cls._find_text_simple(initg_pty, 'Nm'),
-                    }
+                parent_context['GrpHdr.MsgId'] = cls._find_text_simple(grp_hdr, 'MsgId')
+                parent_context['GrpHdr.CreDtTm'] = cls._find_text_simple(grp_hdr, 'CreDtTm')
+                grp_hdr_xml = ET.tostring(grp_hdr, encoding='unicode')
 
             # Find all Payment Information blocks
             pmt_infs = root.findall('.//PmtInf')
@@ -184,9 +192,11 @@ class MessageSplitter:
                 cdtr_trfs = root.findall('.//CdtTrfTxInf')
                 if cdtr_trfs:
                     for idx, txn in enumerate(cdtr_trfs):
-                        record_content = cls._extract_transaction_content(txn, parent_context, message_type)
+                        # Return complete ISO 20022 document for this transaction
+                        txn_xml = ET.tostring(txn, encoding='unicode')
+                        record_xml = cls._build_transaction_xml(grp_hdr_xml, None, txn_xml, message_type)
                         records.append({
-                            'content': record_content,
+                            'content': record_xml,
                             'index': idx,
                             'parent_context': parent_context,
                         })
@@ -194,49 +204,33 @@ class MessageSplitter:
 
             # Process each PmtInf block
             for pmt_idx, pmt_inf in enumerate(pmt_infs):
-                # Extract PmtInf-level context
+                # Minimal PmtInf context - IDs only
                 pmt_context = dict(parent_context)
-                pmt_context['paymentInfoId'] = cls._find_text_simple(pmt_inf, 'PmtInfId')
-                pmt_context['paymentMethod'] = cls._find_text_simple(pmt_inf, 'PmtMtd')
-                pmt_context['requestedExecutionDate'] = cls._find_text_simple(pmt_inf, 'Dt') or cls._find_text_simple(pmt_inf, 'ReqdExctnDt')
+                pmt_context['PmtInf.PmtInfId'] = cls._find_text_simple(pmt_inf, 'PmtInfId')
 
-                # Debtor info (shared across transactions in this PmtInf)
-                dbtr = pmt_inf.find('.//Dbtr')
-                if dbtr is not None:
-                    pmt_context['debtor'] = {
-                        'name': cls._find_text_simple(dbtr, 'Nm'),
-                        'country': cls._find_text_simple(dbtr, 'Ctry'),
-                    }
-
-                dbtr_acct = pmt_inf.find('.//DbtrAcct')
-                if dbtr_acct is not None:
-                    pmt_context['debtorAccount'] = {
-                        'iban': cls._find_text_simple(dbtr_acct, 'IBAN'),
-                    }
-
-                dbtr_agt = pmt_inf.find('.//DbtrAgt')
-                if dbtr_agt is not None:
-                    pmt_context['debtorAgent'] = {
-                        'bic': cls._find_text_simple(dbtr_agt, 'BICFI'),
-                    }
+                # Serialize PmtInf without its CdtTrfTxInf children (for embedding)
+                pmt_inf_copy = cls._copy_element_without_children(pmt_inf, 'CdtTrfTxInf')
+                pmt_inf_xml = ET.tostring(pmt_inf_copy, encoding='unicode') if pmt_inf_copy is not None else None
 
                 # Find all transactions within this PmtInf
                 transactions = pmt_inf.findall('.//CdtTrfTxInf')
 
                 for txn_idx, txn in enumerate(transactions):
-                    record_content = cls._extract_transaction_content(txn, pmt_context, message_type)
+                    # Return complete ISO 20022 document for this transaction
+                    txn_xml = ET.tostring(txn, encoding='unicode')
+                    record_xml = cls._build_transaction_xml(grp_hdr_xml, pmt_inf_xml, txn_xml, message_type)
                     global_idx = len(records)
                     records.append({
-                        'content': record_content,
+                        'content': record_xml,
                         'index': global_idx,
                         'parent_context': pmt_context,
                     })
 
             if not records:
-                # Fallback to single record
+                # Fallback to single record (full XML)
                 return [{'content': content, 'index': 0, 'parent_context': parent_context}]
 
-            logger.info(f"Split ISO 20022 {message_type} into {len(records)} transactions")
+            logger.info(f"Split ISO 20022 {message_type} into {len(records)} transactions (raw XML)")
             return records
 
         except ET.ParseError as e:
@@ -247,209 +241,107 @@ class MessageSplitter:
             return [{'content': content, 'index': 0, 'parent_context': {}}]
 
     @classmethod
-    def _extract_transaction_content(cls, txn_elem, parent_context: dict, message_type: str) -> dict:
-        """Extract transaction content from XML element and merge with parent context."""
-        content = dict(parent_context)
+    def _build_transaction_xml(cls, grp_hdr_xml: Optional[str], pmt_inf_xml: Optional[str],
+                                txn_xml: str, message_type: str = '') -> str:
+        """
+        Build a complete, valid ISO 20022 document for a single transaction.
 
-        # Payment ID
-        pmt_id = txn_elem.find('.//PmtId')
-        if pmt_id is not None:
-            content['instructionId'] = cls._find_text_simple(pmt_id, 'InstrId')
-            content['endToEndId'] = cls._find_text_simple(pmt_id, 'EndToEndId')
-            content['uetr'] = cls._find_text_simple(pmt_id, 'UETR')
-            content['paymentId'] = cls._find_text_simple(pmt_id, 'TxId')
+        Instead of using a proprietary wrapper format, we rebuild a valid
+        pain.001/pacs.008 document that contains just the single transaction.
+        This allows parsers to process split transactions the same way they
+        process regular full documents.
 
-        # Amount
-        amt = txn_elem.find('.//Amt')
-        if amt is not None:
-            instd_amt = amt.find('.//InstdAmt')
-            if instd_amt is not None:
-                content['instructedAmount'] = instd_amt.text
-                content['instructedCurrency'] = instd_amt.get('Ccy')
+        For pain.001: <Document><CstmrCdtTrfInitn><GrpHdr>...</GrpHdr><PmtInf>...<CdtTrfTxInf>...</CdtTrfTxInf></PmtInf></CstmrCdtTrfInitn></Document>
+        For pacs.008: <Document><FIToFICstmrCdtTrf><GrpHdr>...</GrpHdr><CdtTrfTxInf>...</CdtTrfTxInf></FIToFICstmrCdtTrf></Document>
+        """
+        msg_type_lower = message_type.lower().replace('.', '_').replace('-', '_')
 
-        # Interbank settlement amount (for pacs.008)
-        intrbnk_amt = txn_elem.find('.//IntrBkSttlmAmt')
-        if intrbnk_amt is not None:
-            content['interbankSettlementAmount'] = intrbnk_amt.text
-            content['interbankSettlementCurrency'] = intrbnk_amt.get('Ccy')
-            if 'instructedAmount' not in content:
-                content['instructedAmount'] = intrbnk_amt.text
-                content['instructedCurrency'] = intrbnk_amt.get('Ccy')
+        # Determine document structure based on message type
+        if msg_type_lower in ('pain_001', 'pain001'):
+            # pain.001 structure: Document > CstmrCdtTrfInitn > GrpHdr + PmtInf > CdtTrfTxInf
+            if pmt_inf_xml and txn_xml:
+                # Insert transaction into PmtInf (before closing tag)
+                pmt_inf_with_txn = pmt_inf_xml.rstrip()
+                if pmt_inf_with_txn.endswith('</PmtInf>'):
+                    pmt_inf_with_txn = pmt_inf_with_txn[:-9] + txn_xml + '</PmtInf>'
+                else:
+                    pmt_inf_with_txn = pmt_inf_xml + txn_xml
 
-        # Charge Bearer
-        content['chargeBearer'] = cls._find_text_simple(txn_elem, 'ChrgBr')
+                parts = ['<?xml version="1.0" encoding="UTF-8"?>']
+                parts.append('<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">')
+                parts.append('<CstmrCdtTrfInitn>')
+                if grp_hdr_xml:
+                    parts.append(grp_hdr_xml)
+                parts.append(pmt_inf_with_txn)
+                parts.append('</CstmrCdtTrfInitn>')
+                parts.append('</Document>')
+                return ''.join(parts)
+            else:
+                # No PmtInf context - wrap transaction directly
+                parts = ['<?xml version="1.0" encoding="UTF-8"?>']
+                parts.append('<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09">')
+                parts.append('<CstmrCdtTrfInitn>')
+                if grp_hdr_xml:
+                    parts.append(grp_hdr_xml)
+                parts.append('<PmtInf>')
+                parts.append(txn_xml)
+                parts.append('</PmtInf>')
+                parts.append('</CstmrCdtTrfInitn>')
+                parts.append('</Document>')
+                return ''.join(parts)
 
-        # Debtor (Payer) - IMPORTANT for FPS, CHAPS, and UK payments
-        dbtr = txn_elem.find('.//Dbtr')
-        if dbtr is not None:
-            debtor_data = {
-                'name': cls._find_text_simple(dbtr, 'Nm'),
-                'country': cls._find_text_simple(dbtr, 'Ctry'),
-            }
-            # Organization ID - extract LEI, AnyBIC, and Other ID
-            org_id = dbtr.find('.//Id/OrgId')
-            if org_id is not None:
-                debtor_data['idType'] = 'ORG'
-                debtor_data['lei'] = cls._find_text_simple(org_id, 'LEI')
-                debtor_data['anyBic'] = cls._find_text_simple(org_id, 'AnyBIC')
-                debtor_data['otherId'] = cls._find_text_simple(org_id, 'Othr/Id')
-                debtor_data['otherIdScheme'] = cls._find_text_simple(org_id, 'Othr/SchmeNm/Cd')
-                debtor_data['id'] = debtor_data['lei'] or debtor_data['anyBic'] or debtor_data['otherId']
-            # Private ID - for individuals
-            prvt_id = dbtr.find('.//Id/PrvtId')
-            if prvt_id is not None:
-                debtor_data['idType'] = 'PRVT'
-                debtor_data['otherId'] = cls._find_text_simple(prvt_id, 'Othr/Id')
-                debtor_data['otherIdScheme'] = cls._find_text_simple(prvt_id, 'Othr/SchmeNm/Cd')
-                debtor_data['id'] = debtor_data['otherId']
-            # Address fields
-            pstl_adr = dbtr.find('.//PstlAdr')
-            if pstl_adr is not None:
-                debtor_data['streetName'] = cls._find_text_simple(pstl_adr, 'StrtNm')
-                debtor_data['buildingNumber'] = cls._find_text_simple(pstl_adr, 'BldgNb')
-                debtor_data['postalCode'] = cls._find_text_simple(pstl_adr, 'PstCd')
-                debtor_data['townName'] = cls._find_text_simple(pstl_adr, 'TwnNm')
-                debtor_data['countrySubDivision'] = cls._find_text_simple(pstl_adr, 'CtrySubDvsn')
-                debtor_data['country'] = cls._find_text_simple(pstl_adr, 'Ctry') or debtor_data.get('country')
-                content['payerAddress'] = cls._find_text_simple(pstl_adr, 'AdrLine')
-            content['debtor'] = debtor_data
-            # Also set flat fields for compatibility
-            content['payerName'] = debtor_data.get('name')
-            content['debtorName'] = debtor_data.get('name')
+        elif msg_type_lower in ('pacs_008', 'pacs008'):
+            # pacs.008 structure: Document > FIToFICstmrCdtTrf > GrpHdr + CdtTrfTxInf
+            parts = ['<?xml version="1.0" encoding="UTF-8"?>']
+            parts.append('<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">')
+            parts.append('<FIToFICstmrCdtTrf>')
+            if grp_hdr_xml:
+                parts.append(grp_hdr_xml)
+            parts.append(txn_xml)
+            parts.append('</FIToFICstmrCdtTrf>')
+            parts.append('</Document>')
+            return ''.join(parts)
 
-        # Debtor Account
-        dbtr_acct = txn_elem.find('.//DbtrAcct')
-        if dbtr_acct is not None:
-            iban = cls._find_text_simple(dbtr_acct, 'IBAN')
-            # UK Sort Code + Account Number format (Othr/Id) - also used by RTP
-            othr_id = dbtr_acct.find('.//Othr/Id')
-            account_number = othr_id.text if othr_id is not None else None
-            content['debtorAccount'] = {
-                'iban': iban,
-                'accountNumber': account_number or iban,  # RTP uses accountNumber
-            }
-            if account_number:
-                content['payerAccount'] = account_number
-                content['debtorAccountNumber'] = account_number
+        else:
+            # Default: Return a generic wrapper that maintains valid XML structure
+            # This is a fallback for other ISO 20022 types
+            parts = ['<?xml version="1.0" encoding="UTF-8"?>']
+            parts.append('<Document>')
+            if grp_hdr_xml:
+                parts.append(grp_hdr_xml)
+            if pmt_inf_xml:
+                # Insert transaction into PmtInf
+                pmt_inf_with_txn = pmt_inf_xml.rstrip()
+                if pmt_inf_with_txn.endswith('</PmtInf>'):
+                    pmt_inf_with_txn = pmt_inf_with_txn[:-9] + txn_xml + '</PmtInf>'
+                else:
+                    pmt_inf_with_txn = pmt_inf_xml + txn_xml
+                parts.append(pmt_inf_with_txn)
+            else:
+                parts.append(txn_xml)
+            parts.append('</Document>')
+            return ''.join(parts)
 
-        # Debtor Agent (Payer's Bank)
-        dbtr_agt = txn_elem.find('.//DbtrAgt')
-        if dbtr_agt is not None:
-            fin_instn_id = dbtr_agt.find('.//FinInstnId')
-            bic = cls._find_text_simple(dbtr_agt, 'BICFI') or (cls._find_text_simple(fin_instn_id, 'BICFI') if fin_instn_id is not None else None)
-            lei = cls._find_text_simple(fin_instn_id, 'LEI') if fin_instn_id is not None else None
-            name = cls._find_text_simple(fin_instn_id, 'Nm') if fin_instn_id is not None else None
-            # UK Sort Code / RTP Member ID (ClrSysMmbId/MmbId)
-            member_id_elem = dbtr_agt.find('.//ClrSysMmbId/MmbId')
-            member_id = member_id_elem.text if member_id_elem is not None else None
-            # Clearing system code
-            clr_sys_code = cls._find_text_simple(dbtr_agt, 'ClrSysMmbId/ClrSysId/Cd')
-            content['debtorAgent'] = {
-                'bic': bic,
-                'lei': lei,
-                'name': name,
-                'memberId': member_id,  # RTP uses memberId
-                'clearingSystemCode': clr_sys_code,
-                'clearingSystemMemberId': member_id,
-            }
-            if member_id:
-                content['payerSortCode'] = member_id
-                content['debtorSortCode'] = member_id
+    @classmethod
+    def _copy_element_without_children(cls, elem: ET.Element, exclude_tag: str) -> Optional[ET.Element]:
+        """
+        Create a shallow copy of an element excluding specific child elements.
+        Used to copy PmtInf without CdtTrfTxInf children.
+        """
+        if elem is None:
+            return None
 
-        # Creditor (Payee)
-        cdtr = txn_elem.find('.//Cdtr')
-        if cdtr is not None:
-            creditor_data = {
-                'name': cls._find_text_simple(cdtr, 'Nm'),
-                'country': cls._find_text_simple(cdtr, 'Ctry'),
-            }
-            # Organization ID - extract LEI, AnyBIC, and Other ID
-            org_id = cdtr.find('.//Id/OrgId')
-            if org_id is not None:
-                creditor_data['idType'] = 'ORG'
-                creditor_data['lei'] = cls._find_text_simple(org_id, 'LEI')
-                creditor_data['anyBic'] = cls._find_text_simple(org_id, 'AnyBIC')
-                creditor_data['otherId'] = cls._find_text_simple(org_id, 'Othr/Id')
-                creditor_data['otherIdScheme'] = cls._find_text_simple(org_id, 'Othr/SchmeNm/Cd')
-                creditor_data['id'] = creditor_data['lei'] or creditor_data['anyBic'] or creditor_data['otherId']
-            # Private ID - for individuals
-            prvt_id = cdtr.find('.//Id/PrvtId')
-            if prvt_id is not None:
-                creditor_data['idType'] = 'PRVT'
-                creditor_data['otherId'] = cls._find_text_simple(prvt_id, 'Othr/Id')
-                creditor_data['otherIdScheme'] = cls._find_text_simple(prvt_id, 'Othr/SchmeNm/Cd')
-                creditor_data['id'] = creditor_data['otherId']
-            # Address fields
-            pstl_adr = cdtr.find('.//PstlAdr')
-            if pstl_adr is not None:
-                creditor_data['streetName'] = cls._find_text_simple(pstl_adr, 'StrtNm')
-                creditor_data['buildingNumber'] = cls._find_text_simple(pstl_adr, 'BldgNb')
-                creditor_data['postalCode'] = cls._find_text_simple(pstl_adr, 'PstCd')
-                creditor_data['townName'] = cls._find_text_simple(pstl_adr, 'TwnNm')
-                creditor_data['countrySubDivision'] = cls._find_text_simple(pstl_adr, 'CtrySubDvsn')
-                creditor_data['country'] = cls._find_text_simple(pstl_adr, 'Ctry') or creditor_data.get('country')
-                content['payeeAddress'] = cls._find_text_simple(pstl_adr, 'AdrLine')
-            content['creditor'] = creditor_data
-            # Also set flat fields for compatibility
-            content['payeeName'] = creditor_data.get('name')
-            content['creditorName'] = creditor_data.get('name')
+        # Create new element with same tag and attributes
+        new_elem = ET.Element(elem.tag, elem.attrib)
+        new_elem.text = elem.text
+        new_elem.tail = elem.tail
 
-        # Creditor Account
-        cdtr_acct = txn_elem.find('.//CdtrAcct')
-        if cdtr_acct is not None:
-            iban = cls._find_text_simple(cdtr_acct, 'IBAN')
-            # UK Sort Code + Account Number format (Othr/Id) - also used by RTP
-            othr_id = cdtr_acct.find('.//Othr/Id')
-            account_number = othr_id.text if othr_id is not None else None
-            content['creditorAccount'] = {
-                'iban': iban,
-                'accountNumber': account_number or iban,  # RTP uses accountNumber
-            }
-            if account_number:
-                content['payeeAccount'] = account_number
-                content['creditorAccountNumber'] = account_number
+        # Copy children except excluded tag
+        for child in elem:
+            if child.tag != exclude_tag:
+                new_elem.append(child)
 
-        # Creditor Agent (Payee's Bank)
-        cdtr_agt = txn_elem.find('.//CdtrAgt')
-        if cdtr_agt is not None:
-            fin_instn_id = cdtr_agt.find('.//FinInstnId')
-            bic = cls._find_text_simple(cdtr_agt, 'BICFI') or (cls._find_text_simple(fin_instn_id, 'BICFI') if fin_instn_id is not None else None)
-            lei = cls._find_text_simple(fin_instn_id, 'LEI') if fin_instn_id is not None else None
-            name = cls._find_text_simple(fin_instn_id, 'Nm') if fin_instn_id is not None else None
-            # UK Sort Code / RTP Member ID (ClrSysMmbId/MmbId)
-            member_id_elem = cdtr_agt.find('.//ClrSysMmbId/MmbId')
-            member_id = member_id_elem.text if member_id_elem is not None else None
-            # Clearing system code
-            clr_sys_code = cls._find_text_simple(cdtr_agt, 'ClrSysMmbId/ClrSysId/Cd')
-            content['creditorAgent'] = {
-                'bic': bic,
-                'lei': lei,
-                'name': name,
-                'memberId': member_id,  # RTP uses memberId
-                'clearingSystemCode': clr_sys_code,
-                'clearingSystemMemberId': member_id,
-            }
-            if member_id:
-                content['payeeSortCode'] = member_id
-                content['creditorSortCode'] = member_id
-
-        # Purpose Code
-        purp = txn_elem.find('.//Purp')
-        if purp is not None:
-            content['purposeCode'] = cls._find_text_simple(purp, 'Cd')
-
-        # Remittance Info
-        rmt_inf = txn_elem.find('.//RmtInf')
-        if rmt_inf is not None:
-            unstructured = cls._find_text_simple(rmt_inf, 'Ustrd')
-            content['remittanceInfo'] = unstructured  # Flat field for compatibility
-            content['remittanceInformation'] = {'unstructured': unstructured}  # RTP uses nested structure
-            # Structured reference
-            strd = rmt_inf.find('.//Strd/CdtrRefInf/Ref')
-            if strd is not None and strd.text:
-                content['paymentReference'] = strd.text
-
-        return content
+        return new_elem
 
     @classmethod
     def _split_swift_mt(cls, content: str, message_type: str) -> List[Dict[str, Any]]:
@@ -510,15 +402,18 @@ class MessageSplitter:
         - Record type 9: File Control
 
         Each entry detail (type 6) with its addenda becomes a separate record,
-        but we include the file/batch headers as context.
+        including the file/batch headers AND control records for complete parsing.
         """
         records = []
         lines = content.strip().split('\n')
 
         file_header = None
         batch_header = None
+        batch_control = None
+        file_control = None
         current_entry = None
         current_addenda = []
+        entries_with_addenda = []  # Store all entries before we have control records
 
         for line in lines:
             # Pad to 94 chars
@@ -532,40 +427,36 @@ class MessageSplitter:
             elif record_type == '6':
                 # Save previous entry if exists
                 if current_entry:
-                    records.append({
-                        'content': cls._build_ach_record(file_header, batch_header, current_entry, current_addenda),
-                        'index': len(records),
-                        'parent_context': {
-                            'file_header': file_header,
-                            'batch_header': batch_header,
-                        },
-                    })
+                    entries_with_addenda.append((current_entry, list(current_addenda)))
                 current_entry = line
                 current_addenda = []
             elif record_type == '7':
                 current_addenda.append(line)
             elif record_type == '8':
-                # Save the last entry
+                # Batch control - save the last entry first
                 if current_entry:
-                    records.append({
-                        'content': cls._build_ach_record(file_header, batch_header, current_entry, current_addenda),
-                        'index': len(records),
-                        'parent_context': {
-                            'file_header': file_header,
-                            'batch_header': batch_header,
-                        },
-                    })
+                    entries_with_addenda.append((current_entry, list(current_addenda)))
                     current_entry = None
                     current_addenda = []
+                batch_control = line
+            elif record_type == '9':
+                file_control = line
 
-        # Handle case where file doesn't have batch control
+        # Handle case where file doesn't have batch control (save any remaining entry)
         if current_entry:
+            entries_with_addenda.append((current_entry, list(current_addenda)))
+
+        # Now build records with complete content including control records
+        for entry, addenda in entries_with_addenda:
             records.append({
-                'content': cls._build_ach_record(file_header, batch_header, current_entry, current_addenda),
+                'content': cls._build_ach_record(file_header, batch_header, entry, addenda,
+                                                  batch_control, file_control),
                 'index': len(records),
                 'parent_context': {
                     'file_header': file_header,
                     'batch_header': batch_header,
+                    'batch_control': batch_control,
+                    'file_control': file_control,
                 },
             })
 
@@ -576,8 +467,9 @@ class MessageSplitter:
         return records
 
     @classmethod
-    def _build_ach_record(cls, file_header: str, batch_header: str, entry: str, addenda: List[str]) -> str:
-        """Build a complete ACH record from components."""
+    def _build_ach_record(cls, file_header: str, batch_header: str, entry: str, addenda: List[str],
+                          batch_control: str = None, file_control: str = None) -> str:
+        """Build a complete ACH record from components including control records."""
         lines = []
         if file_header:
             lines.append(file_header)
@@ -585,6 +477,10 @@ class MessageSplitter:
             lines.append(batch_header)
         lines.append(entry)
         lines.extend(addenda)
+        if batch_control:
+            lines.append(batch_control)
+        if file_control:
+            lines.append(file_control)
         return '\n'.join(lines)
 
     @classmethod
